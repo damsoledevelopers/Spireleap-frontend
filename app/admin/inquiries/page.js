@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -36,6 +37,22 @@ import toast from 'react-hot-toast'
 
 export default function AdminInquiriesPage() {
   const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // Role-based access control
+  useEffect(() => {
+    if (!authLoading && user) {
+      const allowedRoles = ['super_admin', 'agency_admin', 'agent']
+      if (!allowedRoles.includes(user.role)) {
+        router.push('/auth/login')
+      }
+    }
+  }, [user, authLoading, router])
+
+  // Role-based feature visibility
+  const isSuperAdmin = user?.role === 'super_admin'
+  const isAgencyAdmin = user?.role === 'agency_admin'
+  const isAgent = user?.role === 'agent'
   const [inquiries, setInquiries] = useState([])
   const [allInquiries, setAllInquiries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,12 +70,14 @@ export default function AdminInquiriesPage() {
   const [properties, setProperties] = useState([])
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
+  const [agencyAgents, setAgencyAgents] = useState({}) // Store agents by agency ID
+  const [assigningAgent, setAssigningAgent] = useState(null) // Track which inquiry is being assigned
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedInquiry, setSelectedInquiry] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(15)
-  const [pagination, setPagination] = useState({ page: 1, limit: 15, total: 0, pages: 0 })
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 })
   const [stats, setStats] = useState({
     total: 0,
     new: 0,
@@ -69,6 +88,7 @@ export default function AdminInquiriesPage() {
     hot: 0,
     warm: 0,
     cold: 0,
+    unassigned: 0,
     byAgency: {},
     byAgent: {},
     byProperty: {}
@@ -86,6 +106,7 @@ export default function AdminInquiriesPage() {
       hot: 0,
       warm: 0,
       cold: 0,
+      unassigned: 0,
       byAgency: {},
       byAgent: {},
       byProperty: {}
@@ -104,8 +125,13 @@ export default function AdminInquiriesPage() {
       if (inquiry.priority === 'warm') statsData.warm++
       if (inquiry.priority === 'cold') statsData.cold++
 
-      // By agency
+      // Unassigned count (no agency)
       const agencyId = inquiry.agency?._id || inquiry.agency
+      if (!agencyId) {
+        statsData.unassigned++
+      }
+
+      // By agency
       if (agencyId) {
         const agencyKey = typeof agencyId === 'object' ? agencyId.toString() : agencyId
         statsData.byAgency[agencyKey] = (statsData.byAgency[agencyKey] || 0) + 1
@@ -138,7 +164,7 @@ export default function AdminInquiriesPage() {
 
   const fetchProperties = useCallback(async () => {
     try {
-      const response = await api.get('/properties?limit=1000')
+      const response = await api.get('/properties?limit=500')
       const fetchedProperties = response.data.properties || []
       setProperties(fetchedProperties)
       if (fetchedProperties.length === 0) {
@@ -170,6 +196,37 @@ export default function AdminInquiriesPage() {
     }
   }, [])
 
+  // Fetch agents from a specific agency
+  const fetchAgentsByAgency = useCallback(async (agencyId) => {
+    if (!agencyId) return []
+
+    // Check if we already have agents for this agency cached
+    if (agencyAgents[agencyId]) {
+      return agencyAgents[agencyId]
+    }
+
+    try {
+      const response = await api.get(`/users?role=agent&agency=${agencyId}&limit=1000`)
+      const agencyAgentsList = response.data.users || []
+
+      // Cache the agents for this agency
+      setAgencyAgents(prev => ({
+        ...prev,
+        [agencyId]: agencyAgentsList
+      }))
+
+      return agencyAgentsList
+    } catch (error) {
+      console.error('Failed to fetch agents by agency:', error)
+      // Cache as empty list to prevent infinite loading
+      setAgencyAgents(prev => ({
+        ...prev,
+        [agencyId]: []
+      }))
+      return []
+    }
+  }, [agencyAgents])
+
   const fetchInquiries = useCallback(async () => {
     try {
       setLoading(true)
@@ -187,7 +244,7 @@ export default function AdminInquiriesPage() {
 
       const response = await api.get(`/leads?${params}`)
       const fetchedInquiries = response.data.leads || []
-      
+
       // Update pagination from API response
       if (response.data && response.data.pagination) {
         const apiPagination = response.data.pagination
@@ -209,24 +266,19 @@ export default function AdminInquiriesPage() {
           pages: calculatedPages
         })
       }
-      
+
       // API already populates property, agency, and assignedAgent, so use them directly
       setInquiries(fetchedInquiries)
-      
+
       // Fetch inquiries for stats (using max allowed limit of 500)
-      // Stats fetch should include all filters except pagination
+      // Stats fetch should include all filters
       const allParams = new URLSearchParams({ limit: '500', page: '1' })
       Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== '' && key !== 'search') {
+        if (value && value !== '') {
           allParams.append(key, value)
         }
       })
-      
-      // Include search in stats fetch if present
-      if (filters.search && filters.search !== '') {
-        allParams.append('search', filters.search)
-      }
-      
+
       try {
         const allResponse = await api.get(`/leads?${allParams}`)
         setAllInquiries(allResponse.data.leads || [])
@@ -235,7 +287,7 @@ export default function AdminInquiriesPage() {
         // Use paginated inquiries for stats if full fetch fails
         setAllInquiries(fetchedInquiries)
       }
-      
+
     } catch (error) {
       console.error('Failed to fetch inquiries:', error)
       toast.error('Failed to load inquiries')
@@ -246,7 +298,7 @@ export default function AdminInquiriesPage() {
       setLoading(false)
     }
   }, [
-    currentPage, 
+    currentPage,
     itemsPerPage,
     filters
   ])
@@ -258,8 +310,54 @@ export default function AdminInquiriesPage() {
       fetchAgents()
       fetchAgencies()
     }
-  }, [user, authLoading, filters, currentPage, fetchInquiries, fetchProperties, fetchAgents, fetchAgencies])
+  }, [user, authLoading, fetchInquiries, fetchProperties, fetchAgents, fetchAgencies])
 
+  // Assign agent to a lead
+  const handleAssignAgent = useCallback(async (leadId, agentId) => {
+    if (!agentId) {
+      toast.error('Please select an agent')
+      return
+    }
+
+    try {
+      setAssigningAgent(leadId)
+      const response = await api.put(`/leads/${leadId}/assign`, { assignedAgent: agentId })
+
+      // Update local state immediately for instant feedback
+      const updatedLead = response.data.lead
+      if (updatedLead && updatedLead.assignedAgent) {
+        // Ensure assignedAgent is properly set (could be object or ID)
+        const assignedAgentData = updatedLead.assignedAgent
+
+        setInquiries(prev => prev.map(inquiry =>
+          inquiry._id === leadId
+            ? {
+              ...inquiry,
+              assignedAgent: assignedAgentData
+            }
+            : inquiry
+        ))
+        setAllInquiries(prev => prev.map(inquiry =>
+          inquiry._id === leadId
+            ? {
+              ...inquiry,
+              assignedAgent: assignedAgentData
+            }
+            : inquiry
+        ))
+      }
+
+      toast.success('Agent assigned successfully')
+
+      // Refresh the inquiries list to get full updated data
+      await fetchInquiries()
+    } catch (error) {
+      console.error('Failed to assign agent:', error)
+      toast.error(error.response?.data?.message || 'Failed to assign agent')
+    } finally {
+      setAssigningAgent(null)
+    }
+  }, [fetchInquiries])
 
   const handleViewDetails = async (inquiryId) => {
     try {
@@ -324,6 +422,21 @@ export default function AdminInquiriesPage() {
   // Server-side pagination - no client-side filtering needed
   // All filtering and pagination is handled by the API
 
+  // Show loading or redirect if not authorized
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (!user || !['super_admin', 'agency_admin', 'agent'].includes(user.role)) {
+    return null // Router will handle redirect
+  }
+
   if (loading && inquiries.length === 0) {
     return (
       <DashboardLayout>
@@ -342,7 +455,9 @@ export default function AdminInquiriesPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Inquiries</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Manage all property inquiries with complete details
+              {isSuperAdmin ? 'Manage all property inquiries with complete details' :
+                isAgencyAdmin ? 'Manage your agency inquiries' :
+                  'View your assigned inquiries'}
             </p>
           </div>
           <div className="relative min-w-[300px] max-w-md">
@@ -361,7 +476,7 @@ export default function AdminInquiriesPage() {
         </div>
 
         {/* Analysis Cards */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
             <div className="card-body">
               <div className="flex items-center justify-between">
@@ -433,6 +548,21 @@ export default function AdminInquiriesPage() {
               </div>
             </div>
           </div>
+
+          <div className="card bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Unassigned</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.unassigned}</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {stats.total > 0 ? Math.round((stats.unassigned / stats.total) * 100) : 0}% of total
+                  </p>
+                </div>
+                <AlertCircle className="h-10 w-10 text-gray-500 opacity-70" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
@@ -456,11 +586,10 @@ export default function AdminInquiriesPage() {
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${
-                  filters.startDate || filters.endDate
-                    ? 'border-primary-500 text-gray-900'
-                    : 'border-gray-300 text-gray-700'
-                }`}
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
+                  ? 'border-primary-500 text-gray-900'
+                  : 'border-gray-300 text-gray-700'
+                  }`}
               >
                 <Filter className="h-4 w-4 mr-2 text-gray-400" />
                 <span>
@@ -473,8 +602,8 @@ export default function AdminInquiriesPage() {
                         : 'Date Range'}
                 </span>
                 {(filters.startDate || filters.endDate) && (
-                  <X 
-                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600" 
+                  <X
+                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
                     onClick={(e) => {
                       e.stopPropagation()
                       setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
@@ -485,8 +614,8 @@ export default function AdminInquiriesPage() {
               </button>
               {showDatePicker && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
                   <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
@@ -513,7 +642,12 @@ export default function AdminInquiriesPage() {
                           type="date"
                           value={filters.endDate}
                           onChange={(e) => {
-                            setFilters(prev => ({ ...prev, endDate: e.target.value }))
+                            const newEndDate = e.target.value
+                            if (filters.startDate && newEndDate && newEndDate < filters.startDate) {
+                              toast.error('End date must be after start date')
+                              return
+                            }
+                            setFilters(prev => ({ ...prev, endDate: newEndDate }))
                             setCurrentPage(1)
                           }}
                           min={filters.startDate || undefined}
@@ -550,9 +684,12 @@ export default function AdminInquiriesPage() {
               onChange={(e) => {
                 const newAgency = e.target.value
                 setFilters(prev => {
-                  // Clear assignedAgent if it doesn't belong to the new agency
+                  // Clear assignedAgent if unassigned is selected or if it doesn't belong to the new agency
                   let newAssignedAgent = prev.assignedAgent
-                  if (newAgency && prev.assignedAgent) {
+                  if (newAgency === 'unassigned') {
+                    // Clear assignedAgent when unassigned is selected
+                    newAssignedAgent = ''
+                  } else if (newAgency && prev.assignedAgent) {
                     const selectedAgent = agents.find(agent => {
                       const agentId = agent._id || agent.id
                       return agentId === prev.assignedAgent || agentId?.toString() === prev.assignedAgent
@@ -575,6 +712,7 @@ export default function AdminInquiriesPage() {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
             >
               <option value="">All Agencies</option>
+              <option value="unassigned">Unassigned</option>
               {agencies && agencies.length > 0 && agencies.map((agency) => (
                 <option key={agency._id} value={agency._id}>
                   {agency.name}
@@ -728,21 +866,25 @@ export default function AdminInquiriesPage() {
                               <div className="font-medium">{inquiry.property.title || 'N/A'}</div>
                               {inquiry.property.price && (
                                 <div className="text-xs text-gray-500">
-                                  ${inquiry.property.price.toLocaleString()}
+                                  ${typeof inquiry.property.price === 'number'
+                                    ? inquiry.property.price.toLocaleString()
+                                    : String(inquiry.property.price)}
                                 </div>
                               )}
                               {inquiry.property.location && (
                                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                                   <MapPin className="h-3 w-3" />
-                                  {typeof inquiry.property.location === 'string' 
-                                    ? inquiry.property.location 
-                                    : [
-                                        inquiry.property.location.address,
-                                        inquiry.property.location.city,
-                                        inquiry.property.location.state,
-                                        inquiry.property.location.country,
-                                        inquiry.property.location.zipCode
-                                      ].filter(Boolean).join(', ') || 'N/A'}
+                                  {typeof inquiry.property.location === 'string'
+                                    ? inquiry.property.location
+                                    : typeof inquiry.property.location === 'object'
+                                      ? [
+                                        inquiry.property.location?.address,
+                                        inquiry.property.location?.city,
+                                        inquiry.property.location?.state,
+                                        inquiry.property.location?.country,
+                                        inquiry.property.location?.zipCode
+                                      ].filter(Boolean).join(', ') || 'N/A'
+                                      : 'N/A'}
                                 </div>
                               )}
                             </div>
@@ -768,26 +910,76 @@ export default function AdminInquiriesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {inquiry.assignedAgent ? (
-                            <>
-                              {inquiry.assignedAgent.profileImage ? (
-                                <img
-                                  src={inquiry.assignedAgent.profileImage}
-                                  alt={`${inquiry.assignedAgent.firstName || ''} ${inquiry.assignedAgent.lastName || ''}`}
-                                  className="h-8 w-8 rounded-full mr-2 object-cover"
-                                />
-                              ) : (
-                                <UserCircle className="h-8 w-8 text-gray-400 mr-2" />
-                              )}
-                              <div className="text-sm text-gray-900">
-                                {inquiry.assignedAgent.firstName || ''} {inquiry.assignedAgent.lastName || ''}
+                        {(user?.role === 'super_admin' || user?.role === 'agency_admin') && inquiry.agency ? (
+                          <div className="relative">
+                            <select
+                              value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
+                              onChange={async (e) => {
+                                const selectedAgentId = e.target.value
+                                if (selectedAgentId) {
+                                  await handleAssignAgent(inquiry._id, selectedAgentId)
+                                }
+                              }}
+                              disabled={assigningAgent === inquiry._id}
+                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              onFocus={async () => {
+                                // Fetch agents when dropdown is opened
+                                const agencyId = inquiry.agency?._id || inquiry.agency
+                                if (agencyId && !agencyAgents[agencyId]) {
+                                  await fetchAgentsByAgency(agencyId)
+                                }
+                              }}
+                            >
+                              <option value="">Assign Agent...</option>
+                              {(() => {
+                                const agencyId = inquiry.agency?._id || inquiry.agency
+                                // If undefined, it means not fetched yet (loading)
+                                const availableAgents = agencyAgents[agencyId]
+
+                                if (availableAgents === undefined) {
+                                  return <option value="" disabled>Loading agents...</option>
+                                }
+
+                                // If empty array, show nothing (keep it blank)
+                                if (availableAgents.length === 0) {
+                                  return null
+                                }
+
+                                return availableAgents.map((agent) => (
+                                  <option key={agent._id} value={agent._id}>
+                                    {agent.firstName} {agent.lastName}
+                                  </option>
+                                ))
+                              })()}
+                            </select>
+                            {assigningAgent === inquiry._id && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                               </div>
-                            </>
-                          ) : (
-                            <span className="text-gray-400 text-sm">Unassigned</span>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center">
+                            {inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent.firstName || inquiry.assignedAgent) ? (
+                              <>
+                                {inquiry.assignedAgent.profileImage ? (
+                                  <img
+                                    src={inquiry.assignedAgent.profileImage}
+                                    alt={`${inquiry.assignedAgent.firstName || ''} ${inquiry.assignedAgent.lastName || ''}`}
+                                    className="h-8 w-8 rounded-full mr-2 object-cover"
+                                  />
+                                ) : (
+                                  <UserCircle className="h-8 w-8 text-gray-400 mr-2" />
+                                )}
+                                <div className="text-sm text-gray-900">
+                                  {inquiry.assignedAgent.firstName || ''} {inquiry.assignedAgent.lastName || ''}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Unassigned</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(inquiry.status)}
@@ -798,10 +990,10 @@ export default function AdminInquiriesPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {inquiry.createdAt
                           ? new Date(inquiry.createdAt).toLocaleDateString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            })
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })
                           : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -854,7 +1046,7 @@ export default function AdminInquiriesPage() {
                         {pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 1}
                       </span> to{' '}
                       <span className="font-medium">
-                        {pagination.total > 0 
+                        {pagination.total > 0
                           ? Math.min(pagination.page * pagination.limit, pagination.total)
                           : inquiries.length}
                       </span>{' '}
@@ -873,36 +1065,67 @@ export default function AdminInquiriesPage() {
                         </button>
                         {[...Array(pagination.pages)].map((_, i) => {
                           const pageNum = i + 1
-                          
+
                           // For many pages, show only first, last, current, and neighbors
                           if (pagination.pages > 10) {
-                            const showPage = 
-                              pageNum === 1 || 
-                              pageNum === pagination.pages || 
+                            const showPage =
+                              pageNum === 1 ||
+                              pageNum === pagination.pages ||
                               (pageNum >= pagination.page - 1 && pageNum <= pagination.page + 1)
-                            
+
                             if (!showPage) {
-                              // Show ellipsis only once
-                              if (pageNum === 2 || pageNum === pagination.pages - 1) {
-                                return (
-                                  <span key={`ellipsis-${i}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                    ...
-                                  </span>
-                                )
+                              // Show ellipsis only once before first hidden page and once after last hidden page
+                              const isBeforeFirstHidden = pageNum === pagination.page - 2 && pagination.page > 3
+                              const isAfterLastHidden = pageNum === pagination.page + 2 && pagination.page < pagination.pages - 2
+
+                              // Edge case: if page is near the beginning or end
+                              if (pagination.page <= 3) {
+                                // Near beginning: show ellipsis after page 4
+                                if (pageNum === 4) {
+                                  return (
+                                    <span key={`ellipsis-before-${pageNum}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      ...
+                                    </span>
+                                  )
+                                }
+                              } else if (pagination.page >= pagination.pages - 2) {
+                                // Near end: show ellipsis before second-to-last page
+                                if (pageNum === pagination.pages - 3) {
+                                  return (
+                                    <span key={`ellipsis-after-${pageNum}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      ...
+                                    </span>
+                                  )
+                                }
+                              } else {
+                                // Middle: show ellipsis before and after
+                                if (isBeforeFirstHidden) {
+                                  return (
+                                    <span key={`ellipsis-before-${pageNum}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      ...
+                                    </span>
+                                  )
+                                }
+                                if (isAfterLastHidden) {
+                                  return (
+                                    <span key={`ellipsis-after-${pageNum}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      ...
+                                    </span>
+                                  )
+                                }
                               }
                               return null
                             }
                           }
-                          
+
                           return (
                             <button
                               key={pageNum}
                               onClick={() => setCurrentPage(pageNum)}
-                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                pagination.page === pageNum
-                                  ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                                  : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                              }`}
+                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${pagination.page === pageNum
+                                ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                }`}
                             >
                               {pageNum}
                             </button>
@@ -1008,7 +1231,9 @@ export default function AdminInquiriesPage() {
                         <div>
                           <p className="text-sm text-gray-500">Price</p>
                           <p className="text-sm font-medium text-gray-900">
-                            ${selectedInquiry.property.price.toLocaleString()}
+                            ${typeof selectedInquiry.property.price === 'number'
+                              ? selectedInquiry.property.price.toLocaleString()
+                              : String(selectedInquiry.property.price)}
                           </p>
                         </div>
                       )}
@@ -1016,15 +1241,17 @@ export default function AdminInquiriesPage() {
                         <div className="col-span-2">
                           <p className="text-sm text-gray-500">Location</p>
                           <p className="text-sm font-medium text-gray-900">
-                            {typeof selectedInquiry.property.location === 'string' 
-                              ? selectedInquiry.property.location 
-                              : [
-                                  selectedInquiry.property.location.address,
-                                  selectedInquiry.property.location.city,
-                                  selectedInquiry.property.location.state,
-                                  selectedInquiry.property.location.country,
-                                  selectedInquiry.property.location.zipCode
-                                ].filter(Boolean).join(', ') || 'N/A'}
+                            {typeof selectedInquiry.property.location === 'string'
+                              ? selectedInquiry.property.location
+                              : typeof selectedInquiry.property.location === 'object'
+                                ? [
+                                  selectedInquiry.property.location?.address,
+                                  selectedInquiry.property.location?.city,
+                                  selectedInquiry.property.location?.state,
+                                  selectedInquiry.property.location?.country,
+                                  selectedInquiry.property.location?.zipCode
+                                ].filter(Boolean).join(', ') || 'N/A'
+                                : 'N/A'}
                           </p>
                         </div>
                       )}
@@ -1133,7 +1360,9 @@ export default function AdminInquiriesPage() {
                     <div>
                       <p className="text-sm text-gray-500">Source</p>
                       <p className="text-sm font-medium text-gray-900">
-                        {selectedInquiry.source?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
+                        {selectedInquiry.source && typeof selectedInquiry.source === 'string'
+                          ? selectedInquiry.source.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                          : 'N/A'}
                       </p>
                     </div>
                     <div>
@@ -1159,7 +1388,9 @@ export default function AdminInquiriesPage() {
                             <p className="text-sm text-gray-500">Budget Min</p>
                             <p className="text-sm font-medium text-gray-900">
                               {selectedInquiry.inquiry.budget.currency || '$'}{' '}
-                              {selectedInquiry.inquiry.budget.min.toLocaleString()}
+                              {typeof selectedInquiry.inquiry.budget.min === 'number'
+                                ? selectedInquiry.inquiry.budget.min.toLocaleString()
+                                : String(selectedInquiry.inquiry.budget.min)}
                             </p>
                           </div>
                         )}
@@ -1168,7 +1399,9 @@ export default function AdminInquiriesPage() {
                             <p className="text-sm text-gray-500">Budget Max</p>
                             <p className="text-sm font-medium text-gray-900">
                               {selectedInquiry.inquiry.budget.currency || '$'}{' '}
-                              {selectedInquiry.inquiry.budget.max.toLocaleString()}
+                              {typeof selectedInquiry.inquiry.budget.max === 'number'
+                                ? selectedInquiry.inquiry.budget.max.toLocaleString()
+                                : String(selectedInquiry.inquiry.budget.max)}
                             </p>
                           </div>
                         )}
@@ -1178,7 +1411,9 @@ export default function AdminInquiriesPage() {
                       <div>
                         <p className="text-sm text-gray-500">Timeline</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {selectedInquiry.inquiry.timeline.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          {typeof selectedInquiry.inquiry.timeline === 'string'
+                            ? selectedInquiry.inquiry.timeline.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                            : String(selectedInquiry.inquiry.timeline)}
                         </p>
                       </div>
                     )}
@@ -1215,7 +1450,7 @@ export default function AdminInquiriesPage() {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   )
 }
 

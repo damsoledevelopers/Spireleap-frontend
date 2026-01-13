@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -9,7 +10,26 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 export default function AdminPropertiesPage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // Role-based access control
+  useEffect(() => {
+    if (!authLoading && user) {
+      const allowedRoles = ['super_admin', 'agency_admin', 'agent', 'staff']
+      if (!allowedRoles.includes(user.role)) {
+        router.push('/auth/login')
+      }
+    }
+  }, [user, authLoading, router])
+
+  // Role-based feature visibility
+  const isSuperAdmin = user?.role === 'super_admin'
+  const isAgencyAdmin = user?.role === 'agency_admin'
+  const isAgent = user?.role === 'agent'
+  const isStaff = user?.role === 'staff'
+  const canAddProperty = isSuperAdmin || isAgencyAdmin || isAgent
+  const canDeleteProperty = isSuperAdmin || isAgencyAdmin
   const [properties, setProperties] = useState([])
   const [allProperties, setAllProperties] = useState([]) // Store all properties for metrics
   const [loading, setLoading] = useState(true)
@@ -56,11 +76,14 @@ export default function AdminPropertiesPage() {
   })
 
 
+
   useEffect(() => {
     fetchMetrics()
-    fetchAgencies()
+    if (isSuperAdmin || isAgencyAdmin) {
+      fetchAgencies()
+    }
     fetchUniqueLocations()
-  }, [])
+  }, [isSuperAdmin, isAgencyAdmin])
 
   useEffect(() => {
     // Reset pagination when date filters change
@@ -76,8 +99,8 @@ export default function AdminPropertiesPage() {
 
     return () => clearTimeout(timer)
   }, [
-    filters.status, 
-    filters.propertyType, 
+    filters.status,
+    filters.propertyType,
     filters.listingType,
     filters.agency,
     filters.city,
@@ -90,7 +113,7 @@ export default function AdminPropertiesPage() {
     filters.bathrooms,
     filters.minArea,
     filters.maxArea,
-    pagination.current, 
+    pagination.current,
     searchTerm,
     startDate,
     endDate
@@ -115,7 +138,7 @@ export default function AdminPropertiesPage() {
       if (filters.listingType && filters.listingType.trim()) {
         params.append('listingType', filters.listingType.trim())
       }
-      if (filters.agency && filters.agency.trim()) {
+      if (filters.agency && filters.agency.trim() && isSuperAdmin) {
         params.append('agency', filters.agency.trim())
       }
       if (filters.city && filters.city.trim()) {
@@ -155,27 +178,29 @@ export default function AdminPropertiesPage() {
         }
       })
       let fetchedProperties = response.data.properties || []
-      
+
       // Apply client-side date filtering by createdAt or updatedAt
       if (startDate || endDate) {
         fetchedProperties = fetchedProperties.filter((property) => {
           const propertyDate = new Date(property.updatedAt || property.updated_at || property.createdAt || property.created_at || 0)
           const start = startDate ? new Date(startDate + 'T00:00:00') : null
           const end = endDate ? new Date(endDate + 'T23:59:59') : null
-          
+
           if (start && propertyDate < start) return false
           if (end && propertyDate > end) return false
           return true
         })
       }
-      
+
       setProperties(fetchedProperties)
-      setPagination(response.data.pagination || {
-        current: response.data.pagination?.page || pagination.current,
-        pages: response.data.pagination?.pages || pagination.pages,
-        total: response.data.pagination?.total || pagination.total,
-        limit: response.data.pagination?.limit || pagination.limit
-      })
+      if (response.data.pagination) {
+        setPagination({
+          current: response.data.pagination.page,
+          pages: response.data.pagination.pages,
+          total: response.data.pagination.total,
+          limit: response.data.pagination.limit
+        })
+      }
     } catch (error) {
       console.error('Error fetching properties:', error)
       toast.error(error.response?.data?.message || 'Failed to load properties')
@@ -189,7 +214,7 @@ export default function AdminPropertiesPage() {
       // Fetch all properties for metrics calculation
       const response = await api.get('/properties?limit=500').catch(() => ({ data: { properties: [] } }))
       const allPropertiesData = response.data?.properties || []
-      
+
       setAllProperties(allPropertiesData)
 
       // Calculate metrics
@@ -212,9 +237,21 @@ export default function AdminPropertiesPage() {
     }
   }
 
+  const handleUpdateStatus = async (id, status, rejectionReason = '') => {
+    try {
+      const response = await api.put(`/properties/${id}/approve`, { status, rejectionReason })
+      toast.success(response.data.message || `Property ${status === 'active' ? 'approved' : 'rejected'} successfully`)
+      fetchProperties()
+      fetchMetrics()
+    } catch (error) {
+      console.error('Error updating property status:', error)
+      toast.error(error.response?.data?.message || 'Failed to update property status')
+    }
+  }
+
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this property?')) return
-    
+
     try {
       await api.delete(`/properties/${id}`)
       toast.success('Property deleted successfully')
@@ -248,22 +285,22 @@ export default function AdminPropertiesPage() {
     try {
       const response = await api.get('/properties?limit=500')
       const allProperties = response.data?.properties || []
-      
+
       const cities = [...new Set(allProperties
         .map(p => p.location?.city)
         .filter(Boolean)
       )].sort()
-      
+
       const states = [...new Set(allProperties
         .map(p => p.location?.state)
         .filter(Boolean)
       )].sort()
-      
+
       const countries = [...new Set(allProperties
         .map(p => p.location?.country)
         .filter(Boolean)
       )].sort()
-      
+
       setUniqueLocations({ cities, states, countries })
     } catch (error) {
       console.error('Error fetching unique locations:', error)
@@ -295,23 +332,23 @@ export default function AdminPropertiesPage() {
   }
 
   const hasActiveFilters = () => {
-    return filters.status !== '' || 
-           filters.propertyType !== '' || 
-           filters.listingType !== '' || 
-           filters.agency !== '' ||
-           filters.city !== '' ||
-           filters.state !== '' ||
-           filters.country !== '' ||
-           filters.area !== '' ||
-           filters.minPrice !== '' ||
-           filters.maxPrice !== '' ||
-           filters.bedrooms !== '' ||
-           filters.bathrooms !== '' ||
-           filters.minArea !== '' ||
-           filters.maxArea !== '' ||
-           searchTerm.trim() !== '' ||
-           startDate !== '' ||
-           endDate !== ''
+    return filters.status !== '' ||
+      filters.propertyType !== '' ||
+      filters.listingType !== '' ||
+      filters.agency !== '' ||
+      filters.city !== '' ||
+      filters.state !== '' ||
+      filters.country !== '' ||
+      filters.area !== '' ||
+      filters.minPrice !== '' ||
+      filters.maxPrice !== '' ||
+      filters.bedrooms !== '' ||
+      filters.bathrooms !== '' ||
+      filters.minArea !== '' ||
+      filters.maxArea !== '' ||
+      searchTerm.trim() !== '' ||
+      startDate !== '' ||
+      endDate !== ''
   }
 
   const getPropertyId = (property) => {
@@ -320,6 +357,21 @@ export default function AdminPropertiesPage() {
     if (property._id?.toString) return property._id.toString()
     if (property._id?.$oid) return property._id.$oid
     return String(property._id || property.id || '')
+  }
+
+  // Show loading or redirect if not authorized
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (!user || !['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role)) {
+    return null // Router will handle redirect
   }
 
   return (
@@ -386,25 +438,32 @@ export default function AdminPropertiesPage() {
         <div className="flex justify-between items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Properties</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage all properties across all agencies</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {isSuperAdmin ? 'Manage all properties across all agencies' :
+                isAgencyAdmin ? 'Manage your agency properties' :
+                  isAgent ? 'Manage your assigned properties' :
+                    'View properties'}
+            </p>
           </div>
-           <div className="flex items-center gap-3">
-             {/* Search Bar */}
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-               <input
-                 type="text"
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-                 placeholder="Search properties by any field..."
-                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-64"
-               />
-             </div>
-             <Link href="/admin/properties/add" className="btn btn-primary">
-               <Plus className="h-5 w-5 mr-2" />
-               Add Property
-             </Link>
-           </div>
+          <div className="flex items-center gap-3">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search properties by any field..."
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-64"
+              />
+            </div>
+            {canAddProperty && (
+              <Link href="/admin/properties/add" className="btn btn-primary">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Property
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Filter Buttons */}
@@ -416,9 +475,8 @@ export default function AdminPropertiesPage() {
               setFilters(prev => ({ ...prev, status: e.target.value }))
               setPagination(prev => ({ ...prev, current: 1 }))
             }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${
-              filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
+            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              }`}
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
@@ -436,9 +494,8 @@ export default function AdminPropertiesPage() {
               setFilters(prev => ({ ...prev, propertyType: e.target.value }))
               setPagination(prev => ({ ...prev, current: 1 }))
             }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${
-              filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
+            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              }`}
           >
             <option value="">All Types</option>
             <option value="apartment">Apartment</option>
@@ -461,9 +518,8 @@ export default function AdminPropertiesPage() {
               setFilters(prev => ({ ...prev, listingType: e.target.value }))
               setPagination(prev => ({ ...prev, current: 1 }))
             }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${
-              filters.listingType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
+            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.listingType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              }`}
           >
             <option value="">All Listing Types</option>
             <option value="sale">Sale</option>
@@ -475,9 +531,8 @@ export default function AdminPropertiesPage() {
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${
-                filters.minPrice || filters.maxPrice ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.minPrice || filters.maxPrice ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
             >
               <DollarSign className="h-4 w-4" />
               Price
@@ -548,9 +603,8 @@ export default function AdminPropertiesPage() {
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'specification' ? null : 'specification')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${
-                filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
             >
               <Bed className="h-4 w-4" />
               Specification
@@ -658,9 +712,8 @@ export default function AdminPropertiesPage() {
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'location' ? null : 'location')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${
-                filters.city || filters.state || filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.city || filters.state || filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
             >
               <MapPin className="h-4 w-4" />
               Location
@@ -768,35 +821,35 @@ export default function AdminPropertiesPage() {
             )}
           </div>
 
-          {/* Agency Filter - Direct Dropdown */}
-          <select
-            value={filters.agency}
-            onChange={(e) => {
-              setFilters(prev => ({ ...prev, agency: e.target.value }))
-              setPagination(prev => ({ ...prev, current: 1 }))
-            }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${
-              filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
-          >
-            <option value="">All Agencies</option>
-            {agencies.map((agency) => (
-              <option key={agency._id} value={agency._id}>
-                {agency.name}
-              </option>
-            ))}
-          </select>
+          {/* Agency Filter - Only for Super Admin */}
+          {isSuperAdmin && (
+            <select
+              value={filters.agency}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, agency: e.target.value }))
+                setPagination(prev => ({ ...prev, current: 1 }))
+              }}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
+            >
+              <option value="">All Agencies</option>
+              {agencies.map((agency) => (
+                <option key={agency._id} value={agency._id}>
+                  {agency.name}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Date Range Filter Button */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowDatePicker(!showDatePicker)}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${
-                startDate || endDate
-                  ? 'border-primary-500 bg-primary-50 text-primary-700'
-                  : 'border-gray-300'
-              }`}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${startDate || endDate
+                ? 'border-primary-500 bg-primary-50 text-primary-700'
+                : 'border-gray-300'
+                }`}
             >
               <Calendar className="h-4 w-4" />
               <span>
@@ -809,8 +862,8 @@ export default function AdminPropertiesPage() {
                       : 'Date Range'}
               </span>
               {(startDate || endDate) && (
-                <X 
-                  className="h-4 w-4 ml-1 text-gray-400 hover:text-gray-600" 
+                <X
+                  className="h-4 w-4 ml-1 text-gray-400 hover:text-gray-600"
                   onClick={(e) => {
                     e.stopPropagation()
                     setStartDate('')
@@ -823,8 +876,8 @@ export default function AdminPropertiesPage() {
             </button>
             {showDatePicker && (
               <>
-                <div 
-                  className="fixed inset-0 z-40" 
+                <div
+                  className="fixed inset-0 z-40"
                   onClick={() => setShowDatePicker(false)}
                 />
                 <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
@@ -914,10 +967,12 @@ export default function AdminPropertiesPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No properties found</p>
-            <Link href="/admin/properties/add" className="btn btn-primary mt-4">
-              <Plus className="h-5 w-5 mr-2" />
-              Add Your First Property
-            </Link>
+            {canAddProperty && (
+              <Link href="/admin/properties/add" className="btn btn-primary mt-4">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Your First Property
+              </Link>
+            )}
           </div>
         ) : (
           <>
@@ -946,6 +1001,9 @@ export default function AdminPropertiesPage() {
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
                         Details
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                        Agent
                       </th>
                       <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
                         Status
@@ -1025,6 +1083,15 @@ export default function AdminPropertiesPage() {
                               </div>
                             </div>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {property.agent ? (
+                                `${property.agent.firstName || ''} ${property.agent.lastName || ''}`
+                              ) : (
+                                <span className="text-gray-400 italic text-xs">Unassigned</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             {property.status === 'active' ? (
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -1057,20 +1124,52 @@ export default function AdminPropertiesPage() {
                               >
                                 <Eye className="h-5 w-5" />
                               </Link>
-                              <Link
-                                href={`/admin/properties/${propertyId}/edit`}
-                                className="text-primary-600 hover:text-primary-900 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit className="h-5 w-5" />
-                              </Link>
-                              <button
-                                onClick={() => handleDelete(propertyId)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-5 w-5" />
-                              </button>
+
+                              {/* Approval Actions for Admins */}
+                              {(isSuperAdmin || isAgencyAdmin) && property.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => handleUpdateStatus(propertyId, 'active')}
+                                    className="text-green-600 hover:text-green-900 transition-colors"
+                                    title="Approve"
+                                  >
+                                    <CheckCircle className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const reason = prompt('Please enter rejection reason (optional):')
+                                      if (reason !== null) handleUpdateStatus(propertyId, 'inactive', reason)
+                                    }}
+                                    className="text-orange-600 hover:text-orange-900 transition-colors"
+                                    title="Reject"
+                                  >
+                                    <XCircle className="h-5 w-5" />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* Edit access based on creator and role */}
+                              {((isSuperAdmin && property.creatorRole !== 'agent' && property.creatorRole !== 'agency_admin') ||
+                                (isAgencyAdmin && property.creatorRole !== 'agent') ||
+                                (isAgent && (property.agent?._id === user?._id || property.agent === user?._id || property.createdBy === user?._id || property.createdBy?._id === user?._id))
+                              ) ? (
+                                <Link
+                                  href={`/admin/properties/${propertyId}/edit`}
+                                  className="text-primary-600 hover:text-primary-900 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-5 w-5" />
+                                </Link>
+                              ) : null}
+                              {canDeleteProperty && (
+                                <button
+                                  onClick={() => handleDelete(propertyId)}
+                                  className="text-red-600 hover:text-red-900 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1110,7 +1209,7 @@ export default function AdminPropertiesPage() {
                       >
                         Previous
                       </button>
-                      
+
                       {/* Page Numbers */}
                       <div className="flex items-center gap-1">
                         {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
@@ -1124,23 +1223,22 @@ export default function AdminPropertiesPage() {
                           } else {
                             pageNum = pagination.current - 2 + i;
                           }
-                          
+
                           return (
                             <button
                               key={pageNum}
                               onClick={() => setPagination(prev => ({ ...prev, current: pageNum }))}
-                              className={`px-3 py-2 border rounded-lg text-sm font-medium min-w-[40px] ${
-                                pagination.current === pageNum
-                                  ? 'bg-primary-600 text-white border-primary-600'
-                                  : 'border-gray-300 hover:bg-gray-50'
-                              }`}
+                              className={`px-3 py-2 border rounded-lg text-sm font-medium min-w-[40px] ${pagination.current === pageNum
+                                ? 'bg-primary-600 text-white border-primary-600'
+                                : 'border-gray-300 hover:bg-gray-50'
+                                }`}
                             >
                               {pageNum}
                             </button>
                           );
                         })}
                       </div>
-                      
+
                       <button
                         onClick={() => setPagination(prev => ({ ...prev, current: prev.current + 1 }))}
                         disabled={pagination.current === pagination.pages}

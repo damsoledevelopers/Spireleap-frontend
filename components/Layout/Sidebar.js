@@ -30,9 +30,9 @@ import {
 const navigation = {
   super_admin: [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { 
-      name: 'Users', 
-      href: '/admin/users', 
+    {
+      name: 'Users',
+      href: '/admin/users',
       icon: UserCheck,
       submenu: [
         { name: 'Agencies', href: '/admin/users?tab=agencies', icon: Building },
@@ -50,27 +50,26 @@ const navigation = {
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ],
   agency_admin: [
-    { name: 'Dashboard', href: '/agency/dashboard', icon: LayoutDashboard },
-    { name: 'Properties', href: '/agency/properties', icon: Package },
-    { name: 'Leads', href: '/agency/leads', icon: Users },
-    { name: 'Inquiries', href: '/agency/inquiries', icon: MessageSquare },
-    { name: 'Messages', href: '/agency/messages', icon: Mail },
-    { name: 'Agents', href: '/agency/agents', icon: UserCheck },
-    { name: 'Reports', href: '/agency/reports', icon: TrendingUp },
-    { name: 'Settings', href: '/agency/settings', icon: Settings },
+    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { name: 'Properties', href: '/admin/properties', icon: Package },
+    { name: 'Leads', href: '/admin/leads', icon: Users },
+    { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
+    { name: 'Agents', href: '/admin/agents', icon: UserCheck },
+    { name: 'Reports', href: '/admin/reports', icon: TrendingUp },
+    { name: 'Settings', href: '/admin/settings', icon: Settings },
   ],
   agent: [
-    { name: 'Dashboard', href: '/agent/dashboard', icon: LayoutDashboard },
-    { name: 'My Properties', href: '/agent/properties', icon: Package },
-    { name: 'My Leads', href: '/agent/leads', icon: Users },
-    { name: 'Inquiries', href: '/agent/inquiries', icon: MessageSquare },
-    { name: 'Profile', href: '/agent/profile', icon: UserCheck },
+    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { name: 'My Properties', href: '/admin/properties', icon: Package },
+    { name: 'My Leads', href: '/admin/leads', icon: Users },
+    { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
+    { name: 'Profile', href: '/admin/profile', icon: UserCheck },
   ],
   staff: [
-    { name: 'Dashboard', href: '/staff/dashboard', icon: LayoutDashboard },
-    { name: 'Leads', href: '/staff/leads', icon: Users },
-    { name: 'Properties', href: '/staff/properties', icon: Package },
-    { name: 'Profile', href: '/staff/profile', icon: UserCheck },
+    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { name: 'Leads', href: '/admin/leads', icon: Users },
+    { name: 'Properties', href: '/admin/properties', icon: Package },
+    { name: 'Profile', href: '/admin/profile', icon: UserCheck },
   ],
 }
 
@@ -85,13 +84,13 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
   useEffect(() => {
     const currentParams = new URLSearchParams(window.location.search)
     const tabParam = currentParams.get('tab')
-    
+
     userNavigation.forEach((item) => {
       if (item.submenu) {
         const hasActiveSubmenu = item.submenu.some(subItem => {
           const subPath = subItem.href.split('?')[0]
           const subQuery = subItem.href.split('?')[1]
-          
+
           // Check if current page matches any of the submenu pages
           // For agencies, agents, staff pages
           if (pathname === '/admin/agencies' || pathname === '/admin/agents' || pathname === '/admin/staff' || pathname === '/admin/users') {
@@ -143,7 +142,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
         if (pathname === '/admin/staff' && subItem.href.includes('staff')) return true
         if (pathname === '/admin/users' && subItem.href.includes('users') && !subItem.href.includes('agencies') && !subItem.href.includes('agents') && !subItem.href.includes('staff')) return true
       }
-      
+
       if (subItem.href.includes('?')) {
         const [path, query] = subItem.href.split('?')
         const params = new URLSearchParams(query)
@@ -184,11 +183,11 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
           <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
             <div className="flex-shrink-0 flex items-center px-4">
               <div className="h-8 w-8 flex items-center justify-center">
-                <Image 
-                  src="/NovaKeys.png" 
-                  alt="NOVA KEYS Real Estate" 
-                  width={32} 
-                  height={32} 
+                <Image
+                  src="/NovaKeys.png"
+                  alt="NOVA KEYS Real Estate"
+                  width={32}
+                  height={32}
                   className="object-contain"
                 />
               </div>
@@ -198,23 +197,21 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
               {userNavigation.map((item) => {
                 const isActive = isParentActive(item)
                 const isDropdownOpen = openDropdowns[item.name]
-                
+
                 if (item.submenu) {
                   return (
                     <div key={item.name}>
                       <button
                         onClick={() => toggleDropdown(item.name)}
-                        className={`${
-                          isActive
-                            ? 'bg-primary-100 text-primary-900'
-                            : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                        } group w-full flex items-center justify-between px-2 py-2 text-base font-medium rounded-md`}
+                        className={`${isActive
+                          ? 'bg-primary-100 text-primary-900'
+                          : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                          } group w-full flex items-center justify-between px-2 py-2 text-base font-medium rounded-md`}
                       >
                         <div className="flex items-center">
                           <item.icon
-                            className={`${
-                              isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                            } mr-4 flex-shrink-0 h-6 w-6`}
+                            className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                              } mr-4 flex-shrink-0 h-6 w-6`}
                           />
                           {item.name}
                         </div>
@@ -251,16 +248,14 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                                     onClose()
                                   }
                                 }}
-                                className={`${
-                                  subIsActive
-                                    ? 'bg-primary-100 text-primary-900'
-                                    : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                                } flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                                className={`${subIsActive
+                                  ? 'bg-primary-100 text-primary-900'
+                                  : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                                  } flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                               >
                                 <subItem.icon
-                                  className={`${
-                                    subIsActive ? 'text-primary-500' : 'text-gray-400'
-                                  } mr-3 flex-shrink-0 h-5 w-5`}
+                                  className={`${subIsActive ? 'text-primary-500' : 'text-gray-400'
+                                    } mr-3 flex-shrink-0 h-5 w-5`}
                                 />
                                 {subItem.name}
                               </Link>
@@ -271,22 +266,20 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                     </div>
                   )
                 }
-                
+
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
                     onClick={onClose}
-                    className={`${
-                      isActive
-                        ? 'bg-primary-100 text-primary-900'
-                        : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                    } group flex items-center px-2 py-2 text-base font-medium rounded-md`}
+                    className={`${isActive
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                      } group flex items-center px-2 py-2 text-base font-medium rounded-md`}
                   >
                     <item.icon
-                      className={`${
-                        isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                      } mr-4 flex-shrink-0 h-6 w-6`}
+                      className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                        } mr-4 flex-shrink-0 h-6 w-6`}
                     />
                     {item.name}
                   </Link>
@@ -350,11 +343,11 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
             <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
               <div className={`flex items-center flex-shrink-0 px-4 ${isCollapsed ? 'justify-center' : ''}`}>
                 <div className="h-8 w-8 flex items-center justify-center">
-                  <Image 
-                    src="/NovaKeys.png" 
-                    alt="NOVA KEYS Real Estate" 
-                    width={32} 
-                    height={32} 
+                  <Image
+                    src="/NovaKeys.png"
+                    alt="NOVA KEYS Real Estate"
+                    width={32}
+                    height={32}
                     className="object-contain"
                   />
                 </div>
@@ -362,29 +355,27 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                   <span className="ml-2 text-lg font-semibold text-gray-900">NOVA KEYS</span>
                 )}
               </div>
-              
+
               {!isCollapsed && (
                 <nav className="mt-5 flex-1 px-2 space-y-1">
                   {userNavigation.map((item) => {
                     const isActive = isParentActive(item)
                     const isDropdownOpen = openDropdowns[item.name]
-                    
+
                     if (item.submenu) {
                       return (
                         <div key={item.name}>
                           <button
                             onClick={() => toggleDropdown(item.name)}
-                            className={`${
-                              isActive
-                                ? 'bg-primary-100 text-primary-900'
-                                : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                            } group w-full flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md`}
+                            className={`${isActive
+                              ? 'bg-primary-100 text-primary-900'
+                              : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                              } group w-full flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md`}
                           >
                             <div className="flex items-center">
                               <item.icon
-                                className={`${
-                                  isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                                } mr-3 flex-shrink-0 h-6 w-6`}
+                                className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                                  } mr-3 flex-shrink-0 h-6 w-6`}
                               />
                               {item.name}
                             </div>
@@ -418,16 +409,14 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                                       e.stopPropagation()
                                       // Keep dropdown open - don't close it
                                     }}
-                                    className={`${
-                                      subIsActive
-                                        ? 'bg-primary-100 text-primary-900'
-                                        : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                                    } flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                                    className={`${subIsActive
+                                      ? 'bg-primary-100 text-primary-900'
+                                      : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                                      } flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                                   >
                                     <subItem.icon
-                                      className={`${
-                                        subIsActive ? 'text-primary-500' : 'text-gray-400'
-                                      } mr-3 flex-shrink-0 h-5 w-5`}
+                                      className={`${subIsActive ? 'text-primary-500' : 'text-gray-400'
+                                        } mr-3 flex-shrink-0 h-5 w-5`}
                                     />
                                     {subItem.name}
                                   </Link>
@@ -438,21 +427,19 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                         </div>
                       )
                     }
-                    
+
                     return (
                       <Link
                         key={item.name}
                         href={item.href}
-                        className={`${
-                          isActive
-                            ? 'bg-primary-100 text-primary-900'
-                            : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                        } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                        className={`${isActive
+                          ? 'bg-primary-100 text-primary-900'
+                          : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                          } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                       >
                         <item.icon
-                          className={`${
-                            isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                          } mr-3 flex-shrink-0 h-6 w-6`}
+                          className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                            } mr-3 flex-shrink-0 h-6 w-6`}
                         />
                         {item.name}
                       </Link>
@@ -473,16 +460,14 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                           <Link
                             href={item.href}
                             title={item.name}
-                            className={`${
-                              isActive
-                                ? 'bg-primary-100 text-primary-900'
-                                : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                            } flex items-center justify-center px-2 py-2 text-sm font-medium rounded-md`}
+                            className={`${isActive
+                              ? 'bg-primary-100 text-primary-900'
+                              : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                              } flex items-center justify-center px-2 py-2 text-sm font-medium rounded-md`}
                           >
                             <item.icon
-                              className={`${
-                                isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                              } flex-shrink-0 h-6 w-6`}
+                              className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                                } flex-shrink-0 h-6 w-6`}
                             />
                           </Link>
                           {/* Tooltip with submenu */}
@@ -508,16 +493,14 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                         key={item.name}
                         href={item.href}
                         title={item.name}
-                        className={`${
-                          isActive
-                            ? 'bg-primary-100 text-primary-900'
-                            : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
-                        } group flex items-center justify-center px-2 py-2 text-sm font-medium rounded-md`}
+                        className={`${isActive
+                          ? 'bg-primary-100 text-primary-900'
+                          : 'text-gray-600 hover:bg-logo-beige hover:text-gray-900'
+                          } group flex items-center justify-center px-2 py-2 text-sm font-medium rounded-md`}
                       >
                         <item.icon
-                          className={`${
-                            isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                          } flex-shrink-0 h-6 w-6`}
+                          className={`${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                            } flex-shrink-0 h-6 w-6`}
                         />
                       </Link>
                     )
@@ -525,7 +508,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                 </nav>
               )}
             </div>
-            
+
             {!isCollapsed && (
               <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
                 <div className="flex items-center w-full">

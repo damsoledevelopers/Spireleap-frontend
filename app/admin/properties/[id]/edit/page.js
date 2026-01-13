@@ -104,13 +104,35 @@ export default function AdminEditPropertyPage() {
         tags: property.tags || [],
         featured: property.featured || false,
         trending: property.trending || false,
-        status: property.status || 'active',
+        status: user?.role === 'agent' ? 'pending' : (property.status || 'active'),
         seo: property.seo || {
           metaTitle: '',
           metaDescription: '',
           keywords: []
         }
       })
+
+      // Creator-based permission check
+      if (user?.role === 'super_admin') {
+        if (property.creatorRole === 'agent' || property.creatorRole === 'agency_admin') {
+          toast.error('Access denied. You cannot edit properties created by agents or agencies.')
+          router.push('/admin/properties')
+          return
+        }
+      } else if (user?.role === 'agency_admin') {
+        if (property.creatorRole === 'agent') {
+          toast.error('Access denied. You cannot edit properties created by agents.')
+          router.push('/admin/properties')
+          return
+        }
+      } else if (user?.role === 'agent') {
+        const propertyAgentId = property.agent?._id || property.agent
+        if (propertyAgentId !== user?._id) {
+          toast.error('Access denied. You can only edit your own properties.')
+          router.push('/admin/properties')
+          return
+        }
+      }
 
       // Fetch agents for the property's agency
       if (property.agency?._id || property.agency) {
@@ -283,7 +305,7 @@ export default function AdminEditPropertyPage() {
     )
   }
 
-  if (!user || user.role !== 'super_admin') {
+  if (!user || !['super_admin', 'agency_admin', 'agent'].includes(user.role)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -317,47 +339,50 @@ export default function AdminEditPropertyPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Agency & Agent Selection */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Building className="h-5 w-5 text-primary-600" />
-              Agency & Agent Assignment
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agency *</label>
-                <select
-                  required
-                  value={formData.agency}
-                  onChange={(e) => handleInputChange('agency', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Select Agency</option>
-                  {agencies.map(agency => (
-                    <option key={agency._id} value={agency._id}>
-                      {agency.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent *</label>
-                <select
-                  required
-                  value={formData.agent}
-                  onChange={(e) => handleInputChange('agent', e.target.value)}
-                  disabled={!formData.agency}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="">{formData.agency ? 'Select Agent' : 'Select Agency First'}</option>
-                  {agents.map(agent => (
-                    <option key={agent._id} value={agent._id}>
-                      {agent.firstName} {agent.lastName}
-                    </option>
-                  ))}
-                </select>
+          {user?.role !== 'agent' && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Building className="h-5 w-5 text-primary-600" />
+                Agency & Agent Assignment
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agency *</label>
+                  <select
+                    required
+                    value={formData.agency}
+                    onChange={(e) => handleInputChange('agency', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    disabled={user?.role !== 'super_admin'}
+                  >
+                    <option value="">Select Agency</option>
+                    {agencies.map(agency => (
+                      <option key={agency._id} value={agency._id}>
+                        {agency.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agent *</label>
+                  <select
+                    required
+                    value={formData.agent}
+                    onChange={(e) => handleInputChange('agent', e.target.value)}
+                    disabled={!formData.agency || user?.role === 'agent'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">{formData.agency ? 'Select Agent' : 'Select Agency First'}</option>
+                    {agents.map(agent => (
+                      <option key={agent._id} value={agent._id}>
+                        {agent.firstName} {agent.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow p-6">
@@ -408,14 +433,25 @@ export default function AdminEditPropertyPage() {
                   required
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  disabled={user?.role === 'agent'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
-                  <option value="active">Active</option>
-                  <option value="pending">Pending</option>
-                  <option value="sold">Sold</option>
-                  <option value="rented">Rented</option>
-                  <option value="inactive">Inactive</option>
+                  {(user?.role === 'super_admin' || user?.role === 'agency_admin') ? (
+                    <>
+                      <option value="active">Available (Active)</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="sold">Sold</option>
+                      <option value="rented">Rented</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="draft">Draft</option>
+                    </>
+                  ) : (
+                    <option value="pending">Pending Agency Approval</option>
+                  )}
                 </select>
+                {user?.role === 'agent' && (
+                  <p className="mt-1 text-xs text-gray-500">Any edits will require re-approval from the agency.</p>
+                )}
               </div>
             </div>
             <div className="mt-4">

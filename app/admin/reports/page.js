@@ -178,10 +178,10 @@ export default function AdminReports() {
       const agentPerformance = dataToUse.users
         .filter(u => u.role === 'agent')
         .map(agent => {
-          const agentProperties = dataToUse.properties.filter(p => 
+          const agentProperties = dataToUse.properties.filter(p =>
             p.agent && (p.agent._id === agent._id || p.agent.toString() === agent._id)
           )
-          const agentLeads = dataToUse.leads.filter(l => 
+          const agentLeads = dataToUse.leads.filter(l =>
             l.assignedAgent && (l.assignedAgent._id === agent._id || l.assignedAgent.toString() === agent._id)
           )
           const activeLeads = agentLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
@@ -216,14 +216,14 @@ export default function AdminReports() {
           const userAgencyId = u.agency?._id?.toString() || u.agency?.toString() || u.agency
           return userAgencyId === agencyId && u.role === 'agent'
         })
-        
+
         const activeProperties = agencyProperties.filter(p => p.status === 'active').length
         const soldProperties = agencyProperties.filter(p => p.status === 'sold').length
         const rentedProperties = agencyProperties.filter(p => p.status === 'rented').length
         const newLeads = agencyLeads.filter(l => l.status === 'new').length
         const convertedLeads = agencyLeads.filter(l => l.status === 'converted').length
         const activeLeads = agencyLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
-        
+
         const totalPropertyValue = agencyProperties.reduce((sum, prop) => {
           if (prop.price?.sale) {
             return sum + (prop.price.sale || 0)
@@ -231,8 +231,8 @@ export default function AdminReports() {
           return sum
         }, 0)
 
-        const conversionRate = agencyLeads.length > 0 
-          ? ((convertedLeads / agencyLeads.length) * 100).toFixed(1) 
+        const conversionRate = agencyLeads.length > 0
+          ? ((convertedLeads / agencyLeads.length) * 100).toFixed(1)
           : 0
 
         // Calculate Health Status
@@ -247,14 +247,14 @@ export default function AdminReports() {
         }
 
         // Calculate Last Activity (most recent lead or property creation)
-        const lastLeadDate = agencyLeads.length > 0 
+        const lastLeadDate = agencyLeads.length > 0
           ? Math.max(...agencyLeads.map(l => new Date(l.createdAt).getTime()))
           : null
         const lastPropertyDate = agencyProperties.length > 0
           ? Math.max(...agencyProperties.map(p => new Date(p.createdAt).getTime()))
           : null
         const lastActivityDate = lastLeadDate || lastPropertyDate || null
-        const daysSinceActivity = lastActivityDate 
+        const daysSinceActivity = lastActivityDate
           ? Math.floor((Date.now() - lastActivityDate) / (1000 * 60 * 60 * 24))
           : null
 
@@ -303,8 +303,8 @@ export default function AdminReports() {
           link: `/admin/leads/${l._id}`
         }))
       ]
-      .sort((a, b) => new Date(b.time) - new Date(a.time))
-      .slice(0, 10)
+        .sort((a, b) => new Date(b.time) - new Date(a.time))
+        .slice(0, 10)
 
       setExportData({
         leads,
@@ -379,8 +379,8 @@ export default function AdminReports() {
         totalNoShow: leads.filter(l => l.siteVisit?.status === 'no_show').length,
         totalCancelled: leads.filter(l => l.siteVisit?.status === 'cancelled').length,
         convertedFromVisit: leads.filter(l => {
-          return (l.siteVisit?.status === 'completed' || l.status === 'site_visit_completed') && 
-                 (l.status === 'booked' || l.status === 'closed' || l.status === 'negotiation')
+          return (l.siteVisit?.status === 'completed' || l.status === 'site_visit_completed') &&
+            (l.status === 'booked' || l.status === 'closed' || l.status === 'negotiation')
         }).length,
         conversionRate: 0,
         showUpRate: 0
@@ -540,11 +540,10 @@ export default function AdminReports() {
                 <button
                   key={report.id}
                   onClick={() => setSelectedReport(report.id)}
-                  className={`p-5 rounded-xl border-2 ${
-                    selectedReport === report.id
+                  className={`p-5 rounded-xl border-2 ${selectedReport === report.id
                       ? 'border-green-500 bg-white text-gray-700'
                       : 'border-gray-200 bg-white text-gray-700'
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-col items-center justify-center space-y-3">
                     <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
@@ -1081,7 +1080,7 @@ export default function AdminReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-gray-900">
-                        {reportData.totalLeads > 0 
+                        {reportData.totalLeads > 0
                           ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
                           : 0}%
                       </span>
@@ -1164,7 +1163,7 @@ export default function AdminReports() {
         {selectedReport === 'agencies' && (() => {
           // Filter agencies based on selected filter
           let filteredAgencies = reportData.agencyAnalysis
-          
+
           if (agencyFilter === 'no-agents') {
             filteredAgencies = filteredAgencies.filter(a => a.hasNoAgents)
           } else if (agencyFilter === 'no-leads') {
@@ -1180,7 +1179,7 @@ export default function AdminReports() {
           // Apply search filter
           if (agencySearch.trim()) {
             const searchLower = agencySearch.toLowerCase()
-            filteredAgencies = filteredAgencies.filter(a => 
+            filteredAgencies = filteredAgencies.filter(a =>
               a.name.toLowerCase().includes(searchLower) ||
               a.email.toLowerCase().includes(searchLower) ||
               a.phone.includes(searchLower)
@@ -1375,61 +1374,55 @@ export default function AdminReports() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setAgencyFilter('all')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'all'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'all'
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         All
                       </button>
                       <button
                         onClick={() => setAgencyFilter('no-agents')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'no-agents'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'no-agents'
                             ? 'bg-orange-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         No Agents
                       </button>
                       <button
                         onClick={() => setAgencyFilter('no-leads')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'no-leads'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'no-leads'
                             ? 'bg-red-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         No Leads
                       </button>
                       <button
                         onClick={() => setAgencyFilter('poor-health')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'poor-health'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'poor-health'
                             ? 'bg-red-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         Poor Health
                       </button>
                       <button
                         onClick={() => setAgencyFilter('inactive-30d')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'inactive-30d'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'inactive-30d'
                             ? 'bg-yellow-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         Inactive 30+ Days
                       </button>
                       <button
                         onClick={() => setAgencyFilter('active')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          agencyFilter === 'active'
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'active'
                             ? 'bg-green-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         Active Only
                       </button>
@@ -1507,9 +1500,9 @@ export default function AdminReports() {
                             <tr key={agency.id} className="hover:bg-logo-beige transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 {agency.logo ? (
-                                  <img 
-                                    src={agency.logo} 
-                                    alt={agency.name} 
+                                  <img
+                                    src={agency.logo}
+                                    alt={agency.name}
                                     className="h-10 w-10 rounded-lg object-cover"
                                   />
                                 ) : (
@@ -1653,7 +1646,7 @@ export default function AdminReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-green-600">
-                        {reportData.totalLeads > 0 
+                        {reportData.totalLeads > 0
                           ? ((reportData.leadsByStatus.booked || 0) / reportData.totalLeads * 100).toFixed(1)
                           : 0}%
                       </span>
@@ -1661,7 +1654,7 @@ export default function AdminReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Qualification Rate</span>
                       <span className="text-2xl font-semibold text-blue-600">
-                        {reportData.totalLeads > 0 
+                        {reportData.totalLeads > 0
                           ? ((reportData.leadsByStatus.qualified || 0) / reportData.totalLeads * 100).toFixed(1)
                           : 0}%
                       </span>
@@ -1669,7 +1662,7 @@ export default function AdminReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Site Visit Rate</span>
                       <span className="text-2xl font-semibold text-yellow-600">
-                        {reportData.totalLeads > 0 
+                        {reportData.totalLeads > 0
                           ? ((reportData.leadsByStatus.site_visit_scheduled || 0) / reportData.totalLeads * 100).toFixed(1)
                           : 0}%
                       </span>
@@ -2164,9 +2157,8 @@ export default function AdminReports() {
                       <li key={index} className="py-4">
                         <div className="flex items-center space-x-4">
                           <div className="flex-shrink-0">
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                              activity.type === 'property_added' ? 'bg-green-100' : 'bg-purple-100'
-                            }`}>
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${activity.type === 'property_added' ? 'bg-green-100' : 'bg-purple-100'
+                              }`}>
                               {activity.type === 'property_added' ? (
                                 <Package className="h-4 w-4 text-green-600" />
                               ) : (

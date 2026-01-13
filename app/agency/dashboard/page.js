@@ -16,10 +16,10 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 
 const stats = [
-  { name: 'Total Properties', value: '0', icon: Package, change: '+5', changeType: 'positive', href: '/agency/properties' },
-  { name: 'Active Properties', value: '0', icon: Package, change: '+3', changeType: 'positive', href: '/agency/properties?status=active' },
-  { name: 'Total Leads', value: '0', icon: Users, change: '+12', changeType: 'positive', href: '/agency/leads' },
-  { name: 'Active Leads', value: '0', icon: UserCheck, change: '+8', changeType: 'positive', href: '/agency/leads?status=new' },
+  { name: 'Total Properties', value: '0', icon: Package, change: '+5', changeType: 'positive', href: '/admin/properties' },
+  { name: 'Active Properties', value: '0', icon: Package, change: '+3', changeType: 'positive', href: '/admin/properties?status=active' },
+  { name: 'Total Leads', value: '0', icon: Users, change: '+12', changeType: 'positive', href: '/admin/leads' },
+  { name: 'Active Leads', value: '0', icon: UserCheck, change: '+8', changeType: 'positive', href: '/admin/leads?status=new' },
 ]
 
 export default function AgencyAdminDashboard() {
@@ -53,7 +53,7 @@ export default function AgencyAdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      
+
       if (!user.agency) {
         console.error('User agency not found')
         toast.error('Agency not assigned to your account')
@@ -61,7 +61,7 @@ export default function AgencyAdminDashboard() {
       }
 
       const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
-      
+
       // Use optimized stats endpoint instead of fetching all data
       const [statsRes, agencyStatsRes] = await Promise.all([
         api.get('/stats/dashboard').catch(err => {
@@ -73,10 +73,10 @@ export default function AgencyAdminDashboard() {
           return { data: { stats: {} } }
         })
       ])
-      
+
       const stats = statsRes.data || {}
       const agencyStats = agencyStatsRes.data?.stats || {}
-      
+
       // Use agency-specific stats when available, fallback to dashboard stats
       const finalStats = {
         totalProperties: agencyStats.totalProperties || stats.totalProperties || 0,
@@ -96,7 +96,7 @@ export default function AgencyAdminDashboard() {
         },
         inquiriesByProperty: [] // Can be fetched separately if needed
       }
-      
+
       setDashboardData(finalStats)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -135,9 +135,9 @@ export default function AgencyAdminDashboard() {
           {stats.map((stat, index) => {
             const StatIcon = stat.icon
             const value = index === 0 ? dashboardData.totalProperties :
-                          index === 1 ? dashboardData.activeProperties :
-                          index === 2 ? dashboardData.totalLeads :
-                          dashboardData.activeLeads
+              index === 1 ? dashboardData.activeProperties :
+                index === 2 ? dashboardData.totalLeads :
+                  dashboardData.activeLeads
             return (
               <Link key={stat.name} href={stat.href} className="card hover:shadow-md transition-shadow">
                 <div className="card-body">
@@ -154,10 +154,9 @@ export default function AgencyAdminDashboard() {
                           <div className="text-2xl font-semibold text-gray-900">
                             {value}
                           </div>
-                          <div className={`ml-2 flex items-baseline text-sm font-semibold ${
-                            stat.changeType === 'positive' ? 'text-green-600' : 
-                            stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
-                          }`}>
+                          <div className={`ml-2 flex items-baseline text-sm font-semibold ${stat.changeType === 'positive' ? 'text-green-600' :
+                              stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
+                            }`}>
                             {stat.change}
                           </div>
                         </dd>
@@ -265,25 +264,25 @@ export default function AgencyAdminDashboard() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
-              href="/agency/properties/add"
+              href="/admin/properties/add"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center cursor-pointer block"
             >
               <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700">Add New Property</p>
             </Link>
             <Link
-              href="/agency/leads/new"
+              href="/admin/leads"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center cursor-pointer block"
             >
               <Users className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">Add New Lead</p>
+              <p className="text-sm font-medium text-gray-700">Manage Leads</p>
             </Link>
             <Link
-              href="/agency/agents/new"
+              href="/admin/users?tab=agents"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center cursor-pointer block"
             >
               <UserCheck className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">Add New Agent</p>
+              <p className="text-sm font-medium text-gray-700">Manage Agents</p>
             </Link>
           </div>
         </div>

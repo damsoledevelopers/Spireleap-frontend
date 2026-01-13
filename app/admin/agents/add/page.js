@@ -67,7 +67,7 @@ export default function AddAgentPage() {
     )
   }
 
-  if (!user || user.role !== 'super_admin') {
+  if (!user || !['super_admin', 'agency_admin'].includes(user.role)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -78,6 +78,14 @@ export default function AddAgentPage() {
       </DashboardLayout>
     )
   }
+
+  // Pre-fill agency for agency_admin
+  useEffect(() => {
+    if (user?.role === 'agency_admin' && user?.agency) {
+      const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
+      setFormData(prev => ({ ...prev, agency: agencyId }))
+    }
+  }, [user])
 
   const handleInputChange = (field, value) => {
     const keys = field.split('.')
@@ -246,7 +254,8 @@ export default function AddAgentPage() {
                 <select
                   value={formData.agency}
                   onChange={(e) => handleInputChange('agency', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled={user?.role === 'agency_admin'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   <option value="">Select Agency (Optional)</option>
                   {agencies.map((agency) => (

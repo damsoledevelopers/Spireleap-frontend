@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -9,7 +10,25 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 export default function AgentsPage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // Role-based access control - Only Super Admin and Agency Admin can access
+  useEffect(() => {
+    if (!authLoading && user) {
+      const allowedRoles = ['super_admin', 'agency_admin']
+      if (!allowedRoles.includes(user.role)) {
+        router.push('/auth/login')
+      }
+    }
+  }, [user, authLoading, router])
+
+  // Role-based feature visibility
+  const isSuperAdmin = user?.role === 'super_admin'
+  const isAgencyAdmin = user?.role === 'agency_admin'
+  const canAddAgent = isSuperAdmin || isAgencyAdmin
+  const canDeleteAgent = isSuperAdmin || isAgencyAdmin
+  const canEditAgent = isSuperAdmin || isAgencyAdmin
   const [agents, setAgents] = useState([])
   const [allAgents, setAllAgents] = useState([]) // Store all agents for metrics calculation
   const [loading, setLoading] = useState(true)
@@ -214,6 +233,21 @@ export default function AgentsPage() {
     }
   }
 
+  // Show loading or redirect if not authorized
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (!user || !['super_admin', 'agency_admin'].includes(user.role)) {
+    return null // Router will handle redirect
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -270,7 +304,10 @@ export default function AgentsPage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage all real estate agents</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {isSuperAdmin ? 'Manage all real estate agents' : 
+               'Manage your agency agents'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <select
@@ -284,20 +321,23 @@ export default function AgentsPage() {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-            <select
-              value={agencyFilter}
-              onChange={(e) => {
-                setAgencyFilter(e.target.value)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[150px]"
-            >
-              <option value="">All Agencies</option>
-              {agencies.map((agency) => (
-                <option key={agency._id} value={agency._id}>
-                  {agency.name}
-                </option>
-              ))}
-            </select>
+            {/* Agency Filter - Only for Super Admin */}
+            {isSuperAdmin && (
+              <select
+                value={agencyFilter}
+                onChange={(e) => {
+                  setAgencyFilter(e.target.value)
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[150px]"
+              >
+                <option value="">All Agencies</option>
+                {agencies.map((agency) => (
+                  <option key={agency._id} value={agency._id}>
+                    {agency.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -414,10 +454,12 @@ export default function AgentsPage() {
                 Clear Filters
               </button>
             )}
-            <Link href="/admin/agents/add" className="btn btn-primary">
-              <Plus className="h-5 w-5 mr-2" />
-              Add Agent
-            </Link>
+            {canAddAgent && (
+              <Link href="/admin/agents/add" className="btn btn-primary">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Agent
+              </Link>
+            )}
           </div>
         </div>
 
@@ -429,10 +471,12 @@ export default function AgentsPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <UserCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No agents found</p>
-            <Link href="/admin/agents/add" className="btn btn-primary mt-4">
-              <Plus className="h-5 w-5 mr-2" />
-              Add Your First Agent
-            </Link>
+            {canAddAgent && (
+              <Link href="/admin/agents/add" className="btn btn-primary mt-4">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Your First Agent
+              </Link>
+            )}
           </div>
         ) : (
           <>
@@ -558,20 +602,24 @@ export default function AgentsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-3">
-                          <Link 
-                            href={`/admin/agents/${String(agent._id)}/edit`} 
-                            className="text-primary-600 hover:text-primary-900 transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </Link>
-                          <button 
-                            onClick={() => handleDelete(agent._id)} 
-                            className="text-red-600 hover:text-red-900 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
+                          {canEditAgent && (
+                            <Link 
+                              href={`/admin/agents/${String(agent._id)}/edit`} 
+                              className="text-primary-600 hover:text-primary-900 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="h-5 w-5" />
+                            </Link>
+                          )}
+                          {isSuperAdmin && (
+                            <button 
+                              onClick={() => handleDelete(agent._id)} 
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

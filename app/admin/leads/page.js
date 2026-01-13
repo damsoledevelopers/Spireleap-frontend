@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -13,6 +14,27 @@ import * as XLSX from 'xlsx'
 
 export default function AdminLeadsPage() {
   const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // Role-based access control
+  useEffect(() => {
+    if (!authLoading && user) {
+      const allowedRoles = ['super_admin', 'agency_admin', 'agent', 'staff']
+      if (!allowedRoles.includes(user.role)) {
+        router.push('/auth/login')
+      }
+    }
+  }, [user, authLoading, router])
+
+  // Role-based feature visibility
+  const isSuperAdmin = user?.role === 'super_admin'
+  const isAgencyAdmin = user?.role === 'agency_admin'
+  const isAgent = user?.role === 'agent'
+  const isStaff = user?.role === 'staff'
+  const canUploadLeads = isSuperAdmin || isAgencyAdmin
+  const canBulkActions = isSuperAdmin || isAgencyAdmin
+  const canAutoAssign = isSuperAdmin || isAgencyAdmin
+  const canEditLead = isSuperAdmin || isAgent
   const [leads, setLeads] = useState([])
   const [allLeads, setAllLeads] = useState([]) // For Kanban view
   const [loading, setLoading] = useState(true)
@@ -70,7 +92,7 @@ export default function AdminLeadsPage() {
       return
     }
     const token = Cookies.get('token')
-    
+
     if (!authLoading && user) {
       if (!token) {
         console.warn('User is logged in but no token cookie found. Please log in again.')
@@ -99,6 +121,7 @@ export default function AdminLeadsPage() {
     }
   }, [filters.startDate, filters.endDate, filters.owner, filters.source, filters.status, filters.campaign, filters.agency, filters.property, filters.reportingManager, filters.team, filters.priority, pagination.page, pagination.limit, user, authLoading, viewMode])
 
+
   // Refetch owners when agency filter changes to show only agents from selected agency
   useEffect(() => {
     if (!authLoading && user) {
@@ -115,6 +138,26 @@ export default function AdminLeadsPage() {
     }
   }, [searchDebounceTimer])
 
+
+  useEffect(() => {
+    setShowBulkActions(selectedLeads.length > 0)
+  }, [selectedLeads])
+
+  // Show loading or redirect if not authorized
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (!user || !['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role)) {
+    return null // Router will handle redirect
+  }
+
   const fetchLeads = async () => {
     try {
       setLoading(true)
@@ -125,7 +168,7 @@ export default function AdminLeadsPage() {
         limit: pagination.limit,
         ...Object.fromEntries(Object.entries(otherFilters).filter(([_, v]) => v && v !== ''))
       })
-      
+
       // Add date filters separately if provided
       if (startDate) {
         params.append('startDate', startDate)
@@ -133,12 +176,12 @@ export default function AdminLeadsPage() {
       if (endDate) {
         params.append('endDate', endDate)
       }
-      
+
       const response = await api.get(`/leads?${params}`)
       const fetchedLeads = response.data.leads || []
       setLeads(fetchedLeads)
       setPagination(response.data.pagination || { page: 1, limit: 10, total: 0, pages: 0 })
-      
+
       // For Kanban view, fetch all leads without pagination (with all filters)
       if (viewMode === 'kanban') {
         try {
@@ -191,13 +234,13 @@ export default function AdminLeadsPage() {
     } catch (error) {
       console.error('Error fetching leads:', error)
       const errorMessage = error.response?.data?.message || error.message || 'Failed to load leads'
-      
+
       if (error.response?.status === 401) {
         toast.error('Authentication required. Please log in again.')
       } else {
         toast.error(errorMessage)
       }
-      
+
       setLeads([])
       setAllLeads([])
       setPagination({ page: 1, limit: 10, total: 0, pages: 0 })
@@ -210,7 +253,7 @@ export default function AdminLeadsPage() {
     try {
       // Role-based filtering for agents/owners
       let agents = []
-      
+
       // If agency filter is selected, fetch only agents from that agency
       if (filters.agency && user?.role === 'super_admin') {
         // Super admin can filter by agency
@@ -231,9 +274,9 @@ export default function AdminLeadsPage() {
         const response = await api.get('/users?role=agent&limit=100')
         agents = response.data.users || []
       }
-      
+
       setOwners(agents)
-      
+
       // Also fetch all agents for per-lead filtering in table (for super_admin only)
       if (user?.role === 'super_admin') {
         try {
@@ -247,7 +290,7 @@ export default function AdminLeadsPage() {
         // For other roles, use the filtered agents
         setAllAgents(agents)
       }
-      
+
       // Extract unique sources from leads (role-based)
       const responseLeads = await api.get('/leads?limit=500')
       const allLeadsData = responseLeads.data.leads || []
@@ -327,7 +370,7 @@ export default function AdminLeadsPage() {
       const now = new Date()
       const response = await api.get('/leads?limit=500')
       const allLeads = response.data.leads || []
-      
+
       // Count leads with follow-up dates in the past
       const missed = allLeads.filter(lead => {
         if (!lead.followUpDate) return false
@@ -336,7 +379,7 @@ export default function AdminLeadsPage() {
         const isActive = ['new', 'contacted', 'qualified', 'site_visit_scheduled', 'site_visit_completed', 'negotiation'].includes(lead.status)
         return isPastDue && isActive
       }).length
-      
+
       setMissedFollowUps(missed)
     } catch (error) {
       console.error('Error fetching missed follow-ups:', error)
@@ -408,22 +451,22 @@ export default function AdminLeadsPage() {
       // Get lead data first
       const leadResponse = await api.get(`/leads/${leadId}`)
       const lead = leadResponse.data.lead
-      
+
       if (!lead) {
         return { success: false, leadId, error: 'Lead not found' }
       }
-      
+
       const agencyId = lead.agency?._id || lead.agency || lead.agency?._id?.toString() || lead.agency?.toString()
-      
+
       if (!agencyId) {
         return { success: false, leadId, error: 'Lead does not have an agency assigned' }
       }
-      
+
       const response = await api.post(`/leads/${leadId}/auto-assign`, {
         assignmentMethod: method,
         agencyId: agencyId
       })
-      
+
       return { success: true, leadId, data: response.data }
     } catch (error) {
       console.error(`Error auto-assigning lead ${leadId}:`, error)
@@ -437,13 +480,13 @@ export default function AdminLeadsPage() {
       toast.error('Please select leads to assign')
       return
     }
-    
+
     try {
       setAutoAssigning(true)
       const results = await Promise.all(selectedLeads.map(leadId => handleAutoAssign(leadId, autoAssignMethod)))
       const successCount = results.filter(r => r.success).length
       const failedResults = results.filter(r => !r.success)
-      
+
       if (successCount === selectedLeads.length) {
         toast.success(`${selectedLeads.length} lead(s) auto-assigned successfully`)
       } else {
@@ -451,7 +494,7 @@ export default function AdminLeadsPage() {
         const uniqueErrors = [...new Set(errorMessages)]
         toast.warning(`${successCount} of ${selectedLeads.length} lead(s) auto-assigned. ${failedResults.length} failed.${uniqueErrors.length > 0 ? ' Error: ' + uniqueErrors[0] : ''}`)
       }
-      
+
       setSelectedLeads([])
       setShowAutoAssignModal(false)
       fetchLeads()
@@ -518,16 +561,16 @@ export default function AdminLeadsPage() {
     const currentLead = leads.find(lead => String(getLeadId(lead)) === String(leadId))
     const currentAgentId = currentLead?.assignedAgent?._id ? String(currentLead.assignedAgent._id) : (currentLead?.assignedAgent ? String(currentLead.assignedAgent) : null)
     const newAgentId = agentId ? String(agentId) : null
-    
+
     if (currentAgentId === newAgentId) {
       // Value hasn't changed, skip update
       return
     }
-    
+
     // Store previous state references for rollback
     let previousLeadsState = null
     let previousAllLeadsState = null
-    
+
     // Optimistic update - update UI immediately
     const assignedAgent = agentId ? owners.find(o => String(o._id) === String(agentId)) : null
     setLeads(prevLeads => {
@@ -547,7 +590,7 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     // Also update allLeads for Kanban view
     setAllLeads(prevLeads => {
       previousAllLeadsState = prevLeads
@@ -566,14 +609,14 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     try {
       const response = await api.put(`/leads/${leadId}/assign`, { assignedAgent: agentId })
-      
+
       // Update with server response only if it's different
       if (response.data?.lead) {
         const serverAgent = response.data.lead.assignedAgent
-        setLeads(prevLeads => 
+        setLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -586,7 +629,7 @@ export default function AdminLeadsPage() {
             return lead
           })
         )
-        setAllLeads(prevLeads => 
+        setAllLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -600,7 +643,7 @@ export default function AdminLeadsPage() {
           })
         )
       }
-      
+
       toast.success('Lead assigned successfully')
       fetchDashboardMetrics()
       fetchMissedFollowUps()
@@ -622,16 +665,16 @@ export default function AdminLeadsPage() {
     const currentLead = leads.find(lead => String(getLeadId(lead)) === String(leadId))
     const currentAgencyId = currentLead?.agency?._id ? String(currentLead.agency._id) : (currentLead?.agency ? String(currentLead.agency) : null)
     const newAgencyId = agencyId ? String(agencyId) : null
-    
+
     if (currentAgencyId === newAgencyId) {
       // Value hasn't changed, skip update
       return
     }
-    
+
     // Store previous state references for rollback
     let previousLeadsState = null
     let previousAllLeadsState = null
-    
+
     // Optimistic update - update UI immediately
     const selectedAgency = agencyId ? agencies.find(a => String(a._id) === String(agencyId)) : null
     setLeads(prevLeads => {
@@ -647,7 +690,7 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     // Also update allLeads for Kanban view
     setAllLeads(prevLeads => {
       previousAllLeadsState = prevLeads
@@ -662,14 +705,14 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     try {
       const response = await api.put(`/leads/${leadId}`, { agency: agencyId || null })
-      
+
       // Update with server response only if it's different
       if (response.data?.lead) {
         const serverAgency = response.data.lead.agency
-        setLeads(prevLeads => 
+        setLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -682,7 +725,7 @@ export default function AdminLeadsPage() {
             return lead
           })
         )
-        setAllLeads(prevLeads => 
+        setAllLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -696,7 +739,7 @@ export default function AdminLeadsPage() {
           })
         )
       }
-      
+
       toast.success('Lead agency updated successfully')
       fetchDashboardMetrics()
     } catch (error) {
@@ -715,22 +758,22 @@ export default function AdminLeadsPage() {
   const handleQuickPriorityChange = async (leadId, priority) => {
     // Send empty string as null for proper backend handling
     const priorityValue = priority === '' ? null : priority
-    
+
     // Check if the value actually changed to avoid unnecessary updates
     const currentLead = leads.find(lead => String(getLeadId(lead)) === String(leadId))
     const currentPriority = currentLead?.priority || null
     const normalizedCurrentPriority = currentPriority ? String(currentPriority).toLowerCase() : null
     const normalizedNewPriority = priorityValue ? String(priorityValue).toLowerCase() : null
-    
+
     if (normalizedCurrentPriority === normalizedNewPriority) {
       // Value hasn't changed, skip update
       return
     }
-    
+
     // Store previous state references for rollback
     let previousLeadsState = null
     let previousAllLeadsState = null
-    
+
     // Optimistic update - update UI immediately using functional updates
     setLeads(prevLeads => {
       previousLeadsState = prevLeads // Store reference before mutation
@@ -742,7 +785,7 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     // Also update allLeads for Kanban view
     setAllLeads(prevLeads => {
       previousAllLeadsState = prevLeads // Store reference before mutation
@@ -754,16 +797,16 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     try {
       const response = await api.put(`/leads/${leadId}`, { priority: priorityValue })
-      
+
       // Always update with server response to ensure consistency
       if (response.data?.lead) {
         const serverPriority = response.data.lead.priority
         console.log('Server response priority:', serverPriority, 'for leadId:', leadId)
-        
-        setLeads(prevLeads => 
+
+        setLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -773,7 +816,7 @@ export default function AdminLeadsPage() {
             return lead
           })
         )
-        setAllLeads(prevLeads => 
+        setAllLeads(prevLeads =>
           prevLeads.map(lead => {
             const id = getLeadId(lead)
             if (String(id) === String(leadId)) {
@@ -786,7 +829,7 @@ export default function AdminLeadsPage() {
         // If no lead in response, ensure optimistic update is maintained
         console.log('No lead in server response, keeping optimistic update')
       }
-      
+
       toast.success('Lead priority updated successfully')
     } catch (error) {
       // Rollback on error - restore previous state
@@ -803,22 +846,22 @@ export default function AdminLeadsPage() {
 
   const handleQuickStatusChange = async (leadId, status) => {
     const statusValue = status || null
-    
+
     // Check if the value actually changed to avoid unnecessary updates
     const currentLead = leads.find(lead => String(getLeadId(lead)) === String(leadId))
     const currentStatus = currentLead?.status || null
     const normalizedCurrentStatus = currentStatus ? String(currentStatus).toLowerCase() : null
     const normalizedNewStatus = statusValue ? String(statusValue).toLowerCase() : null
-    
+
     if (normalizedCurrentStatus === normalizedNewStatus) {
       // Value hasn't changed, skip update
       return
     }
-    
+
     // Store previous state references for rollback
     let previousLeadsState = null
     let previousAllLeadsState = null
-    
+
     // Optimistic update - update UI immediately
     setLeads(prevLeads => {
       previousLeadsState = prevLeads
@@ -830,7 +873,7 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     // Also update allLeads for Kanban view
     setAllLeads(prevLeads => {
       previousAllLeadsState = prevLeads
@@ -842,18 +885,18 @@ export default function AdminLeadsPage() {
         return lead
       })
     })
-    
+
     try {
       const response = await api.put(`/leads/${leadId}`, { status: statusValue })
-      
+
       // Update with server response only if it's different
       if (response.data?.lead) {
         const serverStatus = response.data.lead.status
         const normalizedServerStatus = serverStatus ? String(serverStatus).toLowerCase() : null
-        
+
         // Only update if server value is different from optimistic update
         if (normalizedServerStatus !== normalizedNewStatus) {
-          setLeads(prevLeads => 
+          setLeads(prevLeads =>
             prevLeads.map(lead => {
               const id = getLeadId(lead)
               if (String(id) === String(leadId)) {
@@ -862,7 +905,7 @@ export default function AdminLeadsPage() {
               return lead
             })
           )
-          setAllLeads(prevLeads => 
+          setAllLeads(prevLeads =>
             prevLeads.map(lead => {
               const id = getLeadId(lead)
               if (String(id) === String(leadId)) {
@@ -873,7 +916,7 @@ export default function AdminLeadsPage() {
           )
         }
       }
-      
+
       toast.success('Lead status updated successfully')
       fetchDashboardMetrics()
       fetchMissedFollowUps()
@@ -906,8 +949,8 @@ export default function AdminLeadsPage() {
   }
 
   const handleSelectLead = (leadId) => {
-    setSelectedLeads(prev => 
-      prev.includes(leadId) 
+    setSelectedLeads(prev =>
+      prev.includes(leadId)
         ? prev.filter(id => id !== leadId)
         : [...prev, leadId]
     )
@@ -927,7 +970,7 @@ export default function AdminLeadsPage() {
       return
     }
     if (!window.confirm(`Are you sure you want to delete ${selectedLeads.length} lead(s)? This action cannot be undone.`)) return
-    
+
     try {
       const deletePromises = selectedLeads.map(id => api.delete(`/leads/${id}`))
       await Promise.all(deletePromises)
@@ -948,7 +991,7 @@ export default function AdminLeadsPage() {
       toast.error('Please select leads and a status')
       return
     }
-    
+
     try {
       const updatePromises = selectedLeads.map(id => api.put(`/leads/${id}`, { status: bulkStatus }))
       await Promise.all(updatePromises)
@@ -971,7 +1014,7 @@ export default function AdminLeadsPage() {
       toast.error('Please select leads and an agent')
       return
     }
-    
+
     try {
       const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}/assign`, { assignedAgent: bulkAgent }))
       await Promise.all(assignPromises)
@@ -994,7 +1037,7 @@ export default function AdminLeadsPage() {
       toast.error('Please select leads and an agency')
       return
     }
-    
+
     try {
       const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}`, { agency: bulkAgency }))
       await Promise.all(assignPromises)
@@ -1012,9 +1055,6 @@ export default function AdminLeadsPage() {
     }
   }
 
-  useEffect(() => {
-    setShowBulkActions(selectedLeads.length > 0)
-  }, [selectedLeads])
 
   const getStatusColor = (status) => {
     const colors = {
@@ -1069,7 +1109,7 @@ export default function AdminLeadsPage() {
 
   const sortedLeads = [...leads].sort((a, b) => {
     let aValue, bValue
-    
+
     switch (sortColumn) {
       case 'contactName':
         aValue = `${a.contact?.firstName || ''} ${a.contact?.lastName || ''}`.trim()
@@ -1102,7 +1142,7 @@ export default function AdminLeadsPage() {
       default:
         return 0
     }
-    
+
     if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
     if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
     return 0
@@ -1122,7 +1162,7 @@ export default function AdminLeadsPage() {
         }
         return labels[source] || source || 'Other'
       }
-      
+
       const getStatusLabel = (status) => {
         if (!status) return 'New Lead'
         const statusLabels = {
@@ -1139,7 +1179,7 @@ export default function AdminLeadsPage() {
         }
         return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
       }
-      
+
       const data = sortedLeads.map(lead => ({
         'Lead ID': lead.leadId || `LEAD-${String(lead._id).slice(-6)}`,
         'Contact Name': `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A',
@@ -1152,7 +1192,7 @@ export default function AdminLeadsPage() {
         'Status': getStatusLabel(lead.status),
         'Created Date': new Date(lead.createdAt).toLocaleDateString()
       }))
-      
+
       const ws = XLSX.utils.json_to_sheet(data)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Leads')
@@ -1191,7 +1231,7 @@ export default function AdminLeadsPage() {
 
     const fileExtension = file.name.split('.').pop().toLowerCase()
     const validExtensions = ['csv', 'xlsx', 'xls']
-    
+
     if (!validExtensions.includes(fileExtension)) {
       toast.error('Please upload a CSV or Excel file (.csv, .xlsx, .xls)')
       event.target.value = ''
@@ -1206,11 +1246,11 @@ export default function AdminLeadsPage() {
     }
 
     const reader = new FileReader()
-    
+
     reader.onload = (e) => {
       try {
         let parsedData = []
-        
+
         if (fileExtension === 'csv') {
           const csvData = Papa.parse(e.target.result, {
             header: true,
@@ -1234,7 +1274,7 @@ export default function AdminLeadsPage() {
         const transformedData = parsedData.map((row, index) => {
           let firstName = ''
           let lastName = ''
-          
+
           // Check for "Contact Name" column (new format)
           const contactName = row['Contact Name'] || row['Contact name'] || row['contactName'] || ''
           if (contactName) {
@@ -1247,10 +1287,10 @@ export default function AdminLeadsPage() {
             firstName = row['First Name'] || row['firstName'] || row['First'] || ''
             lastName = row['Last Name'] || row['lastName'] || row['Last'] || ''
           }
-          
+
           const email = row['Email'] || row['email'] || ''
           const phone = row['Phone'] || row['phone'] || row['Mobile'] || ''
-          
+
           // Handle source mapping (convert labels back to values)
           let source = (row['Source'] || row['source'] || 'other').toLowerCase()
           const sourceMap = {
@@ -1265,7 +1305,7 @@ export default function AdminLeadsPage() {
             'other': 'other'
           }
           source = sourceMap[source] || 'other'
-          
+
           // Handle status mapping (convert labels back to values)
           let status = (row['Status'] || row['status'] || 'new').toLowerCase()
           const statusMap = {
@@ -1286,7 +1326,7 @@ export default function AdminLeadsPage() {
             'invalid': 'junk'
           }
           status = statusMap[status] || 'new'
-          
+
           return {
             contact: {
               firstName: firstName.trim(),
@@ -1340,15 +1380,15 @@ export default function AdminLeadsPage() {
     setUploading(true)
     setLoading(true)
     isUploadingRef.current = true
-    
+
     try {
       const response = await api.post('/leads/bulk', { leads: uploadedData })
       const createdCount = response.data.created || uploadedData.length
       const errors = response.data.errors || []
-      
+
       setShowUploadModal(false)
       setUploadedData([])
-      
+
       if (errors.length > 0) {
         setUploadErrors(errors)
         setShowErrorModal(true)
@@ -1357,7 +1397,7 @@ export default function AdminLeadsPage() {
         toast.success(`Successfully uploaded ${createdCount} leads`)
         setUploadErrors([])
       }
-      
+
       await new Promise(resolve => setTimeout(resolve, 500))
       isUploadingRef.current = false
       await fetchLeads()
@@ -1380,7 +1420,7 @@ export default function AdminLeadsPage() {
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Lead Metrics</h2>
-            
+
           </div>
           {loadingMetrics ? (
             <div className="flex items-center justify-center h-32">
@@ -1481,11 +1521,10 @@ export default function AdminLeadsPage() {
                     fetchLeads()
                   }, 0)
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer relative z-10 ${
-                  viewMode === 'list'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-500 hover:text-gray-700 hover:border-b-2 hover:border-gray-300'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer relative z-10 ${viewMode === 'list'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-b-2 hover:border-gray-300'
+                  }`}
                 style={{ pointerEvents: 'auto' }}
               >
                 List View
@@ -1523,28 +1562,29 @@ export default function AdminLeadsPage() {
                     fetchLeads()
                   }, 0)
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer relative z-10 ${
-                  viewMode === 'kanban'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-500 hover:text-gray-700 hover:border-b-2 hover:border-gray-300'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer relative z-10 ${viewMode === 'kanban'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-b-2 hover:border-gray-300'
+                  }`}
                 style={{ pointerEvents: 'auto' }}
               >
                 Kanban
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                <ArrowUp className="h-4 w-4 mr-2" />
-                Import leads
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  onClick={(e) => { e.target.value = '' }}
-                />
-              </label>
+              {canUploadLeads && (
+                <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <ArrowUp className="h-4 w-4 mr-2" />
+                  Import leads
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    onClick={(e) => { e.target.value = '' }}
+                  />
+                </label>
+              )}
               <button
                 onClick={handleExportExcel}
                 className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
@@ -1559,20 +1599,24 @@ export default function AdminLeadsPage() {
                 <Printer className="h-4 w-4 mr-2" />
                 Print
               </button>
-              <Link
-                href="/admin/reports"
-                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Analytics
-              </Link>
-              <Link
-                href="/admin/leads/new"
-                className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add lead
-              </Link>
+              {(isSuperAdmin || isAgencyAdmin) && (
+                <Link
+                  href="/admin/reports"
+                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Analytics
+                </Link>
+              )}
+              {(isSuperAdmin || isStaff) && (
+                <Link
+                  href="/admin/leads/new"
+                  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add lead
+                </Link>
+              )}
             </div>
           </div>
 
@@ -1583,9 +1627,9 @@ export default function AdminLeadsPage() {
                 value={pagination.limit}
                 onChange={(e) => {
                   const newLimit = parseInt(e.target.value)
-                  setPagination(prev => ({ 
-                    ...prev, 
-                    limit: newLimit, 
+                  setPagination(prev => ({
+                    ...prev,
+                    limit: newLimit,
                     page: 1,
                     total: prev.total,
                     pages: Math.ceil(prev.total / newLimit)
@@ -1598,22 +1642,25 @@ export default function AdminLeadsPage() {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              
+
               <Filter className="h-5 w-5 text-gray-400" />
-              
-              <select
-                value={filters.owner}
-                onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Agent -</option>
-                {owners.map((owner) => (
-                  <option key={owner._id} value={owner._id}>
-                    {owner.firstName} {owner.lastName}
-                  </option>
-                ))}
-              </select>
-              
+
+              {/* Owner/Agent Filter - Only for Super Admin and Agency Admin */}
+              {(isSuperAdmin || isAgencyAdmin) && (
+                <select
+                  value={filters.owner}
+                  onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">- Agent -</option>
+                  {owners.map((owner) => (
+                    <option key={owner._id} value={owner._id}>
+                      {owner.firstName} {owner.lastName}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
                 value={filters.source}
                 onChange={(e) => {
@@ -1637,7 +1684,7 @@ export default function AdminLeadsPage() {
                   </option>
                 ))}
               </select>
-              
+
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
@@ -1655,7 +1702,7 @@ export default function AdminLeadsPage() {
                 <option value="closed">Closed</option>
                 <option value="junk">Junk / Invalid</option>
               </select>
-              
+
               <select
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
@@ -1667,69 +1714,65 @@ export default function AdminLeadsPage() {
                 <option value="cold">Cold</option>
                 <option value="not_interested">Not Interested</option>
               </select>
-              
-              {/* <select
-                value={filters.reportingManager}
-                onChange={(e) => setFilters(prev => ({ ...prev, reportingManager: e.target.value }))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Reporting Manager -</option>
-                {reportingManagers.map((manager) => (
-                  <option key={manager._id} value={manager._id}>
-                    {manager.firstName} {manager.lastName}
-                  </option>
-                ))}
-              </select> */}
-              
-              <select
-                value={filters.team}
-                onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Team -</option>
-                {teams.map((team) => (
-                  <option key={team} value={team}>
-                    {team}
-                  </option>
-                ))}
-              </select>
-              
-              <select
-                value={filters.campaign}
-                onChange={(e) => {
-                  setFilters(prev => ({ ...prev, campaign: e.target.value }))
-                  setPagination(prev => ({ ...prev, page: 1 }))
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Campaign -</option>
-                {campaigns.map((campaign) => (
-                  <option key={campaign} value={campaign}>
-                    {campaign}
-                  </option>
-                ))}
-              </select>
-              
-              <select
-                value={filters.agency ? String(filters.agency) : ''}
-                onChange={(e) => {
-                  const selectedAgency = e.target.value
-                  setFilters(prev => ({ ...prev, agency: selectedAgency }))
-                  setPagination(prev => ({ ...prev, page: 1 }))
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Agency -</option>
-                {agencies.map((agency) => {
-                  const agencyId = agency._id ? String(agency._id) : ''
-                  return (
-                    <option key={agencyId} value={agencyId}>
-                      {agency.name}
+
+              {/* Team Filter - Only for Super Admin and Agency Admin */}
+              {(isSuperAdmin || isAgencyAdmin) && (
+                <select
+                  value={filters.team}
+                  onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">- Team -</option>
+                  {teams.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
                     </option>
-                  )
-                })}
-              </select>
-              
+                  ))}
+                </select>
+              )}
+
+              {/* Campaign Filter - Only for Super Admin and Agency Admin */}
+              {(isSuperAdmin || isAgencyAdmin) && (
+                <select
+                  value={filters.campaign}
+                  onChange={(e) => {
+                    setFilters(prev => ({ ...prev, campaign: e.target.value }))
+                    setPagination(prev => ({ ...prev, page: 1 }))
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">- Campaign -</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign} value={campaign}>
+                      {campaign}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Agency Filter - Only for Super Admin */}
+              {isSuperAdmin && (
+                <select
+                  value={filters.agency ? String(filters.agency) : ''}
+                  onChange={(e) => {
+                    const selectedAgency = e.target.value
+                    setFilters(prev => ({ ...prev, agency: selectedAgency }))
+                    setPagination(prev => ({ ...prev, page: 1 }))
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">- Agency -</option>
+                  {agencies.map((agency) => {
+                    const agencyId = agency._id ? String(agency._id) : ''
+                    return (
+                      <option key={agencyId} value={agencyId}>
+                        {agency.name}
+                      </option>
+                    )
+                  })}
+                </select>
+              )}
+
               <select
                 value={filters.property ? String(filters.property) : ''}
                 onChange={(e) => {
@@ -1749,17 +1792,16 @@ export default function AdminLeadsPage() {
                   )
                 })}
               </select>
-              
+
               {/* Date Range Filter */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowDatePicker(!showDatePicker)}
-                  className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${
-                    filters.startDate || filters.endDate
-                      ? 'border-primary-500 text-gray-900'
-                      : 'border-gray-300 text-gray-700'
-                  }`}
+                  className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
+                    ? 'border-primary-500 text-gray-900'
+                    : 'border-gray-300 text-gray-700'
+                    }`}
                 >
                   <Filter className="h-4 w-4 mr-2 text-gray-400" />
                   <span>
@@ -1772,8 +1814,8 @@ export default function AdminLeadsPage() {
                           : 'Date Range'}
                   </span>
                   {filters.startDate || filters.endDate ? (
-                    <X 
-                      className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600" 
+                    <X
+                      className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
                       onClick={(e) => {
                         e.stopPropagation()
                         setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
@@ -1785,8 +1827,8 @@ export default function AdminLeadsPage() {
                 </button>
                 {showDatePicker && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-40" 
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => setShowDatePicker(false)}
                     />
                     <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
@@ -1847,7 +1889,7 @@ export default function AdminLeadsPage() {
                   </>
                 )}
               </div>
-              
+
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -1858,17 +1900,17 @@ export default function AdminLeadsPage() {
                     const searchValue = e.target.value
                     setFilters(prev => ({ ...prev, search: searchValue }))
                     setPagination(prev => ({ ...prev, page: 1 }))
-                    
+
                     // Clear existing timer
                     if (searchDebounceTimer) {
                       clearTimeout(searchDebounceTimer)
                     }
-                    
+
                     // Set new timer for debounced search
                     const timer = setTimeout(() => {
                       fetchLeads()
                     }, 500) // 500ms delay
-                    
+
                     setSearchDebounceTimer(timer)
                   }}
                   onKeyDown={(e) => {
@@ -1897,15 +1939,14 @@ export default function AdminLeadsPage() {
                   </button>
                 )}
               </div>
-              
+
               <button
                 onClick={clearAllFilters}
                 disabled={!hasActiveFilters()}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${
-                  hasActiveFilters()
-                    ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 focus:ring-2 focus:ring-red-500 cursor-pointer'
-                    : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                }`}
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${hasActiveFilters()
+                  ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 focus:ring-2 focus:ring-red-500 cursor-pointer'
+                  : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                  }`}
                 title={hasActiveFilters() ? 'Clear all filters' : 'No filters to clear'}
               >
                 <X className="h-4 w-4 mr-2" />
@@ -1928,8 +1969,8 @@ export default function AdminLeadsPage() {
               </div>
             ) : (
               <>
-                {/* Bulk Actions Bar */}
-                {showBulkActions && selectedLeads.length > 0 && (
+                {/* Bulk Actions Bar - Only for Super Admin and Agency Admin */}
+                {canBulkActions && showBulkActions && selectedLeads.length > 0 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -1954,30 +1995,36 @@ export default function AdminLeadsPage() {
                         >
                           Assign Agent
                         </button>
-                        <button
-                          onClick={() => {
-                            setShowBulkModal(true)
-                            setBulkAction('agency')
-                          }}
-                          className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm"
-                        >
-                          Assign Agency
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowAutoAssignModal(true)
-                          }}
-                          className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm inline-flex items-center gap-2"
-                        >
-                          <Zap className="h-4 w-4" />
-                          Auto Assign
-                        </button>
-                        <button
-                          onClick={handleBulkDelete}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
-                        >
-                          Delete Selected
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => {
+                              setShowBulkModal(true)
+                              setBulkAction('agency')
+                            }}
+                            className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm"
+                          >
+                            Assign Agency
+                          </button>
+                        )}
+                        {canAutoAssign && (
+                          <button
+                            onClick={() => {
+                              setShowAutoAssignModal(true)
+                            }}
+                            className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm inline-flex items-center gap-2"
+                          >
+                            <Zap className="h-4 w-4" />
+                            Auto Assign
+                          </button>
+                        )}
+                        {isSuperAdmin && (
+                          <button
+                            onClick={handleBulkDelete}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                          >
+                            Delete Selected
+                          </button>
+                        )}
                       </div>
                       <button
                         onClick={() => {
@@ -1993,432 +2040,468 @@ export default function AdminLeadsPage() {
                 )}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
-                  <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1600px' }}>
-                    <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
-                      <tr>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
-                            onChange={handleSelectAll}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Lead ID
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Score
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('contactName')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Contact Name
-                            {sortColumn === 'contactName' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('email')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Email
-                            {sortColumn === 'email' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('phone')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Phone
-                            {sortColumn === 'phone' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('source')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Source
-                            {sortColumn === 'source' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Campaign
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Agency
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Assigned Agent
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Priority
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('status')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Status
-                            {sortColumn === 'status' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('createdDate')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Created Date
-                            {sortColumn === 'createdDate' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                          onClick={() => handleSort('updatedAt')}
-                        >
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            Last Updated
-                            {sortColumn === 'updatedAt' && (
-                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Follow-Up
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {sortedLeads.map((lead) => {
-                        const leadId = getLeadId(lead)
-                        const contactName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
-                        const getSourceLabel = (source) => {
-                          const labels = {
-                            website: 'Website',
-                            phone: 'Phone',
-                            email: 'Email',
-                            walk_in: 'Walk In',
-                            referral: 'Referral',
-                            social_media: 'Social Media',
-                            other: 'Other'
-                          }
-                          return labels[source] || source || 'Other'
-                        }
-                        const getStatusLabel = (status) => {
-                          if (!status) return 'New Lead'
-                          const statusLabels = {
-                            new: 'New Lead',
-                            contacted: 'Contacted',
-                            qualified: 'Qualified',
-                            site_visit_scheduled: 'Site Visit Scheduled',
-                            site_visit_completed: 'Site Visit Completed',
-                            negotiation: 'Negotiation',
-                            booked: 'Booked',
-                            lost: 'Lost',
-                            closed: 'Closed',
-                            junk: 'Junk / Invalid'
-                          }
-                          return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
-                        }
-                        
-                        const getPriorityLabel = (priority) => {
-                          if (!priority) return 'Warm'
-                          const priorityLabels = {
-                            hot: 'Hot',
-                            warm: 'Warm',
-                            cold: 'Cold',
-                            not_interested: 'Not Interested'
-                          }
-                          return priorityLabels[priority?.toLowerCase()] || priority.charAt(0).toUpperCase() + priority.slice(1)
-                        }
-                        return (
-                          <tr key={leadId} className="hover:bg-logo-beige transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1600px' }}>
+                      <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+                        <tr>
+                          {canBulkActions && (
+                            <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider w-12">
                               <input
                                 type="checkbox"
-                                checked={selectedLeads.includes(leadId)}
-                                onChange={() => handleSelectLead(leadId)}
+                                checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
+                                onChange={handleSelectAll}
                                 className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                               />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm font-mono text-gray-600">
-                                {lead.leadId || `LEAD-${String(lead._id).slice(-6)}`}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              {lead.score !== undefined ? (
-                                <div className="flex items-center justify-center gap-2">
-                                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className={`h-2 rounded-full ${
-                                        lead.score >= 70 ? 'bg-red-500' : 
-                                        lead.score >= 40 ? 'bg-orange-500' : 
-                                        lead.score >= 20 ? 'bg-yellow-500' : 'bg-gray-400'
-                                      }`}
-                                      style={{ width: `${Math.min(lead.score, 100)}%` }}
-                                    />
+                            </th>
+                          )}
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Lead ID
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Score
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('contactName')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Contact Name
+                              {sortColumn === 'contactName' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('email')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Email
+                              {sortColumn === 'email' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('phone')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Phone
+                              {sortColumn === 'phone' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('source')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Source
+                              {sortColumn === 'source' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Campaign
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Agency
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Assigned Agent
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Priority
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('status')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Status
+                              {sortColumn === 'status' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('createdDate')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Created Date
+                              {sortColumn === 'createdDate' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
+                            onClick={() => handleSort('updatedAt')}
+                          >
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              Last Updated
+                              {sortColumn === 'updatedAt' && (
+                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Follow-Up
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {sortedLeads.map((lead) => {
+                          const leadId = getLeadId(lead)
+                          const contactName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
+                          const getSourceLabel = (source) => {
+                            const labels = {
+                              website: 'Website',
+                              phone: 'Phone',
+                              email: 'Email',
+                              walk_in: 'Walk In',
+                              referral: 'Referral',
+                              social_media: 'Social Media',
+                              other: 'Other'
+                            }
+                            return labels[source] || source || 'Other'
+                          }
+                          const getStatusLabel = (status) => {
+                            if (!status) return 'New Lead'
+                            const statusLabels = {
+                              new: 'New Lead',
+                              contacted: 'Contacted',
+                              qualified: 'Qualified',
+                              site_visit_scheduled: 'Site Visit Scheduled',
+                              site_visit_completed: 'Site Visit Completed',
+                              negotiation: 'Negotiation',
+                              booked: 'Booked',
+                              lost: 'Lost',
+                              closed: 'Closed',
+                              junk: 'Junk / Invalid'
+                            }
+                            return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
+                          }
+
+                          const getPriorityLabel = (priority) => {
+                            if (!priority) return 'Warm'
+                            const priorityLabels = {
+                              hot: 'Hot',
+                              warm: 'Warm',
+                              cold: 'Cold',
+                              not_interested: 'Not Interested'
+                            }
+                            return priorityLabels[priority?.toLowerCase()] || priority.charAt(0).toUpperCase() + priority.slice(1)
+                          }
+                          return (
+                            <tr key={leadId} className="hover:bg-logo-beige transition-colors">
+                              {canBulkActions && (
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedLeads.includes(leadId)}
+                                    onChange={() => handleSelectLead(leadId)}
+                                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </td>
+                              )}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-sm font-mono text-gray-600">
+                                  {lead.leadId || `LEAD-${String(lead._id).slice(-6)}`}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                {lead.score !== undefined ? (
+                                  <div className="flex items-center justify-center gap-2">
+                                    <div className="w-16 bg-gray-200 rounded-full h-2">
+                                      <div
+                                        className={`h-2 rounded-full ${lead.score >= 70 ? 'bg-red-500' :
+                                          lead.score >= 40 ? 'bg-orange-500' :
+                                            lead.score >= 20 ? 'bg-yellow-500' : 'bg-gray-400'
+                                          }`}
+                                        style={{ width: `${Math.min(lead.score, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-semibold text-gray-700 min-w-[35px]">{lead.score}</span>
+                                    <button
+                                      onClick={() => handleReScoreLead(leadId)}
+                                      disabled={rescoring === leadId}
+                                      className="text-primary-600 hover:text-primary-800 disabled:opacity-50"
+                                      title="Re-score lead"
+                                    >
+                                      <Zap className="h-3 w-3" />
+                                    </button>
                                   </div>
-                                  <span className="text-xs font-semibold text-gray-700 min-w-[35px]">{lead.score}</span>
+                                ) : (
                                   <button
                                     onClick={() => handleReScoreLead(leadId)}
                                     disabled={rescoring === leadId}
-                                    className="text-primary-600 hover:text-primary-800 disabled:opacity-50"
-                                    title="Re-score lead"
+                                    className="text-xs text-primary-600 hover:text-primary-800 disabled:opacity-50"
+                                    title="Calculate score"
                                   >
-                                    <Zap className="h-3 w-3" />
+                                    {rescoring === leadId ? 'Scoring...' : 'Score'}
                                   </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleReScoreLead(leadId)}
-                                  disabled={rescoring === leadId}
-                                  className="text-xs text-primary-600 hover:text-primary-800 disabled:opacity-50"
-                                  title="Calculate score"
-                                >
-                                  {rescoring === leadId ? 'Scoring...' : 'Score'}
-                                </button>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <Link
-                                href={`/admin/leads/${leadId}`}
-                                className="text-sm font-medium text-primary-600 hover:text-primary-800"
-                              >
-                                {contactName}
-                              </Link>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-gray-400" />
-                                <span className="text-sm text-gray-900">{lead.contact?.email || '-'}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 text-gray-400" />
-                                <span className="text-sm text-gray-900">{lead.contact?.phone || '-'}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-900 capitalize">
-                                {getSourceLabel(lead.source)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-600">
-                                {lead.campaignName || '-'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <select
-                                value={lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')}
-                                onChange={(e) => handleQuickAgencyChange(leadId, e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[150px] flex-1"
-                                title="Change Agency"
-                              >
-                                <option value="">Unassigned</option>
-                                {agencies.map((agency) => (
-                                  <option key={agency._id} value={agency._id}>
-                                    {agency.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={lead.assignedAgent?._id || lead.assignedAgent || ''}
-                                  onChange={(e) => handleQuickAssign(leadId, e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] flex-1"
-                                  title="Assign Agent"
-                                >
-                                  <option value="">Unassigned</option>
-                                  {(() => {
-                                    // Filter agents based on lead's agency (similar to edit form)
-                                    let filteredAgents = allAgents.length > 0 ? allAgents : owners
-                                    if (lead.agency) {
-                                      const leadAgencyId = lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')
-                                      if (leadAgencyId) {
-                                        filteredAgents = filteredAgents.filter(owner => {
-                                          const ownerAgencyId = owner.agency?._id ? owner.agency._id.toString() : (owner.agency?.toString() || owner.agency || '')
-                                          return ownerAgencyId === leadAgencyId
-                                        })
-                                      }
-                                    }
-                                    return filteredAgents.map((owner) => (
-                                      <option key={owner._id} value={owner._id}>
-                                        {owner.firstName} {owner.lastName}
-                                      </option>
-                                    ))
-                                  })()}
-                                </select>
-                                <button
-                                  onClick={() => {
-                                    setShowAutoAssignModal(true)
-                                    setSelectedLeads([leadId])
-                                  }}
-                                  className="text-primary-600 hover:text-primary-800 p-1"
-                                  title="Auto Assign"
-                                >
-                                  <Zap className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <select
-                                key={`priority-select-${leadId}-${lead.priority || 'null'}`}
-                                value={lead.priority ? String(lead.priority).toLowerCase() : ''}
-                                onChange={(e) => {
-                                  e.stopPropagation()
-                                  console.log('Priority dropdown onChange:', {
-                                    leadId,
-                                    selectedValue: e.target.value,
-                                    currentPriority: lead.priority
-                                  })
-                                  handleQuickPriorityChange(leadId, e.target.value)
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] cursor-pointer"
-                                title="Change Priority"
-                              >
-                                <option value="">Select Priority</option>
-                                <option value="hot">Hot</option>
-                                <option value="warm">Warm</option>
-                                <option value="cold">Cold</option>
-                                <option value="not_interested">Not Interested</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <select
-                                value={lead.status || ''}
-                                onChange={(e) => handleQuickStatusChange(leadId, e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]"
-                                title="Change Status"
-                              >
-                                <option value="">Select Status</option>
-                                <option value="new">New Lead</option>
-                                <option value="contacted">Contacted</option>
-                                <option value="qualified">Qualified</option>
-                                <option value="site_visit_scheduled">Site Visit Scheduled</option>
-                                <option value="site_visit_completed">Site Visit Completed</option>
-                                <option value="negotiation">Negotiation</option>
-                                <option value="booked">Booked</option>
-                                <option value="lost">Lost</option>
-                                <option value="closed">Closed</option>
-                                <option value="junk">Junk / Invalid</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Date(lead.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {lead.updatedAt ? (
-                                <div className="flex flex-col">
-                                  <span>{new Date(lead.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                  <span className="text-xs text-gray-500">{new Date(lead.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">-</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {lead.followUpDate ? (
-                                <div className="flex flex-col">
-                                  <span className={new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
-                                    {new Date(lead.followUpDate).toLocaleDateString()}
-                                  </span>
-                                  {new Date(lead.followUpDate) < new Date() && (
-                                    <span className="text-xs text-red-500">Overdue</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">-</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                              <div className="flex items-center justify-center gap-2">
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
                                 <Link
                                   href={`/admin/leads/${leadId}`}
-                                  className="text-primary-600 hover:text-primary-900 transition-colors"
-                                  title="View"
+                                  className="text-sm font-medium text-primary-600 hover:text-primary-800"
                                 >
-                                  <Eye className="h-5 w-5" />
+                                  {contactName}
                                 </Link>
-                                <Link
-                                  href={`/admin/leads/${leadId}/edit`}
-                                  className="text-primary-600 hover:text-primary-900 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-5 w-5" />
-                                </Link>
-                                <button
-                                  onClick={() => handleDelete(leadId)}
-                                  className="text-red-600 hover:text-red-900 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Mail className="h-4 w-4 text-gray-400" />
+                                  <span className="text-sm text-gray-900">{lead.contact?.email || '-'}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Phone className="h-4 w-4 text-gray-400" />
+                                  <span className="text-sm text-gray-900">{lead.contact?.phone || '-'}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-sm text-gray-900 capitalize">
+                                  {getSourceLabel(lead.source)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-sm text-gray-600">
+                                  {lead.campaignName || '-'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {isSuperAdmin ? (
+                                  <select
+                                    value={lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')}
+                                    onChange={(e) => handleQuickAgencyChange(leadId, e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[150px] flex-1"
+                                    title="Change Agency"
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {agencies.map((agency) => (
+                                      <option key={agency._id} value={agency._id}>
+                                        {agency.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="text-sm text-gray-900">
+                                    {lead.agency?.name || 'Unassigned'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {(isSuperAdmin || isAgencyAdmin) ? (
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={lead.assignedAgent?._id || lead.assignedAgent || ''}
+                                      onChange={(e) => handleQuickAssign(leadId, e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] flex-1"
+                                      title="Assign Agent"
+                                    >
+                                      <option value="">Unassigned</option>
+                                      {(() => {
+                                        // Filter agents based on lead's agency (similar to edit form)
+                                        let filteredAgents = allAgents.length > 0 ? allAgents : owners
+                                        if (lead.agency) {
+                                          const leadAgencyId = lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')
+                                          if (leadAgencyId) {
+                                            filteredAgents = filteredAgents.filter(owner => {
+                                              const ownerAgencyId = owner.agency?._id ? owner.agency._id.toString() : (owner.agency?.toString() || owner.agency || '')
+                                              return ownerAgencyId === leadAgencyId
+                                            })
+                                          }
+                                        }
+                                        return filteredAgents.map((owner) => (
+                                          <option key={owner._id} value={owner._id}>
+                                            {owner.firstName} {owner.lastName}
+                                          </option>
+                                        ))
+                                      })()}
+                                    </select>
+                                    {canAutoAssign && (
+                                      <button
+                                        onClick={() => {
+                                          setShowAutoAssignModal(true)
+                                          setSelectedLeads([leadId])
+                                        }}
+                                        className="text-primary-600 hover:text-primary-800 p-1"
+                                        title="Auto Assign"
+                                      >
+                                        <Zap className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-gray-900">
+                                    {lead.assignedAgent
+                                      ? `${lead.assignedAgent.firstName || ''} ${lead.assignedAgent.lastName || ''}`.trim() || 'Assigned'
+                                      : 'Unassigned'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                {canEditLead ? (
+                                  <select
+                                    key={`priority-select-${leadId}-${lead.priority || 'null'}`}
+                                    value={lead.priority ? String(lead.priority).toLowerCase() : ''}
+                                    onChange={(e) => {
+                                      e.stopPropagation()
+                                      handleQuickPriorityChange(leadId, e.target.value)
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] cursor-pointer"
+                                    title="Change Priority"
+                                  >
+                                    <option value="">Select Priority</option>
+                                    <option value="hot">Hot</option>
+                                    <option value="warm">Warm</option>
+                                    <option value="cold">Cold</option>
+                                    <option value="not_interested">Not Interested</option>
+                                  </select>
+                                ) : (
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${lead.priority === 'hot' ? 'bg-red-100 text-red-800' :
+                                    lead.priority === 'warm' ? 'bg-yellow-100 text-yellow-800' :
+                                      lead.priority === 'cold' ? 'bg-blue-100 text-blue-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }`}>
+                                    {lead.priority ? lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1).replace('_', ' ') : '-'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {canEditLead ? (
+                                  <select
+                                    value={lead.status || ''}
+                                    onChange={(e) => handleQuickStatusChange(leadId, e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]"
+                                    title="Change Status"
+                                  >
+                                    <option value="">Select Status</option>
+                                    <option value="new">New Lead</option>
+                                    <option value="contacted">Contacted</option>
+                                    <option value="qualified">Qualified</option>
+                                    <option value="site_visit_scheduled">Site Visit Scheduled</option>
+                                    <option value="site_visit_completed">Site Visit Completed</option>
+                                    <option value="negotiation">Negotiation</option>
+                                    <option value="booked">Booked</option>
+                                    <option value="lost">Lost</option>
+                                    <option value="closed">Closed</option>
+                                    <option value="junk">Junk / Invalid</option>
+                                  </select>
+                                ) : (
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${lead.status === 'booked' || lead.status === 'closed' ? 'bg-green-100 text-green-800' :
+                                    lead.status === 'lost' || lead.status === 'junk' ? 'bg-red-100 text-red-800' :
+                                      'bg-primary-100 text-primary-800'
+                                    }`}>
+                                    {lead.status ? lead.status.replace(/_/g, ' ').charAt(0).toUpperCase() + lead.status.replace(/_/g, ' ').slice(1) : '-'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {new Date(lead.createdAt).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {lead.updatedAt ? (
+                                  <div className="flex flex-col">
+                                    <span>{new Date(lead.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                    <span className="text-xs text-gray-500">{new Date(lead.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {lead.followUpDate ? (
+                                  <div className="flex flex-col">
+                                    <span className={new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                                      {new Date(lead.followUpDate).toLocaleDateString()}
+                                    </span>
+                                    {new Date(lead.followUpDate) < new Date() && (
+                                      <span className="text-xs text-red-500">Overdue</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Link
+                                    href={`/admin/leads/${leadId}`}
+                                    className="text-primary-600 hover:text-primary-900 transition-colors"
+                                    title="View"
+                                  >
+                                    <Eye className="h-5 w-5" />
+                                  </Link>
+                                  {canEditLead && (
+                                    <Link
+                                      href={`/admin/leads/${leadId}/edit`}
+                                      className="text-primary-600 hover:text-primary-900 transition-colors"
+                                      title="Edit"
+                                    >
+                                      <Edit className="h-5 w-5" />
+                                    </Link>
+                                  )}
+                                  {isSuperAdmin && (
+                                    <button
+                                      onClick={() => handleDelete(leadId)}
+                                      className="text-red-600 hover:text-red-900 transition-colors"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-5 w-5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* Pagination */}
-                <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
-                  <div className="text-sm text-gray-700">
-                    {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)}/{pagination.total}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                      disabled={pagination.page === 1}
-                      className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      «
-                    </button>
-                    <button
-                      className="px-3 py-1 bg-primary-600 text-white rounded-lg"
-                    >
-                      {pagination.page}
-                    </button>
-                    <button
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                      disabled={pagination.page >= pagination.pages}
-                      className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      »
-                    </button>
+                  {/* Pagination */}
+                  <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+                    <div className="text-sm text-gray-700">
+                      {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)}/{pagination.total}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                        disabled={pagination.page === 1}
+                        className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        «
+                      </button>
+                      <button
+                        className="px-3 py-1 bg-primary-600 text-white rounded-lg"
+                      >
+                        {pagination.page}
+                      </button>
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                        disabled={pagination.page >= pagination.pages}
+                        className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        »
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
               </>
             )}
           </>
@@ -2452,7 +2535,7 @@ export default function AdminLeadsPage() {
                           <div className="flex items-center gap-2 mt-2">
                             <User className="h-3 w-3 text-gray-400" />
                             <span className="text-xs text-gray-600">
-                              Owner: {lead.assignedAgent 
+                              Owner: {lead.assignedAgent
                                 ? `${lead.assignedAgent.firstName} ${lead.assignedAgent.lastName}`
                                 : 'Unassigned'}
                             </span>
@@ -2807,7 +2890,7 @@ export default function AdminLeadsPage() {
                           <span>Converted: {data.converted}</span>
                         </div>
                         <div className="mt-2 bg-gray-200 rounded-full h-2">
-                          <div 
+                          <div
                             className="bg-primary-600 h-2 rounded-full"
                             style={{ width: `${data.conversionRate}%` }}
                           />
@@ -2830,7 +2913,7 @@ export default function AdminLeadsPage() {
                     .sort((a, b) => b.convertedLeads - a.convertedLeads)
                     .slice(0, 5)
                     .map((agent) => {
-                      const agentData = owners.find(o => o._id.toString() === agent.agentId)
+                      const agentData = owners.find(o => o._id?.toString() === agent.agentId)
                       return (
                         <div key={agent.agentId} className="border border-gray-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
@@ -2845,7 +2928,7 @@ export default function AdminLeadsPage() {
                             <span>Converted: {agent.convertedLeads}</span>
                           </div>
                           <div className="mt-2 bg-gray-200 rounded-full h-2">
-                            <div 
+                            <div
                               className="bg-green-600 h-2 rounded-full"
                               style={{ width: `${agent.conversionRate}%` }}
                             />
@@ -2863,4 +2946,3 @@ export default function AdminLeadsPage() {
   )
 }
 
-  

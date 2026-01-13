@@ -129,7 +129,7 @@ export default function AdminAddLeadPage() {
       if (!submitData.contact.alternatePhone) delete submitData.contact.alternatePhone
 
       const response = await api.post('/leads', submitData)
-      
+
       // Check for duplicate warning
       if (response.data.duplicates && response.data.duplicates.length > 0) {
         setDuplicates(response.data.duplicates)
@@ -194,7 +194,7 @@ export default function AdminAddLeadPage() {
     )
   }
 
-  if (!user || user.role !== 'super_admin') {
+  if (!user || !['super_admin', 'agency_admin', 'staff'].includes(user.role)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">

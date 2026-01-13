@@ -14,10 +14,10 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 
 const stats = [
-  { name: 'My Properties', value: '0', icon: Package, change: '+2', changeType: 'positive', href: '/agent/properties' },
-  { name: 'Active Properties', value: '0', icon: Package, change: '+1', changeType: 'positive', href: '/agent/properties?status=active' },
-  { name: 'My Leads', value: '0', icon: Users, change: '+5', changeType: 'positive', href: '/agent/leads' },
-  { name: 'New Leads', value: '0', icon: FileText, change: '+3', changeType: 'positive', href: '/agent/leads?status=new' },
+  { name: 'My Properties', value: '0', icon: Package, change: '+2', changeType: 'positive', href: '/admin/properties' },
+  { name: 'Active Properties', value: '0', icon: Package, change: '+1', changeType: 'positive', href: '/admin/properties?status=active' },
+  { name: 'My Leads', value: '0', icon: Users, change: '+5', changeType: 'positive', href: '/admin/leads' },
+  { name: 'New Leads', value: '0', icon: FileText, change: '+3', changeType: 'positive', href: '/admin/leads?status=new' },
 ]
 
 export default function AgentDashboard() {
@@ -47,7 +47,7 @@ export default function AgentDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      
+
       if (!user) {
         console.error('User not available')
         return
@@ -61,35 +61,35 @@ export default function AgentDashboard() {
       }
 
       console.log('Fetching dashboard data for agent:', userId)
-      
+
       // Fetch agent's properties - backend should filter by agent role
       const propertiesRes = await api.get('/properties?limit=100').catch(err => {
         console.error('Error fetching properties:', err)
         return { data: { properties: [] } }
       })
       const allProperties = propertiesRes.data?.properties || []
-      
+
       // Filter properties by agent - handle both populated and non-populated agent field
       const myProperties = allProperties.filter(p => {
-        const agentId = typeof p.agent === 'object' 
+        const agentId = typeof p.agent === 'object'
           ? (p.agent?._id || p.agent?.id || p.agent)
           : p.agent
         return agentId?.toString() === userId.toString()
       })
-      
+
       console.log('Agent properties:', {
         total: allProperties.length,
         myProperties: myProperties.length,
         userId: userId.toString()
       })
-      
+
       // Fetch agent's leads - backend should filter by assignedAgent for agent role
       const leadsRes = await api.get('/leads?limit=100').catch(err => {
         console.error('Error fetching leads:', err)
         return { data: { leads: [] } }
       })
       const allLeads = leadsRes.data?.leads || []
-      
+
       // Filter leads by assigned agent - handle both populated and non-populated assignedAgent field
       const myLeads = allLeads.filter(l => {
         const assignedAgentId = typeof l.assignedAgent === 'object'
@@ -121,7 +121,7 @@ export default function AgentDashboard() {
         newLeads: myLeads.filter(l => l.status === 'new').length,
         inquiryStats
       })
-      
+
       console.log('Dashboard data set:', {
         totalProperties: myProperties.length,
         activeProperties: myProperties.filter(p => p.status === 'active').length,
@@ -166,9 +166,9 @@ export default function AgentDashboard() {
           {stats.map((stat, index) => {
             const StatIcon = stat.icon
             const value = index === 0 ? dashboardData.totalProperties :
-                          index === 1 ? dashboardData.activeProperties :
-                          index === 2 ? dashboardData.totalLeads :
-                          dashboardData.newLeads
+              index === 1 ? dashboardData.activeProperties :
+                index === 2 ? dashboardData.totalLeads :
+                  dashboardData.newLeads
             return (
               <Link key={stat.name} href={stat.href} className="card hover:shadow-md transition-shadow">
                 <div className="card-body">
@@ -185,10 +185,9 @@ export default function AgentDashboard() {
                           <div className="text-2xl font-semibold text-gray-900">
                             {value}
                           </div>
-                          <div className={`ml-2 flex items-baseline text-sm font-semibold ${
-                            stat.changeType === 'positive' ? 'text-green-600' : 
-                            stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
-                          }`}>
+                          <div className={`ml-2 flex items-baseline text-sm font-semibold ${stat.changeType === 'positive' ? 'text-green-600' :
+                              stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
+                            }`}>
                             {stat.change}
                           </div>
                         </dd>
@@ -237,14 +236,14 @@ export default function AgentDashboard() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Link
-              href="/agent/properties/add"
+              href="/admin/properties/add"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center"
             >
               <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700">Add New Property</p>
             </Link>
             <Link
-              href="/agent/leads"
+              href="/admin/leads"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center"
             >
               <Users className="h-8 w-8 text-gray-400 mx-auto mb-2" />

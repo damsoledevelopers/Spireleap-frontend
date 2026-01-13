@@ -348,13 +348,7 @@ export default function Header() {
               </Link>
               {user ? (
                 <Link
-                  href={
-                    user.role === 'super_admin' ? '/admin/dashboard' :
-                    user.role === 'agency_admin' ? '/agency/dashboard' :
-                    user.role === 'agent' ? '/agent/dashboard' :
-                    user.role === 'staff' ? '/staff/dashboard' :
-                    '/properties'
-                  }
+                  href="/admin/dashboard"
                   className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
