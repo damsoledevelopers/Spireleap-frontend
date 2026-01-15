@@ -81,12 +81,12 @@ export default function AdminEditLeadPage() {
         api.get('/properties?limit=100'),
         api.get('/agencies')
       ])
-      
+
       const lead = leadRes.data.lead
       setProperties(propertiesRes.data.properties || [])
       const agenciesList = agenciesRes.data.agencies || []
       setAgencies(agenciesList)
-      
+
       // Fetch agents based on lead's agency
       const leadAgency = lead.agency?._id || lead.agency
       if (leadAgency) {
@@ -94,7 +94,7 @@ export default function AdminEditLeadPage() {
       } else {
         await fetchAllAgents()
       }
-      
+
       // Normalize agency ID from lead - handle both populated object and string ID
       let normalizedAgencyId = ''
       if (lead.agency) {
@@ -109,11 +109,11 @@ export default function AdminEditLeadPage() {
           normalizedAgencyId = String(lead.agency)
         }
       }
-      
+
       console.log('Lead Agency:', lead.agency)
       console.log('Normalized Agency ID:', normalizedAgencyId)
       console.log('Agencies List:', agenciesList.map(a => ({ id: String(a._id), name: a.name })))
-      
+
       // Populate form with lead data
       setFormData({
         contact: {
@@ -295,7 +295,7 @@ export default function AdminEditLeadPage() {
     )
   }
 
-  if (!user || user.role !== 'super_admin') {
+  if (!user || !['super_admin', 'agency_admin', 'agent'].includes(user.role)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -579,10 +579,10 @@ export default function AdminEditLeadPage() {
                   onChange={(e) => handleInputChange('priority', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="Hot">Hot</option>
+                  <option value="Warm">Warm</option>
+                  <option value="Cold">Cold</option>
+                  <option value="Not_interested">Not Interested</option>
                 </select>
               </div>
               <div>

@@ -96,7 +96,7 @@ export default function HomePage() {
 
   const fetchFeaturedProperties = async () => {
     try {
-      const response = await api.get('/properties?status=active')
+      const response = await api.get('/properties?status=active&featured=true')
       setFeaturedProperties(response.data.properties || [])
     } catch (error) {
       console.error('Error fetching properties:', error)
@@ -199,9 +199,13 @@ export default function HomePage() {
     const params = new URLSearchParams(
       Object.fromEntries(Object.entries(searchFilters).filter(([_, v]) => v))
     )
+
+    // Always enforce active properties on public search
+    params.set('status', 'active')
+
     // Redirect to properties page with filters applied
     if (params.toString()) {
-    router.push(`/properties?${params}`)
+      router.push(`/properties?${params}`)
     } else {
       router.push('/properties')
     }

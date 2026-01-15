@@ -26,6 +26,46 @@ export default function PropertyDetailPage() {
     fetchProperty()
   }, [params.slug])
 
+  // SEO metadata from property.seo
+  useEffect(() => {
+    if (!property) return
+
+    const seo = property.seo || {}
+
+    // Title
+    if (seo.metaTitle || property.title) {
+      document.title = seo.metaTitle || `${property.title} | NovaKeys`
+    }
+
+    // Description
+    const descText =
+      seo.metaDescription ||
+      (property.description && property.description.substring(0, 155)) ||
+      ''
+
+    if (descText) {
+      let metaDescription = document.querySelector('meta[name="description"]')
+      if (!metaDescription) {
+        metaDescription = document.createElement('meta')
+        metaDescription.setAttribute('name', 'description')
+        document.head.appendChild(metaDescription)
+      }
+      metaDescription.setAttribute('content', descText)
+    }
+
+    // Keywords
+    if (seo.keywords && seo.keywords.length) {
+      const keywordsStr = Array.isArray(seo.keywords) ? seo.keywords.join(', ') : seo.keywords
+      let metaKeywords = document.querySelector('meta[name="keywords"]')
+      if (!metaKeywords) {
+        metaKeywords = document.createElement('meta')
+        metaKeywords.setAttribute('name', 'keywords')
+        document.head.appendChild(metaKeywords)
+      }
+      metaKeywords.setAttribute('content', keywordsStr)
+    }
+  }, [property])
+
   const fetchProperty = async () => {
     try {
       setLoading(true)

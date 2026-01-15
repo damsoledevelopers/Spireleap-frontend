@@ -490,14 +490,19 @@ export default function AdminLeadDetailPage() {
 
   const getPriorityBadge = (priority) => {
     const colors = {
-      low: 'bg-gray-100 text-gray-800',
-      medium: 'bg-yellow-100 text-yellow-800',
-      high: 'bg-orange-100 text-orange-800',
-      urgent: 'bg-red-100 text-red-800'
+      Hot: 'bg-red-100 text-red-800',
+      Warm: 'bg-yellow-100 text-yellow-800',
+      Cold: 'bg-blue-100 text-blue-800',
+      Not_interested: 'bg-gray-100 text-gray-800'
     }
+    // Case-insensitive lookup for safety
+    if (!priority) return colors.Warm;
+    const p = String(priority).toLowerCase();
+    const key = Object.keys(colors).find(k => k.toLowerCase() === p);
+    const colorClass = colors[key] || colors.Warm;
     return (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${colors[priority] || colors.medium}`}>
-        {priority.toUpperCase()}
+      <span className={`px-2 py-1 rounded text-xs font-medium ${colorClass}`}>
+        {priority.toString().toUpperCase()}
       </span>
     )
   }
@@ -1556,7 +1561,7 @@ export default function AdminLeadDetailPage() {
                   <FileText className="h-5 w-5" />
                   Documents
                 </h2>
-                {user?.role === 'super_admin' && (
+                {(isSuperAdmin || isAgencyAdmin) && (
                   <label className="px-3 py-1.5 text-sm bg-white text-teal-700 rounded-lg hover:bg-teal-50 flex items-center gap-2 font-medium cursor-pointer">
                     <Upload className="h-4 w-4" />
                     Upload PDF
@@ -1623,7 +1628,7 @@ export default function AdminLeadDetailPage() {
                               <Download className="h-3 w-3" />
                               Download
                             </button>
-                            {user?.role === 'super_admin' && (
+                            {(isSuperAdmin || isAgencyAdmin) && (
                               <button
                                 onClick={() => handleDeleteDocument(index)}
                                 disabled={deletingDocument === index}
@@ -1644,7 +1649,7 @@ export default function AdminLeadDetailPage() {
                 <div className="p-12 text-center">
                   <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 mb-4">No documents uploaded</p>
-                  {user?.role === 'super_admin' && (
+                  {(isSuperAdmin || isAgencyAdmin) && (
                     <label className="inline-flex items-center px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 cursor-pointer">
                       <Upload className="h-4 w-4 mr-2" />
                       Upload PDF Documents
@@ -1703,10 +1708,10 @@ export default function AdminLeadDetailPage() {
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   >
-                    <option value="hot">Hot</option>
-                    <option value="warm">Warm</option>
-                    <option value="cold">Cold</option>
-                    <option value="not_interested">Not Interested</option>
+                    <option value="Hot">Hot</option>
+                    <option value="Warm">Warm</option>
+                    <option value="Cold">Cold</option>
+                    <option value="Not_interested">Not Interested</option>
                   </select>
                 </div>
               </div>

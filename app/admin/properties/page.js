@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -12,6 +12,8 @@ import Link from 'next/link'
 export default function AdminPropertiesPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   // Role-based access control
   useEffect(() => {
@@ -33,32 +35,33 @@ export default function AdminPropertiesPage() {
   const [properties, setProperties] = useState([])
   const [allProperties, setAllProperties] = useState([]) // Store all properties for metrics
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [filters, setFilters] = useState({
-    status: '',
-    propertyType: '',
-    listingType: '',
-    agency: '',
-    city: '',
-    state: '',
-    country: '',
-    area: '',
-    minPrice: '',
-    maxPrice: '',
-    bedrooms: '',
-    bathrooms: '',
-    minArea: '',
-    maxArea: ''
+    status: searchParams.get('status') || '',
+    propertyType: searchParams.get('propertyType') || '',
+    listingType: searchParams.get('listingType') || '',
+    agency: searchParams.get('agency') || '',
+    city: searchParams.get('city') || '',
+    state: searchParams.get('state') || '',
+    country: searchParams.get('country') || '',
+    area: searchParams.get('area') || '',
+    minPrice: searchParams.get('minPrice') || '',
+    maxPrice: searchParams.get('maxPrice') || '',
+    bedrooms: searchParams.get('bedrooms') || '',
+    bathrooms: searchParams.get('bathrooms') || '',
+    minArea: searchParams.get('minArea') || '',
+    maxArea: searchParams.get('maxArea') || ''
   })
   const [agencies, setAgencies] = useState([])
   const [uniqueLocations, setUniqueLocations] = useState({
     cities: [],
     states: [],
-    countries: []
+    countries: [],
+    areas: []
   })
   const [openFilter, setOpenFilter] = useState(null) // 'price', 'specification', 'location', 'agency', 'status', 'propertyType', 'listingType'
-  const [startDate, setStartDate] = useState('') // Date range filter start
-  const [endDate, setEndDate] = useState('') // Date range filter end
+  const [startDate, setStartDate] = useState(searchParams.get('startDate') || '') // Date range filter start
+  const [endDate, setEndDate] = useState(searchParams.get('endDate') || '') // Date range filter end
   const [showDatePicker, setShowDatePicker] = useState(false) // Show/hide date picker
   const [pagination, setPagination] = useState({
     current: 1,
@@ -85,34 +88,78 @@ export default function AdminPropertiesPage() {
     fetchUniqueLocations()
   }, [isSuperAdmin, isAgencyAdmin])
 
+  // Sync state with URL changes (handles browser back/forward)
   useEffect(() => {
-    // Reset pagination when date filters change
-    setPagination(prev => ({ ...prev, current: 1 }))
-  }, [startDate, endDate])
+    setFilters({
+      status: searchParams.get('status') || '',
+      propertyType: searchParams.get('propertyType') || '',
+      listingType: searchParams.get('listingType') || '',
+      agency: searchParams.get('agency') || '',
+      city: searchParams.get('city') || '',
+      state: searchParams.get('state') || '',
+      country: searchParams.get('country') || '',
+      area: searchParams.get('area') || '',
+      minPrice: searchParams.get('minPrice') || '',
+      maxPrice: searchParams.get('maxPrice') || '',
+      bedrooms: searchParams.get('bedrooms') || '',
+      bathrooms: searchParams.get('bathrooms') || '',
+      minArea: searchParams.get('minArea') || '',
+      maxArea: searchParams.get('maxArea') || ''
+    })
+    setSearchTerm(searchParams.get('search') || '')
+    setStartDate(searchParams.get('startDate') || '')
+    setEndDate(searchParams.get('endDate') || '')
+    setPagination(prev => ({
+      ...prev,
+      current: parseInt(searchParams.get('page')) || 1
+    }))
+  }, [searchParams])
+
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '')
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams()
+
+    if (searchInput) params.set('search', searchInput)
+    if (filters.status) params.set('status', filters.status)
+    if (filters.propertyType) params.set('propertyType', filters.propertyType)
+    if (filters.listingType) params.set('listingType', filters.listingType)
+    if (filters.agency) params.set('agency', filters.agency)
+    if (filters.city) params.set('city', filters.city)
+    if (filters.state) params.set('state', filters.state)
+    if (filters.country) params.set('country', filters.country)
+    if (filters.area) params.set('area', filters.area)
+    if (filters.minPrice) params.set('minPrice', filters.minPrice)
+    if (filters.maxPrice) params.set('maxPrice', filters.maxPrice)
+    if (filters.bedrooms) params.set('bedrooms', filters.bedrooms)
+    if (filters.bathrooms) params.set('bathrooms', filters.bathrooms)
+    if (filters.minArea) params.set('minArea', filters.minArea)
+    if (filters.maxArea) params.set('maxArea', filters.maxArea)
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+    if (pagination.current > 1) params.set('page', pagination.current.toString())
+
+    const query = params.toString()
+    const url = query ? `${pathname}?${query}` : pathname
+
+    const timer = setTimeout(() => {
+      if (url !== (pathname + '?' + searchParams.toString())) {
+        router.push(url, { scroll: false })
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [filters, searchInput, startDate, endDate, pagination.current])
 
   useEffect(() => {
     // Debounce search to avoid too many API calls
-    // No debounce for filters for immediate feedback
     const timer = setTimeout(() => {
       fetchProperties()
     }, searchTerm.trim() ? 300 : 0)
 
     return () => clearTimeout(timer)
   }, [
-    filters.status,
-    filters.propertyType,
-    filters.listingType,
-    filters.agency,
-    filters.city,
-    filters.state,
-    filters.country,
-    filters.area,
-    filters.minPrice,
-    filters.maxPrice,
-    filters.bedrooms,
-    filters.bathrooms,
-    filters.minArea,
-    filters.maxArea,
+    filters,
     pagination.current,
     searchTerm,
     startDate,
@@ -301,7 +348,12 @@ export default function AdminPropertiesPage() {
         .filter(Boolean)
       )].sort()
 
-      setUniqueLocations({ cities, states, countries })
+      const areas = [...new Set(allProperties
+        .map(p => p.location?.area || p.area)
+        .filter(Boolean)
+      )].sort()
+
+      setUniqueLocations({ cities, states, countries, areas })
     } catch (error) {
       console.error('Error fetching unique locations:', error)
       setUniqueLocations({ cities: [], states: [], countries: [] })
@@ -451,8 +503,8 @@ export default function AdminPropertiesPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search properties by any field..."
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-64"
               />
@@ -509,22 +561,6 @@ export default function AdminPropertiesPage() {
             <option value="retail">Retail</option>
             <option value="warehouse">Warehouse</option>
             <option value="other">Other</option>
-          </select>
-
-          {/* Listing Type Filter - Direct Dropdown */}
-          <select
-            value={filters.listingType}
-            onChange={(e) => {
-              setFilters(prev => ({ ...prev, listingType: e.target.value }))
-              setPagination(prev => ({ ...prev, current: 1 }))
-            }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.listingType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
-          >
-            <option value="">All Listing Types</option>
-            <option value="sale">Sale</option>
-            <option value="rent">Rent</option>
-            <option value="both">Both</option>
           </select>
 
           {/* Price Filter Button */}
@@ -708,113 +744,209 @@ export default function AdminPropertiesPage() {
             )}
           </div>
 
+          {/* Country Filter Button */}
+          <div className="relative">
+            <button
+              onClick={() => setOpenFilter(openFilter === 'country' ? null : 'country')}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
+            >
+              <MapPin className="h-4 w-4" />
+              Country
+              {filters.country && (
+                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
+                  {filters.country}
+                </span>
+              )}
+              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'country' ? 'rotate-180' : ''}`} />
+            </button>
+            {openFilter === 'country' && (
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+                <div className="p-4 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, country: '' }))
+                        setPagination(prev => ({ ...prev, current: 1 }))
+                        setOpenFilter(null)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                    >
+                      All Countries
+                    </button>
+                    {uniqueLocations.countries.map((country) => (
+                      <button
+                        key={country}
+                        onClick={() => {
+                          setFilters(prev => ({ ...prev, country }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                          setOpenFilter(null)
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.country === country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                      >
+                        {country}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* State Filter Button */}
+          <div className="relative">
+            <button
+              onClick={() => setOpenFilter(openFilter === 'state' ? null : 'state')}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.state ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
+            >
+              <MapPin className="h-4 w-4" />
+              State
+              {filters.state && (
+                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
+                  {filters.state}
+                </span>
+              )}
+              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'state' ? 'rotate-180' : ''}`} />
+            </button>
+            {openFilter === 'state' && (
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+                <div className="p-4 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, state: '' }))
+                        setPagination(prev => ({ ...prev, current: 1 }))
+                        setOpenFilter(null)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                    >
+                      All States
+                    </button>
+                    {uniqueLocations.states.map((state) => (
+                      <button
+                        key={state}
+                        onClick={() => {
+                          setFilters(prev => ({ ...prev, state }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                          setOpenFilter(null)
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.state === state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                      >
+                        {state}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Area Filter Button */}
+          <div className="relative">
+            <button
+              onClick={() => setOpenFilter(openFilter === 'area' ? null : 'area')}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.area ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              Area
+              {filters.area && (
+                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs max-w-[100px] truncate">
+                  {filters.area}
+                </span>
+              )}
+              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'area' ? 'rotate-180' : ''}`} />
+            </button>
+            {openFilter === 'area' && (
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+                <div className="p-4 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, area: '' }))
+                        setPagination(prev => ({ ...prev, current: 1 }))
+                        setOpenFilter(null)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.area ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                    >
+                      All Areas
+                    </button>
+                    {uniqueLocations.areas.map((area) => (
+                      <button
+                        key={area}
+                        onClick={() => {
+                          setFilters(prev => ({ ...prev, area }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                          setOpenFilter(null)
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.area === area ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                      >
+                        {area}
+                      </button>
+                    ))}
+                    <div className="pt-2 border-t border-gray-100 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Or type area..."
+                        className="w-full px-3 py-1.5 border rounded text-xs"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setFilters(prev => ({ ...prev, area: e.target.value }))
+                            setOpenFilter(null)
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Location Filter Button */}
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'location' ? null : 'location')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.city || filters.state || filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.city ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
                 }`}
             >
               <MapPin className="h-4 w-4" />
-              Location
-              {(filters.city || filters.state || filters.country || filters.area) && (
+              City
+              {filters.city && (
                 <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {[filters.city, filters.state, filters.country, filters.area].filter(Boolean).join(', ')}
+                  {filters.city}
                 </span>
               )}
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'location' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'location' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold text-gray-900">Location</h3>
-                    {(filters.city || filters.state || filters.country || filters.area) && (
-                      <button
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, city: '', state: '', country: '', area: '' }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        className="text-xs text-primary-600 hover:text-primary-800"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                      <select
-                        value={filters.city}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, city: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      >
-                        <option value="">All Cities</option>
-                        {uniqueLocations.cities.map((city) => (
-                          <option key={city} value={city}>
-                            {city}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                      <select
-                        value={filters.state}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, state: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      >
-                        <option value="">All States</option>
-                        {uniqueLocations.states.map((state) => (
-                          <option key={state} value={state}>
-                            {state}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                      <select
-                        value={filters.country}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, country: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      >
-                        <option value="">All Countries</option>
-                        {uniqueLocations.countries.map((country) => (
-                          <option key={country} value={country}>
-                            {country}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
-                      <input
-                        type="text"
-                        value={filters.area}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, area: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Enter area/neighborhood"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+                <div className="p-4 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1">
                     <button
-                      onClick={() => setOpenFilter(null)}
-                      className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, city: '' }))
+                        setPagination(prev => ({ ...prev, current: 1 }))
+                        setOpenFilter(null)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
                     >
-                      Apply
+                      All Cities
                     </button>
+                    {uniqueLocations.cities.map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => {
+                          setFilters(prev => ({ ...prev, city }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                          setOpenFilter(null)
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.city === city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
+                      >
+                        {city}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

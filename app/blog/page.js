@@ -43,6 +43,32 @@ export default function BlogPage() {
     })
   }
 
+  // Basic SEO metadata for blog listing
+  useEffect(() => {
+    document.title = 'Real Estate Blog | NovaKeys'
+
+    const desc =
+      'Read the latest real estate trends, tips, and insights from NovaKeys to help you buy, rent, or invest smarter.'
+
+    let metaDescription = document.querySelector('meta[name="description"]')
+    if (!metaDescription) {
+      metaDescription = document.createElement('meta')
+      metaDescription.setAttribute('name', 'description')
+      document.head.appendChild(metaDescription)
+    }
+    metaDescription.setAttribute('content', desc)
+
+    const keywordsStr =
+      'real estate blog, property tips, buying guide, renting guide, investment insights, NovaKeys'
+    let metaKeywords = document.querySelector('meta[name="keywords"]')
+    if (!metaKeywords) {
+      metaKeywords = document.createElement('meta')
+      metaKeywords.setAttribute('name', 'keywords')
+      document.head.appendChild(metaKeywords)
+    }
+    metaKeywords.setAttribute('content', keywordsStr)
+  }, [])
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Header />

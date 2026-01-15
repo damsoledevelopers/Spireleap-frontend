@@ -34,7 +34,7 @@ export default function AdminLeadsPage() {
   const canUploadLeads = isSuperAdmin || isAgencyAdmin
   const canBulkActions = isSuperAdmin || isAgencyAdmin
   const canAutoAssign = isSuperAdmin || isAgencyAdmin
-  const canEditLead = isSuperAdmin || isAgent
+  const canEditLead = isSuperAdmin || isAgencyAdmin || isAgent
   const [leads, setLeads] = useState([])
   const [allLeads, setAllLeads] = useState([]) // For Kanban view
   const [loading, setLoading] = useState(true)
@@ -770,13 +770,12 @@ export default function AdminLeadsPage() {
       return
     }
 
-    // Store previous state references for rollback
-    let previousLeadsState = null
-    let previousAllLeadsState = null
+    // Store previous state references for rollback BEFORE functional update
+    const previousLeadsState = [...leads]
+    const previousAllLeadsState = [...allLeads]
 
     // Optimistic update - update UI immediately using functional updates
     setLeads(prevLeads => {
-      previousLeadsState = prevLeads // Store reference before mutation
       return prevLeads.map(lead => {
         const id = getLeadId(lead)
         if (String(id) === String(leadId)) {
@@ -788,7 +787,6 @@ export default function AdminLeadsPage() {
 
     // Also update allLeads for Kanban view
     setAllLeads(prevLeads => {
-      previousAllLeadsState = prevLeads // Store reference before mutation
       return prevLeads.map(lead => {
         const id = getLeadId(lead)
         if (String(id) === String(leadId)) {
@@ -798,13 +796,17 @@ export default function AdminLeadsPage() {
       })
     })
 
+    console.log(`🚀 Initiating priority update for lead ${leadId} to ${priorityValue}`)
+
     try {
       const response = await api.put(`/leads/${leadId}`, { priority: priorityValue })
+      console.log('✅ Server response received:', response.data)
 
       // Always update with server response to ensure consistency
       if (response.data?.lead) {
         const serverPriority = response.data.lead.priority
-        console.log('Server response priority:', serverPriority, 'for leadId:', leadId)
+        console.log(`✨ Server confirmed priority: ${serverPriority}`)
+        toast.success(`Priority updated to ${serverPriority === 'not_interested' ? 'Not Interested' : serverPriority.charAt(0).toUpperCase() + serverPriority.slice(1)}`)
 
         setLeads(prevLeads =>
           prevLeads.map(lead => {
@@ -1090,12 +1092,16 @@ export default function AdminLeadsPage() {
 
   const getPriorityColor = (priority) => {
     const colors = {
-      hot: 'bg-red-100 text-red-800 border-red-200',
-      warm: 'bg-orange-100 text-orange-800 border-orange-200',
-      cold: 'bg-blue-100 text-blue-800 border-blue-200',
-      not_interested: 'bg-gray-100 text-gray-800 border-gray-200'
+      Hot: 'bg-red-100 text-red-800 border-red-200',
+      Warm: 'bg-orange-100 text-orange-800 border-orange-200',
+      Cold: 'bg-blue-100 text-blue-800 border-blue-200',
+      Not_interested: 'bg-gray-100 text-gray-800 border-gray-200'
     }
-    return colors[priority?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200'
+    // Case-insensitive lookup for safety
+    if (!priority) return colors.Warm;
+    const p = String(priority).toLowerCase();
+    const key = Object.keys(colors).find(k => k.toLowerCase() === p);
+    return colors[key] || colors.Warm;
   }
 
   const handleSort = (column) => {
@@ -1709,10 +1715,10 @@ export default function AdminLeadsPage() {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">- Priority -</option>
-                <option value="hot">Hot</option>
-                <option value="warm">Warm</option>
-                <option value="cold">Cold</option>
-                <option value="not_interested">Not Interested</option>
+                <option value="Hot">Hot</option>
+                <option value="Warm">Warm</option>
+                <option value="Cold">Cold</option>
+                <option value="Not_interested">Not Interested</option>
               </select>
 
               {/* Team Filter - Only for Super Admin and Agency Admin */}
@@ -2192,12 +2198,14 @@ export default function AdminLeadsPage() {
                           const getPriorityLabel = (priority) => {
                             if (!priority) return 'Warm'
                             const priorityLabels = {
-                              hot: 'Hot',
-                              warm: 'Warm',
-                              cold: 'Cold',
-                              not_interested: 'Not Interested'
+                              Hot: 'Hot',
+                              Warm: 'Warm',
+                              Cold: 'Cold',
+                              Not_interested: 'Not Interested'
                             }
-                            return priorityLabels[priority?.toLowerCase()] || priority.charAt(0).toUpperCase() + priority.slice(1)
+                            const p = String(priority).toLowerCase()
+                            const key = Object.keys(priorityLabels).find(k => k.toLowerCase() === p)
+                            return priorityLabels[key] || priority.charAt(0).toUpperCase() + priority.slice(1)
                           }
                           return (
                             <tr key={leadId} className="hover:bg-logo-beige transition-colors">
@@ -2356,7 +2364,7 @@ export default function AdminLeadsPage() {
                                 {canEditLead ? (
                                   <select
                                     key={`priority-select-${leadId}-${lead.priority || 'null'}`}
-                                    value={lead.priority ? String(lead.priority).toLowerCase() : ''}
+                                    value={lead.priority ? String(lead.priority).charAt(0).toUpperCase() + String(lead.priority).slice(1).toLowerCase() : ''}
                                     onChange={(e) => {
                                       e.stopPropagation()
                                       handleQuickPriorityChange(leadId, e.target.value)
@@ -2366,15 +2374,15 @@ export default function AdminLeadsPage() {
                                     title="Change Priority"
                                   >
                                     <option value="">Select Priority</option>
-                                    <option value="hot">Hot</option>
-                                    <option value="warm">Warm</option>
-                                    <option value="cold">Cold</option>
-                                    <option value="not_interested">Not Interested</option>
+                                    <option value="Hot">Hot</option>
+                                    <option value="Warm">Warm</option>
+                                    <option value="Cold">Cold</option>
+                                    <option value="Not_interested">Not Interested</option>
                                   </select>
                                 ) : (
-                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${lead.priority === 'hot' ? 'bg-red-100 text-red-800' :
-                                    lead.priority === 'warm' ? 'bg-yellow-100 text-yellow-800' :
-                                      lead.priority === 'cold' ? 'bg-blue-100 text-blue-800' :
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${String(lead.priority).toLowerCase() === 'hot' ? 'bg-red-100 text-red-800' :
+                                    String(lead.priority).toLowerCase() === 'warm' ? 'bg-yellow-100 text-yellow-800' :
+                                      String(lead.priority).toLowerCase() === 'cold' ? 'bg-blue-100 text-blue-800' :
                                         'bg-gray-100 text-gray-800'
                                     }`}>
                                     {lead.priority ? lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1).replace('_', ' ') : '-'}

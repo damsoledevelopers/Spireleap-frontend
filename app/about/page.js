@@ -68,6 +68,42 @@ export default function AboutPage() {
     { number: '15+', label: 'Years Experience' }
   ]
 
+  // SEO metadata from CMS page
+  useEffect(() => {
+    if (!pageContent?.seo) return
+
+    const seo = pageContent.seo
+
+    // Title
+    if (seo.metaTitle || pageContent.title) {
+      document.title = seo.metaTitle || `${pageContent.title} | NovaKeys`
+    }
+
+    // Description
+    const descText = seo.metaDescription || ''
+    if (descText) {
+      let metaDescription = document.querySelector('meta[name="description"]')
+      if (!metaDescription) {
+        metaDescription = document.createElement('meta')
+        metaDescription.setAttribute('name', 'description')
+        document.head.appendChild(metaDescription)
+      }
+      metaDescription.setAttribute('content', descText)
+    }
+
+    // Keywords
+    if (seo.keywords && seo.keywords.length) {
+      const keywordsStr = Array.isArray(seo.keywords) ? seo.keywords.join(', ') : seo.keywords
+      let metaKeywords = document.querySelector('meta[name="keywords"]')
+      if (!metaKeywords) {
+        metaKeywords = document.createElement('meta')
+        metaKeywords.setAttribute('name', 'keywords')
+        document.head.appendChild(metaKeywords)
+      }
+      metaKeywords.setAttribute('content', keywordsStr)
+    }
+  }, [pageContent])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex flex-col">

@@ -37,7 +37,7 @@ export default function AdminAddLeadPage() {
     agency: '',
     source: 'website',
     status: 'new',
-    priority: 'medium',
+    priority: 'Warm',
     assignedAgent: '',
     campaignName: '',
     inquiry: {
@@ -194,7 +194,7 @@ export default function AdminAddLeadPage() {
     )
   }
 
-  if (!user || !['super_admin', 'agency_admin', 'staff'].includes(user.role)) {
+  if (!user || !['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -363,10 +363,10 @@ export default function AdminAddLeadPage() {
                   onChange={(e) => handleInputChange('priority', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="Hot">Hot</option>
+                  <option value="Warm">Warm</option>
+                  <option value="Cold">Cold</option>
+                  <option value="Not_interested">Not Interested</option>
                 </select>
               </div>
               <div>

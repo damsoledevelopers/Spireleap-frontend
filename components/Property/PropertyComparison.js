@@ -64,6 +64,41 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
     setProperties(properties.filter(p => p._id !== propertyId))
   }
 
+  const getPrimaryImage = (images) => {
+    if (!images || images.length === 0) return null
+    // Support both array of URLs and array of { url } objects, but backend currently sends objects
+    const primary = images.find(img => img.isPrimary) || images[0]
+    return typeof primary === 'string' ? primary : primary.url
+  }
+
+  const formatPrice = (property) => {
+    if (!property || !property.price) return 'N/A'
+
+    // Sale price
+    if (property.listingType === 'sale' && typeof property.price.sale === 'number') {
+      return property.price.sale.toLocaleString()
+    }
+
+    // Rent price
+    if (
+      property.listingType === 'rent' &&
+      property.price.rent &&
+      typeof property.price.rent.amount === 'number'
+    ) {
+      return `${property.price.rent.amount.toLocaleString()}/${property.price.rent.period || 'month'}`
+    }
+
+    // Fallback: try sale amount, then rent amount
+    if (typeof property.price.sale === 'number') {
+      return property.price.sale.toLocaleString()
+    }
+    if (property.price.rent && typeof property.price.rent.amount === 'number') {
+      return property.price.rent.amount.toLocaleString()
+    }
+
+    return 'N/A'
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -122,7 +157,10 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900">{property.title}</p>
-                    <p className="text-xs text-gray-500">{property.location?.city} • ${property.price?.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">
+                      {property.location?.city}
+                      {formatPrice(property) !== 'N/A' && ` • $${formatPrice(property)}`}
+                    </p>
                   </div>
                   <Plus className="h-4 w-4 text-primary-600" />
                 </div>
@@ -170,7 +208,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                       <td key={property._id} className="px-4 py-3">
                         {property.images && property.images.length > 0 ? (
                           <img
-                            src={property.images[0]}
+                            src={getPrimaryImage(property.images) || '/placeholder-property.jpg'}
                             alt={property.title}
                             className="h-24 w-32 object-cover rounded-lg"
                           />
@@ -186,7 +224,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">Price</td>
                     {properties.map(property => (
                       <td key={property._id} className="px-4 py-3 text-sm text-gray-900">
-                        ${property.price?.toLocaleString() || 'N/A'}
+                        {formatPrice(property) !== 'N/A' ? `$${formatPrice(property)}` : 'N/A'}
                       </td>
                     ))}
                   </tr>
@@ -219,7 +257,9 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">Area</td>
                     {properties.map(property => (
                       <td key={property._id} className="px-4 py-3 text-sm text-gray-900">
-                        {property.area ? `${property.area} sq ft` : 'N/A'}
+                        {property.specifications?.area?.value
+                          ? `${property.specifications.area.value} ${property.specifications.area.unit || 'sqft'}`
+                          : 'N/A'}
                       </td>
                     ))}
                   </tr>
@@ -227,7 +267,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">Bedrooms</td>
                     {properties.map(property => (
                       <td key={property._id} className="px-4 py-3 text-sm text-gray-900">
-                        {property.bedrooms || 'N/A'}
+                        {property.specifications?.bedrooms ?? 'N/A'}
                       </td>
                     ))}
                   </tr>
@@ -235,7 +275,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">Bathrooms</td>
                     {properties.map(property => (
                       <td key={property._id} className="px-4 py-3 text-sm text-gray-900">
-                        {property.bathrooms || 'N/A'}
+                        {property.specifications?.bathrooms ?? 'N/A'}
                       </td>
                     ))}
                   </tr>
