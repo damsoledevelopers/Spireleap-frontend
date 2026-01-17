@@ -43,8 +43,21 @@ import {
 import toast from 'react-hot-toast'
 
 export default function AdminUsers() {
-  const { user } = useAuth()
+  const { user, checkPermission } = useAuth()
   const router = useRouter()
+
+  // Page access check
+  useEffect(() => {
+    if (user && !checkPermission('users', 'view')) {
+      toast.error('You do not have permission to view Users')
+      router.push('/admin/dashboard')
+    }
+  }, [user, checkPermission, router])
+
+  const canCreateUser = checkPermission('users', 'create')
+  const canEditUser = checkPermission('users', 'edit')
+  const canDeleteUser = checkPermission('users', 'delete')
+
   const searchParams = useSearchParams()
   const [adminUsers, setAdminUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +66,7 @@ export default function AdminUsers() {
   const [selectedUserInquiries, setSelectedUserInquiries] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedInquiry, setSelectedInquiry] = useState(null) // For viewing detailed inquiry
-  
+
   // Check for tab parameter and redirect accordingly
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -109,7 +122,7 @@ export default function AdminUsers() {
       const response = await api.get('/users?role=user')
       const users = response.data.users || []
       setAdminUsers(users)
-      
+
       // Fetch inquiries for all users
       await fetchInquiriesForUsers(users)
     } catch (error) {
@@ -133,12 +146,12 @@ export default function AdminUsers() {
         const response = await api.get(`/leads?page=${page}&limit=${limit}`)
         const leads = response.data.leads || []
         allLeads = [...allLeads, ...leads]
-        
+
         // Check if there are more pages
         const pagination = response.data.pagination || {}
         hasMore = pagination.pages > pagination.page
         page++
-        
+
         // Safety check to prevent infinite loop
         if (page > 100) {
           console.warn('Reached maximum pages limit (100)')
@@ -147,7 +160,7 @@ export default function AdminUsers() {
       }
 
       console.log(`✅ Fetched ${allLeads.length} total leads/inquiries`)
-      
+
       // Group inquiries by user email
       const inquiriesByEmail = {}
       users.forEach(user => {
@@ -165,7 +178,7 @@ export default function AdminUsers() {
       const usersWithInquiries = Object.keys(inquiriesByEmail).filter(email => inquiriesByEmail[email].length > 0).length
       console.log(`📊 Total inquiries matched to users: ${totalMatched}`)
       console.log(`📊 Users with inquiries: ${usersWithInquiries}`)
-      
+
       setUserInquiries(inquiriesByEmail)
     } catch (error) {
       console.error('❌ Failed to fetch inquiries:', error)
@@ -201,7 +214,7 @@ export default function AdminUsers() {
       toast.error('Cannot delete your own account')
       return
     }
-    
+
     if (window.confirm('Are you sure you want to delete this admin user?')) {
       try {
         await api.delete(`/users/${adminId}`)
@@ -220,7 +233,7 @@ export default function AdminUsers() {
       toast.error('Cannot change your own status')
       return
     }
-    
+
     try {
       await api.put(`/users/${adminId}/status`, { isActive })
       toast.success('Admin user status updated')
@@ -235,20 +248,20 @@ export default function AdminUsers() {
   const handleAddUser = async (e) => {
     e.preventDefault()
     setSubmitting(true)
-    
+
     try {
       await api.post('/users', formData)
       toast.success('User added successfully!')
       setShowAddModal(false)
-                      setFormData({
-                        firstName: '',
-                        lastName: '',
-                        email: '',
-                        phone: '',
-                        password: '',
-                        role: 'user'
-                      })
-                      fetchAdminUsers()
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        password: '',
+        role: 'user'
+      })
+      fetchAdminUsers()
     } catch (error) {
       console.error('Add user error:', error)
       const errorMessage = error.response?.data?.message || 'Failed to add user'
@@ -270,16 +283,16 @@ export default function AdminUsers() {
 
   // Filter users
   const filteredAdmins = adminUsers.filter(admin => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       admin.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       admin.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       admin.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       admin.phone?.includes(searchTerm)
-    
-    const matchesStatus = !statusFilter || 
+
+    const matchesStatus = !statusFilter ||
       (statusFilter === 'active' && admin.isActive) ||
       (statusFilter === 'inactive' && !admin.isActive)
-    
+
     // Date range filter
     let matchesDate = true
     if ((startDate || endDate) && admin.createdAt) {
@@ -295,7 +308,7 @@ export default function AdminUsers() {
         matchesDate = created <= end
       }
     }
-    
+
     // Inquiry filter
     let matchesInquiry = true
     if (inquiryFilter && inquiryFilter !== 'all') {
@@ -303,7 +316,7 @@ export default function AdminUsers() {
       const inquiryCount = userInquiries[userEmail]?.length || 0
       matchesInquiry = inquiryFilter === 'with_inquiries' ? inquiryCount > 0 : inquiryCount === 0
     }
-    
+
     return matchesSearch && matchesStatus && matchesDate && matchesInquiry
   })
 
@@ -437,11 +450,10 @@ export default function AdminUsers() {
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${
-                  startDate || endDate
-                    ? 'border-primary-500 text-gray-900'
-                    : 'border-gray-300 text-gray-700'
-                }`}
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${startDate || endDate
+                  ? 'border-primary-500 text-gray-900'
+                  : 'border-gray-300 text-gray-700'
+                  }`}
               >
                 <Filter className="h-4 w-4 mr-2 text-gray-400" />
                 <span>
@@ -454,8 +466,8 @@ export default function AdminUsers() {
                         : 'Date Range'}
                 </span>
                 {startDate || endDate ? (
-                  <X 
-                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600" 
+                  <X
+                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
                     onClick={(e) => {
                       e.stopPropagation()
                       setStartDate('')
@@ -466,8 +478,8 @@ export default function AdminUsers() {
               </button>
               {showDatePicker && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
                   <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
@@ -549,13 +561,15 @@ export default function AdminUsers() {
               />
             </div>
             {/* Add User Button */}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="btn-primary flex items-center gap-2 bg-red-600 hover:bg-red-700"
-            >
-              <Plus className="h-4 w-4" />
-              Add User
-            </button>
+            {canCreateUser && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="btn-primary flex items-center gap-2 bg-red-600 hover:bg-red-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add User
+              </button>
+            )}
           </div>
         </div>
 
@@ -596,15 +610,15 @@ export default function AdminUsers() {
                       <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg font-medium">No users found</p>
                       <p className="text-gray-400 text-sm mt-2">
-                        {filteredAdmins.length === 0 
-                          ? 'Try adjusting your filters' 
+                        {filteredAdmins.length === 0
+                          ? 'Try adjusting your filters'
                           : 'No users on this page'}
                       </p>
                     </td>
                   </tr>
                 ) : (
                   paginatedAdmins.map((admin) => (
-                  <tr key={admin._id || admin.id} className="hover:bg-logo-beige transition-colors">
+                    <tr key={admin._id || admin.id} className="hover:bg-logo-beige transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
@@ -659,10 +673,10 @@ export default function AdminUsers() {
                         <div className="text-xs text-gray-500">
                           {admin.createdAt || admin.created_at
                             ? new Date(admin.createdAt || admin.created_at).toLocaleTimeString('en-GB', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                              })
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })
                             : ''}
                         </div>
                       </td>
@@ -706,33 +720,38 @@ export default function AdminUsers() {
                           >
                             <Eye className="h-5 w-5" />
                           </Link>
-                          <Link
-                            href={`/admin/users/${String(admin._id || admin.id)}/edit`}
-                            className="text-primary-600 hover:text-primary-900 transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </Link>
+                          {canEditUser && (
+                            <Link
+                              href={`/admin/users/${String(admin._id || admin.id)}/edit`}
+                              className="text-primary-600 hover:text-primary-900 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="h-5 w-5" />
+                            </Link>
+                          )}
                           {admin._id !== user?.id && (
                             <>
-                              <button
-                                onClick={() => handleDeleteAdmin(admin._id || admin.id)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() => handleStatusChange(admin._id || admin.id, !admin.isActive)}
-                                className={`px-2 py-1 text-xs rounded ${
-                                  admin.isActive 
-                                    ? 'bg-red-100 text-red-800 hover:bg-red-200' 
+                              {canDeleteUser && (
+                                <button
+                                  onClick={() => handleDeleteAdmin(admin._id || admin.id)}
+                                  className="text-red-600 hover:text-red-900 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </button>
+                              )}
+                              {canEditUser && (
+                                <button
+                                  onClick={() => handleStatusChange(admin._id || admin.id, !admin.isActive)}
+                                  className={`px-2 py-1 text-xs rounded ${admin.isActive
+                                    ? 'bg-red-100 text-red-800 hover:bg-red-200'
                                     : 'bg-green-100 text-green-800 hover:bg-green-200'
-                                }`}
-                                title={admin.isActive ? 'Deactivate' : 'Activate'}
-                              >
-                                {admin.isActive ? 'Deactivate' : 'Activate'}
-                              </button>
+                                    }`}
+                                  title={admin.isActive ? 'Deactivate' : 'Activate'}
+                                >
+                                  {admin.isActive ? 'Deactivate' : 'Activate'}
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -743,7 +762,7 @@ export default function AdminUsers() {
               </tbody>
             </table>
           </div>
-          
+
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
@@ -780,7 +799,7 @@ export default function AdminUsers() {
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
-                    
+
                     {/* Page Numbers */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum
@@ -793,22 +812,21 @@ export default function AdminUsers() {
                       } else {
                         pageNum = currentPage - 2 + i
                       }
-                      
+
                       return (
                         <button
                           key={pageNum}
                           onClick={() => setCurrentPage(pageNum)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                            currentPage === pageNum
-                              ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                          }`}
+                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${currentPage === pageNum
+                            ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            }`}
                         >
                           {pageNum}
                         </button>
                       )
                     })}
-                    
+
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
@@ -832,51 +850,51 @@ export default function AdminUsers() {
                 <div className="space-y-4">
                   <div>
                     <label className="form-label">First Name</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
+                    <input
+                      type="text"
+                      className="form-input"
                       required
                       value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="form-label">Last Name</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
+                    <input
+                      type="text"
+                      className="form-input"
                       required
                       value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="form-label">Email</label>
-                    <input 
-                      type="email" 
-                      className="form-input" 
+                    <input
+                      type="email"
+                      className="form-input"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="form-label">Phone</label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       className="form-input"
                       value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="form-label">Password</label>
-                    <input 
-                      type="password" 
-                      className="form-input" 
+                    <input
+                      type="password"
+                      className="form-input"
                       required
                       value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       minLength={6}
                     />
                   </div>
@@ -900,8 +918,8 @@ export default function AdminUsers() {
                   >
                     Cancel
                   </button>
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="btn-primary"
                     disabled={submitting}
                   >
@@ -983,8 +1001,8 @@ export default function AdminUsers() {
                               ? (inquiry.property.price.sale
                                 ? `₹${Number(inquiry.property.price.sale).toLocaleString()}`
                                 : inquiry.property.price.rent?.amount
-                                ? `₹${Number(inquiry.property.price.rent.amount).toLocaleString()}/${inquiry.property.price.rent.period || 'month'}`
-                                : 'Price on request')
+                                  ? `₹${Number(inquiry.property.price.rent.amount).toLocaleString()}/${inquiry.property.price.rent.period || 'month'}`
+                                  : 'Price on request')
                               : `₹${Number(inquiry.property.price).toLocaleString()}`)
                             : 'Price on request'
 
@@ -997,8 +1015,8 @@ export default function AdminUsers() {
                                 <div className="flex items-center gap-2">
                                   {inquiry.property?.images && inquiry.property.images.length > 0 && (
                                     <img
-                                      src={typeof inquiry.property.images[0] === 'string' 
-                                        ? inquiry.property.images[0] 
+                                      src={typeof inquiry.property.images[0] === 'string'
+                                        ? inquiry.property.images[0]
                                         : inquiry.property.images[0]?.url || '/placeholder-property.jpg'}
                                       alt={inquiry.property?.title || 'Property'}
                                       className="h-10 w-10 rounded object-cover"
@@ -1022,17 +1040,16 @@ export default function AdminUsers() {
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
                                 <span
-                                  className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                    inquiry.status === 'new'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : inquiry.status === 'contacted'
+                                  className={`px-2 py-1 text-xs font-medium rounded-full ${inquiry.status === 'new'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : inquiry.status === 'contacted'
                                       ? 'bg-yellow-100 text-yellow-800'
                                       : inquiry.status === 'qualified'
-                                      ? 'bg-green-100 text-green-800'
-                                      : inquiry.status === 'booked'
-                                      ? 'bg-purple-100 text-purple-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }`}
+                                        ? 'bg-green-100 text-green-800'
+                                        : inquiry.status === 'booked'
+                                          ? 'bg-purple-100 text-purple-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                    }`}
                                 >
                                   {inquiry.status?.replace('_', ' ').toUpperCase() || 'N/A'}
                                 </span>
@@ -1040,13 +1057,12 @@ export default function AdminUsers() {
                               <td className="px-4 py-3 whitespace-nowrap">
                                 {inquiry.priority && (
                                   <span
-                                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                      inquiry.priority === 'hot'
-                                        ? 'bg-red-100 text-red-800'
-                                        : inquiry.priority === 'warm'
+                                    className={`px-2 py-1 text-xs font-medium rounded-full ${inquiry.priority === 'hot'
+                                      ? 'bg-red-100 text-red-800'
+                                      : inquiry.priority === 'warm'
                                         ? 'bg-orange-100 text-orange-800'
                                         : 'bg-blue-100 text-blue-800'
-                                    }`}
+                                      }`}
                                   >
                                     {inquiry.priority.toUpperCase()}
                                   </span>

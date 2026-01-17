@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Eye, EyeOff, Search, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -11,6 +12,7 @@ const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
 import 'react-quill/dist/quill.snow.css'
 
 export default function BlogManagement() {
+  const { checkPermission } = useAuth()
   const [blogs, setBlogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -52,10 +54,15 @@ export default function BlogManagement() {
     e.preventDefault()
     try {
       const tagsArray = formData.tags.split(',').map(t => t.trim()).filter(t => t)
-      
+      const keywordsArray = formData.seo.keywords.split(',').map(k => k.trim()).filter(k => k)
+
       const blogData = {
         ...formData,
-        tags: tagsArray
+        tags: tagsArray,
+        seo: {
+          ...formData.seo,
+          keywords: keywordsArray
+        }
       }
 
       if (editingBlog) {
@@ -145,17 +152,19 @@ export default function BlogManagement() {
             />
           </div>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setEditingBlog(null)
-            setShowModal(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="h-5 w-5" />
-          New Blog
-        </button>
+        {checkPermission('cms', 'create') && (
+          <button
+            onClick={() => {
+              resetForm()
+              setEditingBlog(null)
+              setShowModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="h-5 w-5" />
+            New Blog
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -197,11 +206,10 @@ export default function BlogManagement() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        blog.status === 'published' ? 'bg-green-100 text-green-800' :
+                      <span className={`px-2 py-1 text-xs rounded-full ${blog.status === 'published' ? 'bg-green-100 text-green-800' :
                         blog.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
                         {blog.status}
                       </span>
                     </td>
@@ -213,18 +221,22 @@ export default function BlogManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(blog)}
-                          className="text-primary-600 hover:text-primary-900"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(blog._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                        {checkPermission('cms', 'edit') && (
+                          <button
+                            onClick={() => handleEdit(blog)}
+                            className="text-primary-600 hover:text-primary-900"
+                          >
+                            <Edit className="h-5 w-5" />
+                          </button>
+                        )}
+                        {checkPermission('cms', 'delete') && (
+                          <button
+                            onClick={() => handleDelete(blog._id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -394,4 +406,3 @@ export default function BlogManagement() {
     </div>
   )
 }
-

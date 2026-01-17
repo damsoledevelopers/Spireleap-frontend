@@ -24,61 +24,76 @@ import {
   Mail,
   MessageSquare,
   UserCircle,
-  Briefcase
+  Briefcase,
+  Shield
 } from 'lucide-react'
 
-const navigation = {
-  super_admin: [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    {
-      name: 'Users',
-      href: '/admin/users',
-      icon: UserCheck,
-      submenu: [
-        { name: 'Agencies', href: '/admin/users?tab=agencies', icon: Building },
-        { name: 'Agents', href: '/admin/users?tab=agents', icon: UserCircle },
-        { name: 'Staff', href: '/admin/users?tab=staff', icon: Briefcase },
-        { name: 'Users', href: '/admin/users?tab=users', icon: UserCheck },
-      ]
-    },
-    { name: 'Properties', href: '/admin/properties', icon: Package },
-    { name: 'Leads', href: '/admin/leads', icon: Users },
-    { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
-    { name: 'Contact Messages', href: '/admin/contact-messages', icon: Mail },
-    { name: 'CMS', href: '/admin/cms', icon: FileText },
-    { name: 'Reports', href: '/admin/reports', icon: TrendingUp },
-    { name: 'Settings', href: '/admin/settings', icon: Settings },
-  ],
-  agency_admin: [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'Properties', href: '/admin/properties', icon: Package },
-    { name: 'Leads', href: '/admin/leads', icon: Users },
-    { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
-    { name: 'Agents', href: '/admin/agents', icon: UserCheck },
-    { name: 'Reports', href: '/admin/reports', icon: TrendingUp },
-    { name: 'Settings', href: '/admin/settings', icon: Settings },
-  ],
-  agent: [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'My Properties', href: '/admin/properties', icon: Package },
-    { name: 'My Leads', href: '/admin/leads', icon: Users },
-    { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
-    { name: 'Profile', href: '/admin/profile', icon: UserCheck },
-  ],
-  staff: [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'Leads', href: '/admin/leads', icon: Users },
-    { name: 'Properties', href: '/admin/properties', icon: Package },
-    { name: 'Profile', href: '/admin/profile', icon: UserCheck },
-  ],
-}
+const navigation = [
+  { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+  {
+    name: 'Users',
+    href: '/admin/users',
+    icon: UserCheck,
+    module: 'users',
+    submenu: [
+      { name: 'Agencies', href: '/admin/users?tab=agencies', icon: Building, module: 'agencies' },
+      { name: 'Agents', href: '/admin/users?tab=agents', icon: UserCircle, module: 'agents' },
+      { name: 'Staff', href: '/admin/users?tab=staff', icon: Briefcase, module: 'staff' },
+      { name: 'Users', href: '/admin/users?tab=users', icon: UserCheck, module: 'users' },
+    ]
+  },
+  { name: 'Permissions', href: '/admin/permissions', icon: Shield, module: 'permissions' },
+  { name: 'Properties', href: '/admin/properties', icon: Package, module: 'properties' },
+  { name: 'Leads', href: '/admin/leads', icon: Users, module: 'leads' },
+  { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare, module: 'inquiries' },
+  { name: 'Contact Messages', href: '/admin/contact-messages', icon: Mail, module: 'contact_messages' },
+  { name: 'CMS', href: '/admin/cms', icon: FileText, module: 'cms' },
+  { name: 'Reports', href: '/admin/reports', icon: TrendingUp, module: 'analytics' },
+  { name: 'Settings', href: '/admin/settings', icon: Settings, module: 'settings' },
+  { name: 'Profile', href: '/admin/profile', icon: UserCircle }
+]
 
 export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, onToggleCollapse }) {
-  const { user, logout } = useAuth()
+  const { user, logout, checkPermission } = useAuth()
   const pathname = usePathname()
   const [openDropdowns, setOpenDropdowns] = useState({})
 
-  const userNavigation = navigation[user?.role] || []
+  const userNavigation = navigation.reduce((acc, item) => {
+    // Check main permissions
+    if (item.module && !checkPermission(item.module, 'view')) return acc
+
+    // Hide Contact Messages for all agency roles (only visible to super_admin)
+    if (item.module === 'contact_messages' && user?.role !== 'super_admin') return acc
+
+    // Handle submenu filtering
+    if (item.submenu) {
+      const filteredSubmenu = item.submenu.filter(subItem => {
+        if (!subItem.module) return true
+        return checkPermission(subItem.module, 'view')
+      })
+
+      // If submenu has items or parent has no module restriction (implied access), include it
+      if (filteredSubmenu.length > 0) {
+        acc.push({ ...item, submenu: filteredSubmenu })
+      } else if (!item.submenu.length) {
+        // If original submenu was empty (unlikely)
+        acc.push(item)
+      }
+      // If all subitems filtered out, do we show parent? 
+      // If parent has its own functioning HREF (like /admin/users), yes.
+      // But if parent behavior depends on submenu (e.g. dropdown only), maybe not?
+      // For now, if subitems exist after filter, show. If filtered to 0, check if parent is valid standalone.
+      // 'Users' href is /admin/users. If they have permission 'users', they can go there.
+      // So we push it even if submenu empty?
+      // Let's push it with empty submenu if filteredSubmenu is empty but parent allowed.
+      else {
+        acc.push({ ...item, submenu: [] })
+      }
+    } else {
+      acc.push(item)
+    }
+    return acc
+  }, [])
 
   // Auto-open dropdown if submenu item is active and keep it open
   useEffect(() => {

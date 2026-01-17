@@ -9,6 +9,7 @@ const AuthContext = createContext(undefined)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  const [permissions, setPermissions] = useState({})
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -21,12 +22,38 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const fetchPermissions = async (role) => {
+    try {
+      // Super Admin bypass for permissions check on frontend (full access)
+      if (role === 'super_admin') {
+        const fullPerms = {
+          leads: { view: true, create: true, edit: true, delete: true },
+          properties: { view: true, create: true, edit: true, delete: true },
+          inquiries: { view: true, create: true, edit: true, delete: true },
+          contact_messages: { view: true, create: true, edit: true, delete: true }
+        }
+        setPermissions(fullPerms)
+        return
+      }
+
+      const response = await api.get(`/permissions/${role}`)
+      setPermissions(response.data.permissions || {})
+    } catch (error) {
+      console.error('Failed to fetch permissions:', error)
+      setPermissions({})
+    }
+  }
+
   const fetchUser = async () => {
     try {
       const response = await api.get('/auth/me')
       const userData = response.data.user
       setUser(userData)
-      
+
+      if (userData.role) {
+        await fetchPermissions(userData.role)
+      }
+
       // Log user data for debugging
       console.log('User data fetched:', {
         email: userData.email,
@@ -45,20 +72,20 @@ export function AuthProvider({ children }) {
     try {
       const response = await api.post('/auth/login', { email, password })
       const { token, user: userData } = response.data
-      
+
       if (!userData || !userData.role) {
         console.error('Login response missing user data or role:', response.data)
         throw new Error('Invalid login response')
       }
-      
+
       // Set cookie with proper attributes for cross-origin support
-      Cookies.set('token', token, { 
+      Cookies.set('token', token, {
         expires: 7,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production', // Only secure in production (HTTPS)
         path: '/' // Ensure cookie is accessible from all paths
       })
-      
+
       // Fetch fresh user data from /auth/me to ensure we have latest data including agency
       try {
         const meResponse = await api.get('/auth/me')
@@ -73,7 +100,7 @@ export function AuthProvider({ children }) {
         console.warn('Failed to fetch user from /auth/me, using login response data:', meError)
         setUser(userData)
       }
-      
+
       // Determine redirect path based on role
       let redirectPath = '/home'
       switch (userData.role) {
@@ -96,16 +123,12 @@ export function AuthProvider({ children }) {
           console.warn('Unknown role:', userData.role)
           redirectPath = '/home'
       }
-      
+
       console.log('Login successful, redirecting to:', redirectPath, 'for role:', userData.role)
-      
-      // Use window.location for reliable navigation
-      if (typeof window !== 'undefined') {
-        window.location.href = redirectPath
-      } else {
-        router.push(redirectPath)
-      }
-      
+
+      // Use router for smooth client-side navigation
+      router.push(redirectPath)
+
       return userData
     } catch (error) {
       console.error('Login error:', error)
@@ -124,22 +147,22 @@ export function AuthProvider({ children }) {
       if (!cleanedData.agency || (typeof cleanedData.agency === 'string' && cleanedData.agency.trim() === '')) {
         delete cleanedData.agency
       }
-      
+
       const response = await api.post('/auth/register', cleanedData)
       const { token, user: newUser, message } = response.data
-      
+
       // Set cookie with proper attributes for cross-origin support
-      Cookies.set('token', token, { 
+      Cookies.set('token', token, {
         expires: 7,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production', // Only secure in production (HTTPS)
         path: '/' // Ensure cookie is accessible from all paths
       })
       setUser(newUser)
-      
+
       // Determine redirect path
       let redirectPath = '/home'
-      
+
       // If user is not active (pending approval), redirect to home
       if (!newUser.isActive) {
         redirectPath = '/home'
@@ -165,14 +188,10 @@ export function AuthProvider({ children }) {
             redirectPath = '/home'
         }
       }
-      
-      // Use window.location for reliable navigation
-      if (typeof window !== 'undefined') {
-        window.location.href = redirectPath
-      } else {
-        router.push(redirectPath)
-      }
-      
+
+      // Use router for smooth client-side navigation
+      router.push(redirectPath)
+
       return message || 'Registration successful!'
     } catch (error) {
       // Handle validation errors
@@ -203,8 +222,17 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Helper to check permissions easily
+  const checkPermission = (moduleName, action) => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+
+    const modulePerms = permissions[moduleName];
+    return !!(modulePerms && modulePerms[action]);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshUser }}>
+    <AuthContext.Provider value={{ user, permissions, loading, login, register, logout, updateUser, refreshUser, checkPermission }}>
       {children}
     </AuthContext.Provider>
   )

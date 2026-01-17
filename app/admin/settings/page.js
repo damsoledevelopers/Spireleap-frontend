@@ -18,9 +18,27 @@ import {
   Server
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 export default function AdminSettings() {
-  const { user } = useAuth()
+  return <SettingsPageContent />
+}
+
+export function SettingsPageContent() {
+  const { user, checkPermission } = useAuth()
+  const router = useRouter()
+
+  // Dynamic Permission Flags
+  const canViewSettings = checkPermission('settings', 'view')
+  const canEditSettings = checkPermission('settings', 'edit')
+
+  // Page access check
+  useEffect(() => {
+    if (user && !canViewSettings) {
+      toast.error('You do not have permission to view settings')
+      router.push('/admin/dashboard')
+    }
+  }, [user, canViewSettings, router])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState({
@@ -70,7 +88,7 @@ export default function AdminSettings() {
       // Fetch settings from API
       const response = await api.get('/settings')
       const apiSettings = response.data.settings || {}
-      
+
       // Convert flat API structure to nested structure
       const nestedSettings = {
         general: {},
@@ -79,7 +97,7 @@ export default function AdminSettings() {
         notifications: {},
         system: {}
       }
-      
+
       // Map API settings to nested structure
       Object.keys(apiSettings).forEach(category => {
         if (nestedSettings[category]) {
@@ -88,13 +106,13 @@ export default function AdminSettings() {
           })
         }
       })
-      
+
       // Merge with defaults
       setSettings(prev => ({
         ...prev,
         ...nestedSettings
       }))
-      
+
       // Also try localStorage as fallback for any missing values
       const savedSettings = localStorage.getItem('adminSettings')
       if (savedSettings) {
@@ -119,7 +137,7 @@ export default function AdminSettings() {
     try {
       // Prepare settings for API (flatten nested structure)
       const settingsToSave = section === 'all' ? settings : { [section]: settings[section] }
-      
+
       // Convert nested structure to flat structure for API
       const flatSettings = {}
       Object.keys(settingsToSave).forEach(category => {
@@ -127,15 +145,15 @@ export default function AdminSettings() {
           flatSettings[`${category}.${key}`] = settingsToSave[category][key]
         })
       })
-      
+
       // Save to API
       await api.put('/settings', { settings: flatSettings })
-      
+
       // Also save to localStorage as backup
       localStorage.setItem('adminSettings', JSON.stringify(settings))
-      
+
       toast.success(`${section === 'all' ? 'All' : section.charAt(0).toUpperCase() + section.slice(1)} settings saved successfully`)
-      
+
       // Refresh settings after save
       await fetchSettings()
     } catch (error) {
@@ -254,18 +272,20 @@ export default function AdminSettings() {
               <RefreshCw className="h-5 w-5 mr-2" />
               Reset
             </button>
-            <button
-              onClick={() => handleSave('all')}
-              disabled={saving || loading}
-              className="btn btn-primary"
-            >
-              {saving ? (
-                <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-5 w-5 mr-2" />
-              )}
-              Save All
-            </button>
+            {canEditSettings && (
+              <button
+                onClick={() => handleSave('all')}
+                disabled={saving || loading}
+                className="btn btn-primary"
+              >
+                {saving ? (
+                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-5 w-5 mr-2" />
+                )}
+                Save All
+              </button>
+            )}
           </div>
         </div>
 
@@ -285,18 +305,20 @@ export default function AdminSettings() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleSave(section.id)}
-                  disabled={saving || loading}
-                  className="btn btn-primary btn-sm"
-                >
-                  {saving ? (
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-1" />
-                  )}
-                  Save
-                </button>
+                {canEditSettings && (
+                  <button
+                    onClick={() => handleSave(section.id)}
+                    disabled={saving || loading}
+                    className="btn btn-primary btn-sm"
+                  >
+                    {saving ? (
+                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Save
+                  </button>
+                )}
               </div>
               <div className="card-body">
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

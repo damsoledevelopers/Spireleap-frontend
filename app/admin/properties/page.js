@@ -5,37 +5,49 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Package, Plus, Search, Edit, Trash2, Eye, Filter, MapPin, DollarSign, Clock, Building, Bed, Bath, Square, TrendingUp, CheckCircle, XCircle, Home, ChevronDown, X, Calendar } from 'lucide-react'
+import { Package, Plus, Search, Edit, Trash2, Eye, Filter, MapPin, DollarSign, Clock, Building, Bed, Bath, Square, TrendingUp, CheckCircle, XCircle, Home, ChevronDown, X, Calendar, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
+import { checkEntryPermission } from '../../../lib/permissions'
 
 export default function AdminPropertiesPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // Role-based access control
+  // Dynamic Permission Flags
+  const canViewProperties = checkPermission('properties', 'view')
+  const canCreateProperty = checkPermission('properties', 'create')
+  const canEditProperty = checkPermission('properties', 'edit')
+  const canDeleteProperty = checkPermission('properties', 'delete')
+
+  // Role-based access control & permission check
   useEffect(() => {
-    if (!authLoading && user) {
-      const allowedRoles = ['super_admin', 'agency_admin', 'agent', 'staff']
-      if (!allowedRoles.includes(user.role)) {
+    if (!authLoading) {
+      if (!user) {
         router.push('/auth/login')
+        return
+      }
+
+      if (!canViewProperties) {
+        toast.error('You do not have permission to view properties')
+        router.push('/admin/dashboard')
       }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, canViewProperties])
 
-  // Role-based feature visibility
+  // Role-based helper flags (for internal logic, not permission)
   const isSuperAdmin = user?.role === 'super_admin'
   const isAgencyAdmin = user?.role === 'agency_admin'
   const isAgent = user?.role === 'agent'
   const isStaff = user?.role === 'staff'
-  const canAddProperty = isSuperAdmin || isAgencyAdmin || isAgent
-  const canDeleteProperty = isSuperAdmin || isAgencyAdmin
   const [properties, setProperties] = useState([])
   const [allProperties, setAllProperties] = useState([]) // Store all properties for metrics
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [permissionModalEntry, setPermissionModalEntry] = useState(null)
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
     propertyType: searchParams.get('propertyType') || '',
@@ -82,7 +94,7 @@ export default function AdminPropertiesPage() {
 
   useEffect(() => {
     fetchMetrics()
-    if (isSuperAdmin || isAgencyAdmin) {
+    if (canViewProperties) {
       fetchAgencies()
     }
     fetchUniqueLocations()
@@ -239,7 +251,7 @@ export default function AdminPropertiesPage() {
         })
       }
 
-      setProperties(fetchedProperties)
+      setProperties(fetchedProperties.filter(property => checkEntryPermission(property, user, 'view', canViewProperties)))
       if (response.data.pagination) {
         setPagination({
           current: response.data.pagination.page,
@@ -258,27 +270,23 @@ export default function AdminPropertiesPage() {
 
   const fetchMetrics = async () => {
     try {
-      // Fetch all properties for metrics calculation
-      const response = await api.get('/properties?limit=500').catch(() => ({ data: { properties: [] } }))
-      const allPropertiesData = response.data?.properties || []
-
-      setAllProperties(allPropertiesData)
-
-      // Calculate metrics
-      const activeProperties = allPropertiesData.filter(p => p.status === 'active').length
-      const soldProperties = allPropertiesData.filter(p => p.status === 'sold').length
-      const rentedProperties = allPropertiesData.filter(p => p.status === 'rented').length
-      const pendingProperties = allPropertiesData.filter(p => p.status === 'pending').length
-      const inactiveProperties = allPropertiesData.filter(p => p.status === 'inactive').length
+      // Use the optimized dashboard stats endpoint
+      const response = await api.get('/stats/dashboard')
+      const stats = response.data
 
       setPropertyMetrics({
-        totalProperties: allPropertiesData.length,
-        activeProperties: activeProperties,
-        soldProperties: soldProperties,
-        rentedProperties: rentedProperties,
-        pendingProperties: pendingProperties,
-        inactiveProperties: inactiveProperties
+        totalProperties: stats.totalProperties || 0,
+        activeProperties: stats.activeProperties || 0,
+        soldProperties: stats.soldProperties || 0,
+        rentedProperties: stats.rentedProperties || 0,
+        pendingProperties: stats.pendingProperties || 0,
+        inactiveProperties: stats.inactiveProperties || 0
       })
+
+      // Also update unique locations if available in this call
+      if (stats.uniqueLocations) {
+        setUniqueLocations(stats.uniqueLocations)
+      }
     } catch (error) {
       console.error('Error fetching property metrics:', error)
     }
@@ -293,6 +301,29 @@ export default function AdminPropertiesPage() {
     } catch (error) {
       console.error('Error updating property status:', error)
       toast.error(error.response?.data?.message || 'Failed to update property status')
+    }
+  }
+
+  const handleQuickStatusUpdate = async (id, newStatus) => {
+    try {
+      // If moving to active, use the approve endpoint for better tracking/notifications
+      if (newStatus === 'active') {
+        await handleUpdateStatus(id, 'active')
+        return
+      }
+
+      const response = await api.put(`/properties/${id}`, { status: newStatus })
+      toast.success('Property status updated successfully')
+
+      // Update local state
+      setProperties(prev => prev.map(p =>
+        getPropertyId(p) === id ? { ...p, status: newStatus } : p
+      ))
+
+      fetchMetrics()
+    } catch (error) {
+      console.error('Error updating property status:', error)
+      toast.error(error.response?.data?.message || 'Failed to update status')
     }
   }
 
@@ -329,34 +360,10 @@ export default function AdminPropertiesPage() {
   }
 
   const fetchUniqueLocations = async () => {
-    try {
-      const response = await api.get('/properties?limit=500')
-      const allProperties = response.data?.properties || []
-
-      const cities = [...new Set(allProperties
-        .map(p => p.location?.city)
-        .filter(Boolean)
-      )].sort()
-
-      const states = [...new Set(allProperties
-        .map(p => p.location?.state)
-        .filter(Boolean)
-      )].sort()
-
-      const countries = [...new Set(allProperties
-        .map(p => p.location?.country)
-        .filter(Boolean)
-      )].sort()
-
-      const areas = [...new Set(allProperties
-        .map(p => p.location?.area || p.area)
-        .filter(Boolean)
-      )].sort()
-
-      setUniqueLocations({ cities, states, countries, areas })
-    } catch (error) {
-      console.error('Error fetching unique locations:', error)
-      setUniqueLocations({ cities: [], states: [], countries: [] })
+    // This is now handled in fetchMetrics via stats/dashboard
+    // But keeping it as a wrapper for consistency or if separate updates are needed
+    if (!uniqueLocations.cities.length) {
+      fetchMetrics()
     }
   }
 
@@ -509,7 +516,7 @@ export default function AdminPropertiesPage() {
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-64"
               />
             </div>
-            {canAddProperty && (
+            {canCreateProperty && (
               <Link href="/admin/properties/add" className="btn btn-primary">
                 <Plus className="h-5 w-5 mr-2" />
                 Add Property
@@ -1099,7 +1106,7 @@ export default function AdminPropertiesPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No properties found</p>
-            {canAddProperty && (
+            {canCreateProperty && (
               <Link href="/admin/properties/add" className="btn btn-primary mt-4">
                 <Plus className="h-5 w-5 mr-2" />
                 Add Your First Property
@@ -1225,40 +1232,63 @@ export default function AdminPropertiesPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
-                            {property.status === 'active' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Active
-                              </span>
-                            ) : property.status === 'sold' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Sold
-                              </span>
-                            ) : property.status === 'rented' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                Rented
-                              </span>
-                            ) : property.status === 'pending' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                Pending
-                              </span>
+                            {canEditProperty ? (
+                              <select
+                                value={property.status || 'inactive'}
+                                onChange={(e) => handleQuickStatusUpdate(propertyId, e.target.value)}
+                                className={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
+                                  ${property.status === 'active' ? 'text-green-800 bg-green-50' :
+                                    property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
+                                      property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
+                                        property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
+                                          'text-gray-800 bg-gray-50'}`}
+                              >
+                                <option value="active">Active</option>
+                                <option value="pending">Pending</option>
+                                <option value="sold">Sold</option>
+                                <option value="rented">Rented</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="unavailable">Unavailable</option>
+                                <option value="draft">Draft</option>
+                              </select>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                {property.status || 'Inactive'}
-                              </span>
+                              property.status === 'active' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  Active
+                                </span>
+                              ) : property.status === 'sold' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  Sold
+                                </span>
+                              ) : property.status === 'rented' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  Rented
+                                </span>
+                              ) : property.status === 'pending' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  Pending
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                  {property.status || 'Inactive'}
+                                </span>
+                              )
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                             <div className="flex items-center justify-center gap-3">
-                              <Link
-                                href={`/admin/properties/${propertyId}`}
-                                className="text-primary-600 hover:text-primary-900 transition-colors"
-                                title="View"
-                              >
-                                <Eye className="h-5 w-5" />
-                              </Link>
+                              {checkEntryPermission(property, user, 'view', canViewProperties) && (
+                                <Link
+                                  href={`/admin/properties/${propertyId}`}
+                                  className="text-primary-600 hover:text-primary-900 transition-colors"
+                                  title="View"
+                                >
+                                  <Eye className="h-5 w-5" />
+                                </Link>
+                              )}
 
                               {/* Approval Actions for Admins */}
-                              {(isSuperAdmin || isAgencyAdmin) && property.status === 'pending' && (
+                              {checkEntryPermission(property, user, 'edit', canEditProperty) && property.status === 'pending' && (
                                 <>
                                   <button
                                     onClick={() => handleUpdateStatus(propertyId, 'active')}
@@ -1280,11 +1310,8 @@ export default function AdminPropertiesPage() {
                                 </>
                               )}
 
-                              {/* Edit access based on creator and role */}
-                              {((isSuperAdmin && property.creatorRole !== 'agent' && property.creatorRole !== 'agency_admin') ||
-                                (isAgencyAdmin && property.creatorRole !== 'agent') ||
-                                (isAgent && (property.agent?._id === user?._id || property.agent === user?._id || property.createdBy === user?._id || property.createdBy?._id === user?._id))
-                              ) ? (
+                              {/* Edit access based on permission and ownership */}
+                              {checkEntryPermission(property, user, 'edit', canEditProperty) && (
                                 <Link
                                   href={`/admin/properties/${propertyId}/edit`}
                                   className="text-primary-600 hover:text-primary-900 transition-colors"
@@ -1292,14 +1319,28 @@ export default function AdminPropertiesPage() {
                                 >
                                   <Edit className="h-5 w-5" />
                                 </Link>
-                              ) : null}
-                              {canDeleteProperty && (
+                              )}
+
+                              {checkEntryPermission(property, user, 'delete', canDeleteProperty) && (
                                 <button
                                   onClick={() => handleDelete(propertyId)}
                                   className="text-red-600 hover:text-red-900 transition-colors"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-5 w-5" />
+                                </button>
+                              )}
+
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setPermissionModalEntry(property)
+                                  }}
+                                  className="text-amber-600 hover:text-amber-900 transition-colors"
+                                  title="Set Custom Permissions"
+                                >
+                                  <ShieldCheck className="h-5 w-5" />
                                 </button>
                               )}
                             </div>
@@ -1386,6 +1427,14 @@ export default function AdminPropertiesPage() {
           </>
         )}
       </div>
+
+      <EntryPermissionModal
+        isOpen={!!permissionModalEntry}
+        onClose={() => setPermissionModalEntry(null)}
+        entry={permissionModalEntry}
+        entryType="properties"
+        onSuccess={fetchProperties}
+      />
     </DashboardLayout>
   )
 }

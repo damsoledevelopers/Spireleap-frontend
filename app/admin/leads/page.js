@@ -5,36 +5,48 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity } from 'lucide-react'
+import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import Cookies from 'js-cookie'
-import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
+import { checkEntryPermission } from '../../../lib/permissions'
 
 export default function AdminLeadsPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
 
   // Role-based access control
   useEffect(() => {
     if (!authLoading && user) {
-      const allowedRoles = ['super_admin', 'agency_admin', 'agent', 'staff']
-      if (!allowedRoles.includes(user.role)) {
-        router.push('/auth/login')
+      // First check if they have general role access
+
+
+      // Then check if they have specific module 'view' permission
+      if (!checkPermission('leads', 'view')) {
+        toast.error('You do not have permission to view Leads')
+        router.push('/admin/dashboard')
       }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, checkPermission])
 
   // Role-based feature visibility
   const isSuperAdmin = user?.role === 'super_admin'
   const isAgencyAdmin = user?.role === 'agency_admin'
   const isAgent = user?.role === 'agent'
   const isStaff = user?.role === 'staff'
-  const canUploadLeads = isSuperAdmin || isAgencyAdmin
-  const canBulkActions = isSuperAdmin || isAgencyAdmin
-  const canAutoAssign = isSuperAdmin || isAgencyAdmin
-  const canEditLead = isSuperAdmin || isAgencyAdmin || isAgent
+
+  // Dynamic permissions from Super Admin
+  const canViewLeads = checkPermission('leads', 'view')
+  const canCreateLead = checkPermission('leads', 'create')
+  const canEditLead = checkPermission('leads', 'edit')
+  const canDeleteLead = checkPermission('leads', 'delete')
+
+  const canUploadLeads = canCreateLead
+  const canBulkActions = canEditLead || canDeleteLead
+  const canAutoAssign = canEditLead
+
   const [leads, setLeads] = useState([])
   const [allLeads, setAllLeads] = useState([]) // For Kanban view
   const [loading, setLoading] = useState(true)
@@ -86,6 +98,7 @@ export default function AdminLeadsPage() {
   const [rescoring, setRescoring] = useState(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [searchDebounceTimer, setSearchDebounceTimer] = useState(null)
+  const [permissionModalEntry, setPermissionModalEntry] = useState(null)
 
   useEffect(() => {
     if (isUploadingRef.current) {
@@ -154,8 +167,8 @@ export default function AdminLeadsPage() {
     )
   }
 
-  if (!user || !['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role)) {
-    return null // Router will handle redirect
+  if (!user) {
+    return null
   }
 
   const fetchLeads = async () => {
@@ -179,7 +192,7 @@ export default function AdminLeadsPage() {
 
       const response = await api.get(`/leads?${params}`)
       const fetchedLeads = response.data.leads || []
-      setLeads(fetchedLeads)
+      setLeads(fetchedLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
       setPagination(response.data.pagination || { page: 1, limit: 10, total: 0, pages: 0 })
 
       // For Kanban view, fetch all leads without pagination (with all filters)
@@ -225,7 +238,8 @@ export default function AdminLeadsPage() {
             kanbanParams.append('search', otherFilters.search)
           }
           const allResponse = await api.get(`/leads?${kanbanParams}`)
-          setAllLeads(allResponse.data.leads || [])
+          const fetchedAllLeads = allResponse.data.leads || []
+          setAllLeads(fetchedAllLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
         } catch (error) {
           console.error('Error fetching all leads for Kanban:', error)
           setAllLeads([])
@@ -356,8 +370,23 @@ export default function AdminLeadsPage() {
   const fetchDashboardMetrics = async () => {
     try {
       setLoadingMetrics(true)
-      const response = await api.get('/leads/analytics/dashboard-metrics')
-      setDashboardMetrics(response.data.metrics || null)
+      const params = new URLSearchParams()
+
+      // Add active filters to the metrics request
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== '') {
+          params.append(key, value)
+        }
+      })
+
+      const response = await api.get(`/leads/analytics/dashboard-metrics?${params}`)
+      const metrics = response.data.metrics || null
+      setDashboardMetrics(metrics)
+
+      // Update missed follow-ups from the backend metrics
+      if (metrics && typeof metrics.missedFollowUps === 'number') {
+        setMissedFollowUps(metrics.missedFollowUps)
+      }
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error)
     } finally {
@@ -366,23 +395,24 @@ export default function AdminLeadsPage() {
   }
 
   const fetchMissedFollowUps = async () => {
-    try {
-      const now = new Date()
-      const response = await api.get('/leads?limit=500')
-      const allLeads = response.data.leads || []
-
-      // Count leads with follow-up dates in the past
-      const missed = allLeads.filter(lead => {
-        if (!lead.followUpDate) return false
-        const followUpDate = new Date(lead.followUpDate)
-        const isPastDue = followUpDate < now
-        const isActive = ['new', 'contacted', 'qualified', 'site_visit_scheduled', 'site_visit_completed', 'negotiation'].includes(lead.status)
-        return isPastDue && isActive
-      }).length
-
-      setMissedFollowUps(missed)
-    } catch (error) {
-      console.error('Error fetching missed follow-ups:', error)
+    // This is now predominantly handled by fetchDashboardMetrics
+    // but kept as a stub or fallback if needed for specific logic
+    if (!dashboardMetrics) {
+      try {
+        const now = new Date()
+        const response = await api.get('/leads?limit=500')
+        const allLeadsData = response.data.leads || []
+        const missed = allLeadsData.filter(lead => {
+          if (!lead.followUpDate) return false
+          const followUpDate = new Date(lead.followUpDate)
+          const isPastDue = followUpDate < now
+          const activeStatuses = ['new', 'contacted', 'qualified', 'site_visit_scheduled', 'site_visit_completed', 'negotiation']
+          return isPastDue && activeStatuses.includes(lead.status)
+        }).length
+        setMissedFollowUps(missed)
+      } catch (error) {
+        console.error('Error fetching missed follow-ups fallback:', error)
+      }
     }
   }
 
@@ -1578,9 +1608,9 @@ export default function AdminLeadsPage() {
               </button>
             </div>
             <div className="flex items-center gap-3">
-              {canUploadLeads && (
-                <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                  <ArrowUp className="h-4 w-4 mr-2" />
+              {(isSuperAdmin || isAgencyAdmin) && canCreateLead && (
+                <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <Upload className="h-4 w-4 mr-2" />
                   Import leads
                   <input
                     type="file"
@@ -1614,7 +1644,7 @@ export default function AdminLeadsPage() {
                   Analytics
                 </Link>
               )}
-              {(isSuperAdmin || isStaff) && (
+              {canCreateLead && (
                 <Link
                   href="/admin/leads/new"
                   className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -2023,7 +2053,7 @@ export default function AdminLeadsPage() {
                             Auto Assign
                           </button>
                         )}
-                        {isSuperAdmin && (
+                        {canDeleteLead && (
                           <button
                             onClick={handleBulkDelete}
                             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
@@ -2395,7 +2425,11 @@ export default function AdminLeadsPage() {
                                     value={lead.status || ''}
                                     onChange={(e) => handleQuickStatusChange(leadId, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]"
+                                    className={`text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]
+                                      ${lead.status === 'booked' || lead.status === 'closed' ? 'bg-green-50 text-green-800 border-green-200' :
+                                        lead.status === 'lost' || lead.status === 'junk' ? 'bg-red-50 text-red-800 border-red-200' :
+                                          lead.status === 'new' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                                            'bg-primary-50 text-primary-800 border-primary-200'}`}
                                     title="Change Status"
                                   >
                                     <option value="">Select Status</option>
@@ -2448,14 +2482,16 @@ export default function AdminLeadsPage() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                 <div className="flex items-center justify-center gap-2">
-                                  <Link
-                                    href={`/admin/leads/${leadId}`}
-                                    className="text-primary-600 hover:text-primary-900 transition-colors"
-                                    title="View"
-                                  >
-                                    <Eye className="h-5 w-5" />
-                                  </Link>
-                                  {canEditLead && (
+                                  {checkEntryPermission(lead, user, 'view', canViewLeads) && (
+                                    <Link
+                                      href={`/admin/leads/${leadId}`}
+                                      className="text-primary-600 hover:text-primary-900 transition-colors"
+                                      title="View"
+                                    >
+                                      <Eye className="h-5 w-5" />
+                                    </Link>
+                                  )}
+                                  {checkEntryPermission(lead, user, 'edit', canEditLead) && (
                                     <Link
                                       href={`/admin/leads/${leadId}/edit`}
                                       className="text-primary-600 hover:text-primary-900 transition-colors"
@@ -2464,13 +2500,25 @@ export default function AdminLeadsPage() {
                                       <Edit className="h-5 w-5" />
                                     </Link>
                                   )}
-                                  {isSuperAdmin && (
+                                  {checkEntryPermission(lead, user, 'delete', canDeleteLead) && (
                                     <button
                                       onClick={() => handleDelete(leadId)}
                                       className="text-red-600 hover:text-red-900 transition-colors"
                                       title="Delete"
                                     >
                                       <Trash2 className="h-5 w-5" />
+                                    </button>
+                                  )}
+                                  {isSuperAdmin && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setPermissionModalEntry(lead)
+                                      }}
+                                      className="text-amber-600 hover:text-amber-900 transition-colors"
+                                      title="Set Custom Permissions"
+                                    >
+                                      <ShieldCheck className="h-5 w-5" />
                                     </button>
                                   )}
                                 </div>
@@ -2950,6 +2998,14 @@ export default function AdminLeadsPage() {
           </div>
         )}
       </div>
+
+      <EntryPermissionModal
+        isOpen={!!permissionModalEntry}
+        onClose={() => setPermissionModalEntry(null)}
+        entry={permissionModalEntry}
+        entryType="leads"
+        onSuccess={fetchLeads}
+      />
     </DashboardLayout>
   )
 }

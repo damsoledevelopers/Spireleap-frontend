@@ -1,23 +1,26 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
+import toast from 'react-hot-toast'
 import ContactMessagesManagement from '../../../components/CMS/ContactMessagesManagement'
 
-export default function ContactMessagesPage() {
-  const { user } = useAuth()
+export function ContactMessagesPageContent() {
+  const { user, checkPermission } = useAuth()
+  const router = useRouter()
 
-  if (!user || (user.role !== 'super_admin' && user.role !== 'agency_admin')) {
-    return (
-      <DashboardLayout>
-        <div className="p-6">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">You don't have permission to access this page.</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    )
-  }
+  // Dynamic Permission Flags
+  const canViewMessages = checkPermission('contact_messages', 'view')
+
+  // Page access check
+  useEffect(() => {
+    if (user && !canViewMessages) {
+      toast.error('You do not have permission to access contact messages')
+      router.push('/admin/dashboard')
+    }
+  }, [user, canViewMessages, router])
 
   return (
     <DashboardLayout>
@@ -30,6 +33,10 @@ export default function ContactMessagesPage() {
       </div>
     </DashboardLayout>
   )
+}
+
+export default function ContactMessagesPage() {
+  return <ContactMessagesPageContent />
 }
 
 

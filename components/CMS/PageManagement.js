@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -10,6 +11,7 @@ const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
 import 'react-quill/dist/quill.snow.css'
 
 export default function PageManagement() {
+  const { checkPermission } = useAuth()
   const [pages, setPages] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -66,7 +68,7 @@ export default function PageManagement() {
           keywords: keywordsArray
         }
       }
-      
+
       if (editingPage) {
         await api.put(`/cms/pages/${editingPage._id}`, submitData)
         toast.success('Page updated successfully')
@@ -146,17 +148,19 @@ export default function PageManagement() {
             />
           </div>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setEditingPage(null)
-            setShowModal(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="h-5 w-5" />
-          New Page
-        </button>
+        {checkPermission('cms', 'create') && (
+          <button
+            onClick={() => {
+              resetForm()
+              setEditingPage(null)
+              setShowModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="h-5 w-5" />
+            New Page
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -197,20 +201,23 @@ export default function PageManagement() {
                       /{page.slug}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        page.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs rounded-full ${page.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {page.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => handleEdit(page)} className="text-primary-600 hover:text-primary-900">
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button onClick={() => handleDelete(page._id)} className="text-red-600 hover:text-red-900">
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                        {checkPermission('cms', 'edit') && (
+                          <button onClick={() => handleEdit(page)} className="text-primary-600 hover:text-primary-900">
+                            <Edit className="h-5 w-5" />
+                          </button>
+                        )}
+                        {checkPermission('cms', 'delete') && (
+                          <button onClick={() => handleDelete(page._id)} className="text-red-600 hover:text-red-900">
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

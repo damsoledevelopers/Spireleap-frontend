@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function ContactUsManagement() {
+  const { checkPermission } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [contactPage, setContactPage] = useState(null)
@@ -266,14 +268,16 @@ export default function ContactUsManagement() {
 
         {/* Submit Button */}
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="h-5 w-5" />
-            {saving ? 'Saving...' : 'Save Contact Us Page'}
-          </button>
+          {(contactPage ? checkPermission('cms', 'edit') : checkPermission('cms', 'create')) && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="h-5 w-5" />
+              {saving ? 'Saving...' : 'Save Contact Us Page'}
+            </button>
+          )}
         </div>
       </form>
     </div>

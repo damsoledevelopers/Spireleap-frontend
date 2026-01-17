@@ -85,6 +85,18 @@ export default function AdminAddPropertyPage() {
     }
   }, [formData.agency])
 
+  // Pre-fill agency for agency_admin and agent
+  useEffect(() => {
+    if ((user?.role === 'agency_admin' || user?.role === 'agent') && user?.agency) {
+      const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
+      setFormData(prev => ({ ...prev, agency: agencyId }))
+    }
+    // Pre-fill agent for agent role
+    if (user?.role === 'agent') {
+      setFormData(prev => ({ ...prev, agent: user.id }))
+    }
+  }, [user])
+
   const fetchInitialData = async () => {
     if (!user) return
 
@@ -310,17 +322,6 @@ export default function AdminAddPropertyPage() {
     )
   }
 
-  // Pre-fill agency for agency_admin and agent
-  useEffect(() => {
-    if ((user?.role === 'agency_admin' || user?.role === 'agent') && user?.agency) {
-      const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
-      setFormData(prev => ({ ...prev, agency: agencyId }))
-    }
-    // Pre-fill agent for agent role
-    if (user?.role === 'agent') {
-      setFormData(prev => ({ ...prev, agent: user.id }))
-    }
-  }, [user])
 
   return (
     <DashboardLayout>

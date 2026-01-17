@@ -30,24 +30,36 @@ import {
   Clock,
   Home,
   Users,
-  Package
+  Package,
+  Plus,
+  ShieldCheck,
+  Building2,
+  Lock,
+  Download,
+  Upload
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
+import { checkEntryPermission } from '../../../lib/permissions'
 
 export default function AdminInquiriesPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
 
-  // Role-based access control
+  // Dynamic Permission Flags
+  const canViewInquiries = checkPermission('inquiries', 'view')
+  const canEditInquiry = checkPermission('leads', 'edit')
+
+  // Role-based access control & permission check
   useEffect(() => {
     if (!authLoading && user) {
-      const allowedRoles = ['super_admin', 'agency_admin', 'agent']
-      if (!allowedRoles.includes(user.role)) {
-        router.push('/auth/login')
+      if (!canViewInquiries) {
+        toast.error('You do not have permission to view inquiries')
+        router.push('/admin/dashboard')
       }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, canViewInquiries])
 
   // Role-based feature visibility
   const isSuperAdmin = user?.role === 'super_admin'
@@ -67,6 +79,11 @@ export default function AdminInquiriesPage() {
     startDate: '',
     endDate: ''
   })
+
+  // Per-entry Permission State
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
+  const [selectedInquiryPermissions, setSelectedInquiryPermissions] = useState(null)
+
   const [properties, setProperties] = useState([])
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
@@ -227,6 +244,11 @@ export default function AdminInquiriesPage() {
     }
   }, [agencyAgents])
 
+  const handleOpenEntryPermissions = (inquiry) => {
+    setSelectedInquiryPermissions(inquiry)
+    setIsPermissionModalOpen(true)
+  }
+
   const fetchInquiries = useCallback(async () => {
     try {
       setLoading(true)
@@ -268,7 +290,7 @@ export default function AdminInquiriesPage() {
       }
 
       // API already populates property, agency, and assignedAgent, so use them directly
-      setInquiries(fetchedInquiries)
+      setInquiries(fetchedInquiries.filter(inquiry => checkEntryPermission(inquiry, user, 'view', canViewInquiries)))
 
       // Fetch inquiries for stats (using max allowed limit of 500)
       // Stats fetch should include all filters
@@ -300,7 +322,9 @@ export default function AdminInquiriesPage() {
   }, [
     currentPage,
     itemsPerPage,
-    filters
+    filters,
+    user,
+    canViewInquiries
   ])
 
   useEffect(() => {
@@ -313,6 +337,30 @@ export default function AdminInquiriesPage() {
   }, [user, authLoading, fetchInquiries, fetchProperties, fetchAgents, fetchAgencies])
 
   // Assign agent to a lead
+  const handleUpdateStatus = useCallback(async (leadId, newStatus) => {
+    try {
+      setLoading(true)
+      await api.put(`/leads/${leadId}`, { status: newStatus })
+      toast.success('Status updated successfully')
+
+      // Update local state
+      setInquiries(prev => prev.map(inquiry =>
+        inquiry._id === leadId ? { ...inquiry, status: newStatus } : inquiry
+      ))
+      setAllInquiries(prev => prev.map(inquiry =>
+        inquiry._id === leadId ? { ...inquiry, status: newStatus } : inquiry
+      ))
+
+      // Refresh to ensure all metrics are updated
+      await fetchInquiries()
+    } catch (error) {
+      console.error('Failed to update status:', error)
+      toast.error('Failed to update status')
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchInquiries])
+
   const handleAssignAgent = useCallback(async (leadId, agentId) => {
     if (!agentId) {
       toast.error('Please select an agent')
@@ -433,7 +481,7 @@ export default function AdminInquiriesPage() {
     )
   }
 
-  if (!user || !['super_admin', 'agency_admin', 'agent'].includes(user.role)) {
+  if (!user || (!isSuperAdmin && !canViewInquiries)) {
     return null // Router will handle redirect
   }
 
@@ -864,27 +912,10 @@ export default function AdminInquiriesPage() {
                           {inquiry.property ? (
                             <div>
                               <div className="font-medium">{inquiry.property.title || 'N/A'}</div>
-                              {inquiry.property.price && (
-                                <div className="text-xs text-gray-500">
-                                  ${typeof inquiry.property.price === 'number'
-                                    ? inquiry.property.price.toLocaleString()
-                                    : String(inquiry.property.price)}
-                                </div>
-                              )}
-                              {inquiry.property.location && (
+                              {inquiry.property.agent && (
                                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                  <MapPin className="h-3 w-3" />
-                                  {typeof inquiry.property.location === 'string'
-                                    ? inquiry.property.location
-                                    : typeof inquiry.property.location === 'object'
-                                      ? [
-                                        inquiry.property.location?.address,
-                                        inquiry.property.location?.city,
-                                        inquiry.property.location?.state,
-                                        inquiry.property.location?.country,
-                                        inquiry.property.location?.zipCode
-                                      ].filter(Boolean).join(', ') || 'N/A'
-                                      : 'N/A'}
+                                  <UserCircle className="h-3 w-3" />
+                                  <span>Owner: {inquiry.property.agent.firstName} {inquiry.property.agent.lastName}</span>
                                 </div>
                               )}
                             </div>
@@ -931,25 +962,30 @@ export default function AdminInquiriesPage() {
                               }}
                             >
                               <option value="">Assign Agent...</option>
+                              {inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent) && (
+                                <option value={inquiry.assignedAgent._id || inquiry.assignedAgent}>
+                                  {inquiry.assignedAgent.firstName
+                                    ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName}`
+                                    : 'Assigned Agent'}
+                                </option>
+                              )}
                               {(() => {
                                 const agencyId = inquiry.agency?._id || inquiry.agency
-                                // If undefined, it means not fetched yet (loading)
                                 const availableAgents = agencyAgents[agencyId]
 
                                 if (availableAgents === undefined) {
-                                  return <option value="" disabled>Loading agents...</option>
+                                  return null // Just show the assigned agent or "Assign Agent..."
                                 }
 
-                                // If empty array, show nothing (keep it blank)
-                                if (availableAgents.length === 0) {
-                                  return null
-                                }
-
-                                return availableAgents.map((agent) => (
-                                  <option key={agent._id} value={agent._id}>
-                                    {agent.firstName} {agent.lastName}
-                                  </option>
-                                ))
+                                // Filter out the current agent to avoid duplicates
+                                const currentAgentId = inquiry.assignedAgent?._id || inquiry.assignedAgent
+                                return availableAgents
+                                  .filter(agent => agent._id !== currentAgentId)
+                                  .map((agent) => (
+                                    <option key={agent._id} value={agent._id}>
+                                      {agent.firstName} {agent.lastName}
+                                    </option>
+                                  ))
                               })()}
                             </select>
                             {assigningAgent === inquiry._id && (
@@ -982,7 +1018,32 @@ export default function AdminInquiriesPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(inquiry.status)}
+                        {canEditInquiry ? (
+                          <select
+                            value={inquiry.status || 'new'}
+                            onChange={(e) => handleUpdateStatus(inquiry._id, e.target.value)}
+                            className={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
+                              ${inquiry.status === 'new' ? 'text-blue-800 bg-blue-50' :
+                                inquiry.status === 'contacted' ? 'text-yellow-800 bg-yellow-50' :
+                                  inquiry.status === 'qualified' ? 'text-purple-800 bg-purple-50' :
+                                    inquiry.status === 'booked' ? 'text-green-800 bg-green-50' :
+                                      inquiry.status === 'lost' ? 'text-red-800 bg-red-50' :
+                                        'text-gray-800 bg-gray-50'}`}
+                          >
+                            <option value="new">New</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="qualified">Qualified</option>
+                            <option value="site_visit_scheduled">Site Visit Scheduled</option>
+                            <option value="site_visit_completed">Site Visit Completed</option>
+                            <option value="negotiation">Negotiation</option>
+                            <option value="booked">Booked</option>
+                            <option value="lost">Lost</option>
+                            <option value="closed">Closed</option>
+                            <option value="junk">Junk</option>
+                          </select>
+                        ) : (
+                          getStatusBadge(inquiry.status)
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getPriorityBadge(inquiry.priority)}
@@ -998,20 +1059,34 @@ export default function AdminInquiriesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleViewDetails(inquiry._id)}
-                            className="text-primary-600 hover:text-primary-900 flex items-center gap-1"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View
-                          </button>
-                          <Link
-                            href={`/admin/leads/${inquiry._id}/edit`}
-                            className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
-                          >
-                            <Edit className="h-4 w-4" />
-                            Edit
-                          </Link>
+                          {checkEntryPermission(inquiry, user, 'view', canViewInquiries) && (
+                            <button
+                              onClick={() => handleViewDetails(inquiry._id)}
+                              className="text-primary-600 hover:text-primary-900 flex items-center gap-1"
+                            >
+                              <Eye className="h-4 w-4" />
+                              View
+                            </button>
+                          )}
+                          {checkEntryPermission(inquiry, user, 'edit', canEditInquiry) && (
+                            <Link
+                              href={`/admin/leads/${inquiry._id}/edit`}
+                              className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </Link>
+                          )}
+                          {user?.role === 'super_admin' && (
+                            <button
+                              onClick={() => handleOpenEntryPermissions(inquiry)}
+                              className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                              title="Set Custom Permissions"
+                            >
+                              <ShieldCheck className="h-4 w-4" />
+                              Permissions
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1450,7 +1525,17 @@ export default function AdminInquiriesPage() {
           </div>
         )}
       </div>
-    </DashboardLayout >
+
+      <EntryPermissionModal
+        isOpen={isPermissionModalOpen}
+        onClose={() => {
+          setIsPermissionModalOpen(false)
+          setSelectedInquiryPermissions(null)
+        }}
+        entry={selectedInquiryPermissions}
+        entryType="inquiries"
+        onSuccess={fetchInquiries}
+      />
+    </DashboardLayout>
   )
 }
-

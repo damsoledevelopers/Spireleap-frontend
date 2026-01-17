@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Home } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function AmenityManagement() {
+  const { checkPermission } = useAuth()
   const [amenities, setAmenities] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -44,7 +46,7 @@ export default function AmenityManagement() {
       const categoryValue = formData.category && formData.category.trim() && validCategories.includes(formData.category.trim())
         ? formData.category.trim()
         : 'other'
-      
+
       const submitData = {
         name: formData.name.trim(),
         icon: formData.icon?.trim() || undefined,
@@ -73,9 +75,9 @@ export default function AmenityManagement() {
       fetchAmenities()
     } catch (error) {
       console.error('Error saving amenity:', error)
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.errors?.join(', ') || 
-                          'Failed to save amenity'
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.errors?.join(', ') ||
+        'Failed to save amenity'
       toast.error(errorMessage)
     }
   }
@@ -132,17 +134,19 @@ export default function AmenityManagement() {
             />
           </div>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setEditingAmenity(null)
-            setShowModal(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="h-5 w-5" />
-          New Amenity
-        </button>
+        {checkPermission('cms', 'create') && (
+          <button
+            onClick={() => {
+              resetForm()
+              setEditingAmenity(null)
+              setShowModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="h-5 w-5" />
+            New Amenity
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -183,20 +187,23 @@ export default function AmenityManagement() {
                       {amenity.category || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        amenity.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs rounded-full ${amenity.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {amenity.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => handleEdit(amenity)} className="text-primary-600 hover:text-primary-900">
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button onClick={() => handleDelete(amenity._id)} className="text-red-600 hover:text-red-900">
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                        {checkPermission('cms', 'edit') && (
+                          <button onClick={() => handleEdit(amenity)} className="text-primary-600 hover:text-primary-900">
+                            <Edit className="h-5 w-5" />
+                          </button>
+                        )}
+                        {checkPermission('cms', 'delete') && (
+                          <button onClick={() => handleDelete(amenity._id)} className="text-red-600 hover:text-red-900">
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

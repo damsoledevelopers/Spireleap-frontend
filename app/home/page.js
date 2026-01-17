@@ -6,17 +6,14 @@ import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
 import Header from '../../components/Layout/Header'
 import Footer from '../../components/Layout/Footer'
-import { 
-  Search, 
-  MapPin, 
-  Bed, 
-  Bath, 
-  Square, 
-  ArrowRight, 
-  Star, 
-  Home, 
-  Shield, 
-  TrendingUp, 
+import {
+  Search,
+  MapPin,
+  Bed,
+  Bath,
+  Square,
+  ArrowRight,
+  Star,
   Users,
   Building2,
   DollarSign,
@@ -37,8 +34,22 @@ export default function HomePage() {
   const [amenities, setAmenities] = useState([])
   const [homePageContent, setHomePageContent] = useState(null)
   const [seoData, setSeoData] = useState(null)
+  const [activeScripts, setActiveScripts] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentPropertyIndex, setCurrentPropertyIndex] = useState(0)
+  const [currentStatsIndex, setCurrentStatsIndex] = useState(0)
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0)
+  const [currentAmenityIndex, setCurrentAmenityIndex] = useState(0)
+  const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0)
+  const [currentBlogIndex, setCurrentBlogIndex] = useState(0)
+  const [isPaused, setIsPaused] = useState({
+    properties: false,
+    stats: false,
+    categories: false,
+    amenities: false,
+    testimonials: false,
+    blogs: false
+  })
   const [windowWidth, setWindowWidth] = useState(0)
   const [searchFilters, setSearchFilters] = useState({
     propertyType: '',
@@ -48,6 +59,96 @@ export default function HomePage() {
     maxPrice: ''
   })
 
+  // Get stats from CMS or use defaults
+  const getStats = () => {
+    if (homePageContent?.stats && Array.isArray(homePageContent.stats)) {
+      const validStats = homePageContent.stats.filter(s => s && s.number && s.label && s.number.trim() && s.label.trim())
+      if (validStats.length > 0) {
+        return validStats
+      }
+    }
+    // Default stats if CMS data is not available
+    return [
+      { number: '500+', label: 'Properties Listed' },
+      { number: '200+', label: 'Happy Clients' },
+      { number: '50+', label: 'Expert Agents' },
+      { number: '15+', label: 'Years Experience' }
+    ]
+  }
+
+  const stats = getStats()
+
+  // Carousel Navigation Components
+  const Carousel = ({ items, renderItem, itemsPerView, currentIndex, setCurrentIndex, sectionKey, isPaused, setIsPaused, showDots = true }) => {
+    // maxIndex is now the last index where a full view can start
+    const maxIndex = Math.max(0, items.length - itemsPerView);
+
+    const handlePrev = () => setCurrentIndex(prev => Math.max(0, prev - 1));
+    const handleNext = () => setCurrentIndex(prev => (prev >= maxIndex ? 0 : prev + 1));
+
+    return (
+      <div
+        className="relative group w-full"
+        onMouseEnter={() => setIsPaused(prev => ({ ...prev, [sectionKey]: true }))}
+        onMouseLeave={() => setIsPaused(prev => ({ ...prev, [sectionKey]: false }))}
+      >
+        {/* Generous vertical padding to prevent shadow clipping and boxy feel */}
+        <div className="overflow-hidden py-10 -my-10">
+          <div
+            className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1)"
+            style={{
+              transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)`,
+            }}
+          >
+            {items.map((item, index) => (
+              <div
+                key={index}
+                className="flex-shrink-0 px-4" // Horizontal padding creates the "individual" gap
+                style={{ width: `${100 / itemsPerView}%` }}
+              >
+                {renderItem(item, index)}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {items.length > itemsPerView && (
+          <>
+            {/* Nav Buttons - Positioned outside the "box" on large screens */}
+            <button
+              onClick={handlePrev}
+              disabled={currentIndex === 0}
+              className={`absolute top-1/2 -left-4 lg:-left-20 -translate-y-1/2 z-20 p-5 rounded-full bg-white shadow-2xl text-primary-600 hover:text-primary-800 transition-all duration-300 transform hover:scale-110 active:scale-95 border border-gray-100 hidden md:flex items-center justify-center ${currentIndex === 0 ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
+            >
+              <ChevronLeft className="h-7 w-7" />
+            </button>
+            <button
+              onClick={handleNext}
+              className="absolute top-1/2 -right-4 lg:-right-20 -translate-y-1/2 z-20 p-5 rounded-full bg-white shadow-2xl text-primary-600 hover:text-primary-800 transition-all duration-300 transform hover:scale-110 active:scale-95 border border-gray-100 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100"
+            >
+              <ArrowRight className="h-7 w-7" />
+            </button>
+
+            {/* Premium Pagination Dots */}
+            {showDots && (
+              <div className="flex justify-center gap-2.5 mt-10">
+                {Array.from({ length: maxIndex + 1 }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentIndex(i)}
+                    className={`h-2 rounded-full transition-all duration-500 ${currentIndex === i
+                      ? 'w-10 bg-primary-600'
+                      : 'w-2 bg-gray-300 hover:bg-gray-400'}`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   useEffect(() => {
     fetchHomePageContent()
     fetchFeaturedProperties()
@@ -56,20 +157,57 @@ export default function HomePage() {
     fetchBanners()
     fetchCategories()
     fetchAmenities()
-    
-    // Set initial window width
+    fetchActiveScripts()
+
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth)
-      
-      // Handle window resize
-      const handleResize = () => {
-        setWindowWidth(window.innerWidth)
-        setCurrentPropertyIndex(0) // Reset to first slide on resize
-      }
+      const handleResize = () => setWindowWidth(window.innerWidth)
       window.addEventListener('resize', handleResize)
       return () => window.removeEventListener('resize', handleResize)
     }
   }, [])
+
+  // Unified Auto-Scroll Logic
+  useEffect(() => {
+    const getItemsPerView = (width) => {
+      if (width >= 1280) return 4;
+      if (width >= 1024) return 3;
+      if (width >= 768) return 2;
+      return 1;
+    }
+
+    const getItemsPerViewSmall = (width) => {
+      if (width >= 1024) return 4;
+      if (width >= 768) return 3;
+      return 2;
+    }
+
+    const itemsPerView = getItemsPerView(windowWidth);
+    const itemsPerViewSmall = getItemsPerViewSmall(windowWidth);
+
+    const interval = setInterval(() => {
+      if (!isPaused.properties && featuredProperties.length > itemsPerView) {
+        setCurrentPropertyIndex(prev => (prev >= featuredProperties.length - itemsPerView ? 0 : prev + 1));
+      }
+      if (!isPaused.stats && stats.length > itemsPerView) {
+        setCurrentStatsIndex(prev => (prev >= stats.length - itemsPerView ? 0 : prev + 1));
+      }
+      if (!isPaused.categories && categories.length > itemsPerView) {
+        setCurrentCategoryIndex(prev => (prev >= categories.length - itemsPerView ? 0 : prev + 1));
+      }
+      if (!isPaused.amenities && amenities.length > itemsPerViewSmall) {
+        setCurrentAmenityIndex(prev => (prev >= amenities.length - itemsPerViewSmall ? 0 : prev + 1));
+      }
+      if (!isPaused.testimonials && testimonials.length > itemsPerView) {
+        setCurrentTestimonialIndex(prev => (prev >= testimonials.length - itemsPerView ? 0 : prev + 1));
+      }
+      if (!isPaused.blogs && blogs.length > itemsPerView) {
+        setCurrentBlogIndex(prev => (prev >= blogs.length - itemsPerView ? 0 : prev + 1));
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [featuredProperties, stats, categories, amenities, testimonials, blogs, isPaused, windowWidth]);
 
   const fetchHomePageContent = async () => {
     try {
@@ -171,13 +309,22 @@ export default function HomePage() {
     }
   }
 
+  const fetchActiveScripts = async () => {
+    try {
+      const response = await api.get('/cms/scripts/active')
+      setActiveScripts(response.data.scripts || [])
+    } catch (error) {
+      console.error('Error fetching active scripts:', error)
+    }
+  }
+
   const formatDate = (dateString) => {
     if (!dateString) return ''
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     })
   }
 
@@ -225,77 +372,7 @@ export default function HomePage() {
     return primary?.url || images?.[0]?.url || '/placeholder-property.jpg'
   }
 
-  // Icon mapping for features
-  const iconMap = {
-    'Home': Home,
-    'Shield': Shield,
-    'TrendingUp': TrendingUp,
-    'Users': Users,
-    '🏠': Home,
-    '🛡️': Shield,
-    '📈': TrendingUp,
-    '👥': Users
-  }
 
-  const getIcon = (iconName) => {
-    if (typeof iconName === 'string' && iconMap[iconName]) {
-      return iconMap[iconName]
-    }
-    return Home // Default icon
-  }
-
-  const features = homePageContent?.features?.filter(f => f.title && f.description).length > 0
-    ? homePageContent.features.filter(f => f.title && f.description).map(f => {
-        const iconStr = f.icon || ''
-        const isEmoji = /[\u{1F300}-\u{1F9FF}]/u.test(iconStr)
-        return {
-          icon: isEmoji ? Home : getIcon(iconStr), // Use Home as fallback for emoji
-          iconName: iconStr, // Store original string for emoji rendering
-          title: f.title,
-          description: f.description
-        }
-      })
-    : [
-        {
-          icon: Home,
-          title: 'Premium Properties',
-          description: 'Discover luxury homes and apartments in prime locations'
-        },
-        {
-          icon: Shield,
-          title: 'Verified Listings',
-          description: 'All properties are verified and authentic'
-        },
-        {
-          icon: TrendingUp,
-          title: 'Best Investment',
-          description: 'Find properties with the best ROI potential'
-        },
-        {
-          icon: Users,
-          title: 'Expert Agents',
-          description: 'Work with experienced real estate professionals'
-        }
-      ]
-
-  // Get stats from CMS or use defaults
-  const getStats = () => {
-    if (homePageContent?.stats && Array.isArray(homePageContent.stats)) {
-      const validStats = homePageContent.stats.filter(s => s && s.number && s.label && s.number.trim() && s.label.trim())
-      if (validStats.length > 0) {
-        return validStats
-      }
-    }
-    // Default stats if CMS data is not available
-    return [
-      { number: '500+', label: 'Properties Listed' },
-      { number: '200+', label: 'Happy Clients' },
-      { number: '50+', label: 'Expert Agents' },
-      { number: '15+', label: 'Years Experience' }
-    ]
-  }
-
-  const stats = getStats()
 
 
   // Set SEO metadata
@@ -305,7 +382,7 @@ export default function HomePage() {
       if (seoData.metaTitle) {
         document.title = seoData.metaTitle
       }
-      
+
       // Update or create meta description
       let metaDescription = document.querySelector('meta[name="description"]')
       if (metaDescription) {
@@ -316,19 +393,19 @@ export default function HomePage() {
         metaDescription.setAttribute('content', seoData.metaDescription || '')
         document.head.appendChild(metaDescription)
       }
-      
+
       // Update or create meta keywords
       let metaKeywords = document.querySelector('meta[name="keywords"]')
       if (metaKeywords) {
-        const keywordsStr = Array.isArray(seoData.keywords) 
-          ? seoData.keywords.join(', ') 
+        const keywordsStr = Array.isArray(seoData.keywords)
+          ? seoData.keywords.join(', ')
           : seoData.keywords || ''
         metaKeywords.setAttribute('content', keywordsStr)
       } else {
         metaKeywords = document.createElement('meta')
         metaKeywords.setAttribute('name', 'keywords')
-        const keywordsStr = Array.isArray(seoData.keywords) 
-          ? seoData.keywords.join(', ') 
+        const keywordsStr = Array.isArray(seoData.keywords)
+          ? seoData.keywords.join(', ')
           : seoData.keywords || ''
         metaKeywords.setAttribute('content', keywordsStr)
         document.head.appendChild(metaKeywords)
@@ -336,12 +413,115 @@ export default function HomePage() {
     }
   }, [seoData])
 
+  // Script Injection logic
+  useEffect(() => {
+    // Capture state of body before injecting scripts
+    const initialBodyChildren = new Set(Array.from(document.body.children));
+    const injectedElements = [];
+
+    if (activeScripts.length > 0) {
+      activeScripts.forEach(script => {
+        const scriptId = `cms-script-${script._id}`;
+        // If already injected, don't inject again but keep track for cleanup
+        const existingContainer = document.getElementById(scriptId);
+        if (existingContainer) {
+          // Find all elements previously injected by this script using the data attribute
+          const previouslyInjected = document.querySelectorAll(`[data-script-id="${script._id}"]`);
+          previouslyInjected.forEach(el => injectedElements.push(el));
+          return;
+        }
+
+        const tempContainer = document.createElement('div');
+        tempContainer.id = scriptId;
+        tempContainer.style.display = 'none';
+        tempContainer.innerHTML = script.code;
+
+        const nodes = Array.from(tempContainer.childNodes);
+        nodes.forEach(node => {
+          let elementToInject;
+
+          if (node.nodeType === 1) { // Element node
+            if (node.tagName === 'SCRIPT') {
+              const s = document.createElement('script');
+              Array.from(node.attributes).forEach(attr => s.setAttribute(attr.name, attr.value));
+              s.innerHTML = node.innerHTML;
+              elementToInject = s;
+            } else {
+              elementToInject = node.cloneNode(true);
+            }
+          } else if (node.nodeType === 3 && node.textContent.trim()) { // Text node
+            const span = document.createElement('span');
+            span.textContent = node.textContent;
+            elementToInject = span;
+          }
+
+          if (elementToInject) {
+            // Add identifying attributes for cleanup
+            elementToInject.setAttribute('data-script-id', script._id);
+            elementToInject.classList.add('cms-injected-element');
+
+            if (script.placement === 'head') {
+              document.head.appendChild(elementToInject);
+            } else if (script.placement === 'body_start') {
+              document.body.prepend(elementToInject);
+            } else {
+              document.body.appendChild(elementToInject);
+            }
+
+            injectedElements.push(elementToInject);
+          }
+        });
+
+        // Also keep the marker container
+        document.body.appendChild(tempContainer);
+        injectedElements.push(tempContainer);
+      });
+    }
+
+    // Cleanup function: remove all elements injected by this effect AND artifacts
+    return () => {
+      // 1. Remove markers and script tags we explicitly tracked
+      injectedElements.forEach(el => {
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
+
+      // 2. Remove third-party widget artifacts (elements added to body by the scripts)
+      // We assume ANY element added to body that wasn't there initially is a widget artifact (unless safelisted)
+      try {
+        const currentBodyChildren = Array.from(document.body.children);
+        const safelistedIds = ['app-content-wrapper', '__next'];
+        const safelistedTags = ['SCRIPT', 'LINK', 'STYLE', 'META', 'HEAD'];
+
+        currentBodyChildren.forEach(child => {
+          if (!initialBodyChildren.has(child)) {
+            // SAFEGUARD: Never remove the main app wrapper, Next.js internals, or resource tags
+            if (safelistedIds.includes(child.id) || safelistedTags.includes(child.tagName)) return;
+
+            // Remove everything else (Divs, Iframes, Anchors, IMGs, etc.)
+            if (child.parentNode === document.body) {
+              document.body.removeChild(child);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error cleaning up widget artifacts:', error);
+      }
+    };
+  }, [activeScripts])
+
   return (
     <div className="min-h-screen bg-logo-offWhite">
       <Header />
 
       {/* Hero Section - Enhanced Modern Design */}
-      <section className="relative min-h-[95vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 via-primary-700 to-primary-600">
+      <section
+        className="relative min-h-[95vh] flex items-center justify-center overflow-hidden transition-colors duration-500"
+        style={{
+          background: homePageContent?.styles?.hero?.backgroundColor || 'linear-gradient(to bottom right, #0a213e, #0f2d52, #143a67, #19487b)'
+        }}
+      >
         {/* Enhanced Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-gold-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
@@ -351,23 +531,41 @@ export default function HomePage() {
           {/* Additional subtle particles */}
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAzNHYtNGgtMnY0aC00djJoNHY0aDJ2LTRoNHYtMmgtNHptMC0zMFYwaC0ydjRoLTR2Mmg0djRoMlY2aDRWNGgtNHpNNiAzNHYtNEg0djRIMHYyaDR2NGgydi00aDR2LTJINnptMC0zMFYwSDR2NEgwdjJoNHY0aDJWNmg0VjRINnoiIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvZz48L3N2Zz4=')] opacity-20"></div>
         </div>
-        
+
         {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-          <div className="text-center animate-fade-in-up">
+          <div
+            className="animate-fade-in-up"
+            style={{ textAlign: homePageContent?.styles?.hero?.textAlign || 'center' }}
+          >
             {/* Enhanced Badge */}
             <div className="inline-flex items-center px-5 py-2.5 mb-8 bg-white/15 backdrop-blur-md rounded-full border border-white/30 shadow-lg hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
               <span className="text-sm font-bold text-white tracking-wide">🏆 #1 Real Estate Platform</span>
             </div>
 
             <h1 className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-6 text-white leading-tight animate-fade-in-up animation-delay-200">
-              <span className="bg-gradient-to-r from-gold-400 via-gold-300 to-gold-200 bg-clip-text text-transparent drop-shadow-2xl animate-gradient">
+              <span
+                className="bg-gradient-to-r from-gold-400 via-gold-300 to-gold-200 bg-clip-text text-transparent drop-shadow-2xl animate-gradient"
+                style={{
+                  ...(homePageContent?.styles?.hero?.titleColor ? { backgroundImage: 'none', color: homePageContent.styles.hero.titleColor } : {}),
+                  fontSize: homePageContent?.styles?.hero?.titleFontSize || '',
+                  fontStyle: homePageContent?.styles?.hero?.titleFontStyle || 'normal'
+                }}
+              >
                 {homePageContent?.heroTitle || 'Find Your Dream'}
               </span>
               {homePageContent?.heroSubtitle && (
                 <>
                   <br />
-                  <span className="text-white drop-shadow-lg animate-fade-in-up animation-delay-400">{homePageContent.heroSubtitle}</span>
+                  <span
+                    className="text-white drop-shadow-lg animate-fade-in-up animation-delay-400"
+                    style={{
+                      color: homePageContent?.styles?.hero?.subtitleColor || '#ffffff',
+                      fontStyle: homePageContent?.styles?.hero?.subtitleFontStyle || 'normal'
+                    }}
+                  >
+                    {homePageContent.heroSubtitle}
+                  </span>
                 </>
               )}
               {!homePageContent?.heroSubtitle && (
@@ -377,8 +575,15 @@ export default function HomePage() {
                 </>
               )}
             </h1>
-            
-            <p className="text-xl md:text-2xl lg:text-3xl mb-12 text-gray-100 max-w-4xl mx-auto leading-relaxed font-light animate-fade-in-up animation-delay-600">
+
+            <p
+              className="text-xl md:text-2xl lg:text-3xl mb-12 text-gray-100 max-w-4xl mx-auto leading-relaxed font-light animate-fade-in-up animation-delay-600"
+              style={{
+                color: homePageContent?.styles?.hero?.descriptionColor || '#f3f4f6',
+                fontSize: homePageContent?.styles?.hero?.descriptionFontSize || '',
+                fontStyle: homePageContent?.styles?.hero?.descriptionFontStyle || 'normal'
+              }}
+            >
               {homePageContent?.heroDescription || 'Discover premium homes, luxury apartments, and prime commercial properties in the world\'s best locations'}
             </p>
 
@@ -396,7 +601,7 @@ export default function HomePage() {
                       value={searchFilters.propertyType}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
                       className="w-full px-4 py-3.5 pl-11 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-gray-900 font-medium text-base transition-all duration-200 hover:border-primary-400 hover:shadow-md bg-white shadow-sm appearance-none cursor-pointer"
-                      style={{ 
+                      style={{
                         backgroundImage: 'none',
                         WebkitAppearance: 'none',
                         MozAppearance: 'none'
@@ -425,7 +630,7 @@ export default function HomePage() {
                       value={searchFilters.listingType}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, listingType: e.target.value }))}
                       className="w-full px-4 py-3.5 pl-11 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-gray-900 font-medium text-base transition-all duration-200 hover:border-primary-400 hover:shadow-md bg-white shadow-sm appearance-none cursor-pointer"
-                      style={{ 
+                      style={{
                         backgroundImage: 'none',
                         WebkitAppearance: 'none',
                         MozAppearance: 'none'
@@ -518,7 +723,12 @@ export default function HomePage() {
       )}
 
       {/* Stats Section - Enhanced Modern Design */}
-      <section className="relative py-28 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 text-white overflow-hidden">
+      <section
+        className="relative py-28 text-white overflow-hidden transition-colors duration-500"
+        style={{
+          background: homePageContent?.styles?.stats?.backgroundColor || 'linear-gradient(to bottom right, #0a213e, #0f2d52, #143a67)'
+        }}
+      >
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0" style={{
@@ -526,7 +736,7 @@ export default function HomePage() {
             backgroundSize: '60px 60px'
           }}></div>
         </div>
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <div className="inline-block px-4 py-2 mb-4 bg-white/20 backdrop-blur-sm rounded-full text-sm font-semibold border border-white/30">
@@ -539,24 +749,40 @@ export default function HomePage() {
               We've helped countless clients find their dream properties
             </p>
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-            {stats.map((stat, index) => (
-              <div 
-                key={index} 
-                className="group relative bg-white/10 backdrop-blur-md rounded-3xl p-8 md:p-10 border border-white/20 hover:bg-white/20 transition-all duration-500 transform hover:-translate-y-3 hover:shadow-2xl hover:scale-105"
-                style={{ animationDelay: `${index * 100}ms` }}
+
+          <Carousel
+            items={stats}
+            sectionKey="stats"
+            currentIndex={currentStatsIndex}
+            setCurrentIndex={setCurrentStatsIndex}
+            isPaused={isPaused}
+            setIsPaused={setIsPaused}
+            itemsPerView={windowWidth >= 1024 ? 4 : windowWidth >= 768 ? 2 : 1}
+            renderItem={(stat, index) => (
+              <div
+                className="group relative h-full bg-white/10 backdrop-blur-md rounded-3xl p-8 md:p-10 border border-white/20 hover:bg-white/20 transition-all duration-500 transform hover:-translate-y-3 shadow-lg"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-gold-500/30 via-transparent to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative text-center">
-                  <div className="text-5xl md:text-6xl lg:text-7xl font-extrabold bg-gradient-to-r from-gold-300 via-gold-200 to-white bg-clip-text text-transparent mb-4 drop-shadow-lg">
+                <div className="relative text-center h-full flex flex-col justify-center">
+                  <div
+                    className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-3"
+                    style={{
+                      color: homePageContent?.styles?.stats?.numberColor || '#fcd34d'
+                    }}
+                  >
                     {stat.number}
                   </div>
-                  <div className="text-white/95 font-bold text-base md:text-lg">{stat.label}</div>
+                  <div
+                    className="font-bold text-sm md:text-base lg:text-lg"
+                    style={{
+                      color: homePageContent?.styles?.stats?.labelColor || '#f9fafb'
+                    }}
+                  >
+                    {stat.label}
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         </div>
       </section>
 
@@ -585,164 +811,97 @@ export default function HomePage() {
           ) : featuredProperties.length === 0 ? (
             <div className="text-center py-20">
               <div className="inline-block p-6 bg-gray-100 rounded-full mb-4">
-                <Home className="h-12 w-12 text-gray-400" />
+                <Users className="h-12 w-12 text-gray-400" />
               </div>
               <p className="text-xl text-gray-500 font-medium">No featured properties available</p>
               <p className="text-sm text-gray-400 mt-2">Check back soon for new listings</p>
             </div>
-          ) : (() => {
-            // Calculate items per view based on screen size
-            const getItemsPerView = () => {
-              if (windowWidth === 0) return 3 // Default during SSR
-              if (windowWidth >= 1280) return 4 // xl: 4 items
-              if (windowWidth >= 1024) return 3 // lg: 3 items
-              if (windowWidth >= 768) return 2  // md: 2 items
-              return 1 // sm: 1 item
-            }
-            
-            const itemsPerView = getItemsPerView()
-            const maxIndex = Math.max(0, Math.ceil(featuredProperties.length / itemsPerView) - 1)
-            const translateX = currentPropertyIndex * (100 / itemsPerView)
-            
-            return (
-            <div className="relative">
-              {/* Carousel Container */}
-              <div className="overflow-hidden">
-                <div 
-                  className="flex transition-transform duration-500 ease-in-out gap-8 lg:gap-10"
-                  style={{
-                    transform: `translateX(-${translateX}%)`
-                  }}
+          ) : (
+            <Carousel
+              items={featuredProperties}
+              sectionKey="properties"
+              currentIndex={currentPropertyIndex}
+              setCurrentIndex={setCurrentPropertyIndex}
+              isPaused={isPaused}
+              setIsPaused={setIsPaused}
+              itemsPerView={windowWidth >= 1024 ? 3 : windowWidth >= 768 ? 2 : 1}
+              renderItem={(property) => (
+                <Link
+                  href={`/properties/${property.slug || property._id}`}
+                  className="group relative bg-white rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 border border-gray-100 block h-full"
                 >
-                  {featuredProperties.map((property) => (
-                    <div
-                      key={property._id}
-                      className="flex-shrink-0"
-                      style={{
-                        width: `${100 / itemsPerView}%`
-                      }}
-                    >
-                      <Link
-                        href={`/properties/${property.slug || property._id}`}
-                        className="group relative bg-white rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 border border-gray-100 hover:border-primary-200 block"
-                      >
-                        {/* Image Container */}
-                        <div className="relative h-80 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
-                          <img
-                            src={getPrimaryImage(property.images)}
-                            alt={property.title}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-                            loading="lazy"
-                          />
-                          {/* Enhanced Gradient Overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                          {/* Shine effect on hover */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                          
-                          {/* Badges */}
-                          <div className="absolute top-4 left-4 flex flex-col gap-2">
-                            <span className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg backdrop-blur-sm">
-                              ⭐ Featured
-                            </span>
-                          </div>
-                          <div className="absolute top-4 right-4">
-                            <span className="bg-white/95 backdrop-blur-sm text-gray-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg">
-                              {property.listingType === 'sale' ? 'For Sale' : property.listingType === 'rent' ? 'For Rent' : 'Sale/Rent'}
-                            </span>
-                          </div>
+                  {/* Square Image Container */}
+                  <div className="relative aspect-square overflow-hidden bg-gray-100">
+                    <img
+                      src={getPrimaryImage(property.images)}
+                      alt={property.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                      loading="lazy"
+                    />
 
-                          {/* View Details Button (on hover) */}
-                          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <span className="bg-white text-primary-600 px-6 py-2 rounded-full text-sm font-semibold shadow-xl">
-                              View Details →
-                            </span>
-                          </div>
-                        </div>
+                    {/* Gradient Overlays */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
 
-                        {/* Enhanced Content */}
-                        <div className="p-7">
-                          <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-primary-600 transition-colors duration-300">
-                            {property.title}
-                          </h3>
-                          <p className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-primary-600 via-primary-700 to-gold-500 bg-clip-text text-transparent mb-5">
-                            {property.listingType === 'sale' && property.price?.sale
-                              ? formatPrice(property.price.sale)
-                              : property.listingType === 'rent' && property.price?.rent?.amount
-                              ? `${formatPrice(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
-                              : 'Price on request'}
-                          </p>
-                          <div className="flex items-center text-gray-600 text-sm mb-4">
-                            <MapPin className="h-4 w-4 mr-1.5 text-primary-600" />
-                            <span className="line-clamp-1">
-                              {property.location?.address}, {property.location?.city}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-gray-600 text-sm border-t border-gray-100 pt-5">
-                            {property.specifications?.bedrooms && (
-                              <div className="flex items-center gap-2 bg-gradient-to-br from-primary-50 to-gold-50 px-4 py-2 rounded-xl border border-primary-100 group-hover:border-primary-200 transition-colors">
-                                <Bed className="h-5 w-5 text-primary-600" />
-                                <span className="font-bold text-gray-700">{property.specifications.bedrooms}</span>
-                              </div>
-                            )}
-                            {property.specifications?.bathrooms && (
-                              <div className="flex items-center gap-2 bg-gradient-to-br from-primary-50 to-gold-50 px-4 py-2 rounded-xl border border-primary-100 group-hover:border-primary-200 transition-colors">
-                                <Bath className="h-5 w-5 text-primary-600" />
-                                <span className="font-bold text-gray-700">{property.specifications.bathrooms}</span>
-                              </div>
-                            )}
-                            {property.specifications?.area && (
-                              <div className="flex items-center gap-2 bg-gradient-to-br from-primary-50 to-gold-50 px-4 py-2 rounded-xl border border-primary-100 group-hover:border-primary-200 transition-colors">
-                                <Square className="h-5 w-5 text-primary-600" />
-                                <span className="font-bold text-gray-700">
-                                  {property.specifications.area.value} {property.specifications.area.unit}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </Link>
+                    {/* Top Badges */}
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
+                      <span className="bg-primary-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">
+                        Featured
+                      </span>
+                      <span className="bg-white/95 backdrop-blur-md text-gray-900 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">
+                        {property.listingType === 'sale' ? 'For Sale' : 'For Rent'}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Navigation Buttons */}
-              {featuredProperties.length > itemsPerView && (
-                <div className="flex items-center justify-center gap-4 mt-10">
-                  <button
-                    onClick={() => setCurrentPropertyIndex(Math.max(0, currentPropertyIndex - 1))}
-                    disabled={currentPropertyIndex === 0}
-                    className="p-3 rounded-full bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-110 active:scale-95"
-                  >
-                    <ChevronLeft className="h-6 w-6" />
-                  </button>
-                  
-                  <div className="flex gap-2">
-                    {Array.from({ length: maxIndex + 1 }).map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentPropertyIndex(index)}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          currentPropertyIndex === index
-                            ? 'w-8 bg-primary-600'
-                            : 'w-2 bg-gray-300 hover:bg-gray-400'
-                        }`}
-                      />
-                    ))}
+                    {/* Bottom Info Overlay (On Image) */}
+                    <div className="absolute bottom-4 left-4 right-4 z-10">
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-2xl">
+                        <div className="text-white text-lg font-extrabold mb-1 truncate">
+                          {property.title}
+                        </div>
+                        <div className="flex items-center text-white/90 text-xs">
+                          <MapPin className="h-3.5 w-3.5 mr-1.5 text-primary-400" />
+                          <span className="truncate">{property.location?.city}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <button
-                    onClick={() => setCurrentPropertyIndex(Math.min(maxIndex, currentPropertyIndex + 1))}
-                    disabled={currentPropertyIndex >= maxIndex}
-                    className="p-3 rounded-full bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-110 active:scale-95"
-                  >
-                    <ArrowRight className="h-6 w-6" />
-                  </button>
-                </div>
+                  {/* Pricing & Quick Specs Area */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-2xl font-black text-primary-700">
+                        {property.listingType === 'sale' && property.price?.sale
+                          ? formatPrice(property.price.sale)
+                          : property.listingType === 'rent' && property.price?.rent?.amount
+                            ? `${formatPrice(property.price.rent.amount)}`
+                            : 'On Request'}
+                        {property.listingType === 'rent' && (
+                          <span className="text-sm text-gray-400 font-medium ml-1">/mo</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                        <Bed className="h-4 w-4 text-primary-600 mb-1" />
+                        <span className="text-xs font-bold text-gray-700">{property.specifications?.bedrooms || 0} Bed</span>
+                      </div>
+                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                        <Bath className="h-4 w-4 text-primary-600 mb-1" />
+                        <span className="text-xs font-bold text-gray-700">{property.specifications?.bathrooms || 0} Bath</span>
+                      </div>
+                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                        <Square className="h-4 w-4 text-primary-600 mb-1" />
+                        <span className="text-[10px] font-bold text-gray-700 truncate px-1">
+                          {property.specifications?.area?.value || 0} {property.specifications?.area?.unit || 'sqft'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               )}
-            </div>
-            )
-          })()}
+            />
+          )}
 
           <div className="text-center mt-20">
             <Link
@@ -757,15 +916,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Categories Section - Enhanced From CMS */}
+      {/* Categories Section - Refined Minimal Design */}
       {categories.length > 0 && (
-        <section className="py-28 bg-gradient-to-b from-white via-logo-offWhite to-white">
+        <section className="py-28 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-20">
-              <div className="inline-block px-5 py-2.5 mb-5 bg-gradient-to-r from-primary-500/20 to-gold-400/20 text-primary-700 border border-primary-300/50 rounded-full text-sm font-bold tracking-wide shadow-sm">
-                🏘️ Property Types
-              </div>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-primary-800 via-primary-700 to-primary-600 bg-clip-text text-transparent mb-5 leading-tight">
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
                 Browse by Category
               </h2>
               <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
@@ -773,43 +929,41 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6 lg:gap-8">
-              {categories.map((category, index) => (
+            <Carousel
+              items={categories}
+              sectionKey="categories"
+              currentIndex={currentCategoryIndex}
+              setCurrentIndex={setCurrentCategoryIndex}
+              isPaused={isPaused}
+              setIsPaused={setIsPaused}
+              itemsPerView={windowWidth >= 1024 ? 3 : windowWidth >= 768 ? 2 : 1}
+              renderItem={(category) => (
                 <Link
-                  key={category._id}
                   href={`/properties?category=${category.slug || category._id}`}
-                  className="group relative bg-gradient-to-br from-white to-gold-50/30 rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 hover:scale-105 border-2 border-gold-200/50 hover:border-primary-400 text-center"
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  className="group relative bg-white rounded-3xl p-10 border border-gray-100 hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 text-center block h-full shadow-lg"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-gold-400/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  {category.icon && (
-                    <div className="text-5xl mb-5 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative z-10">
-                      {category.icon}
-                    </div>
-                  )}
-                  <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors duration-300 relative z-10">
+                  <div className="h-20 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative z-10">
+                    <div className="text-5xl">{category.icon || '🏠'}</div>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors duration-300 relative z-10">
                     {category.name}
                   </h3>
                   {category.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2 relative z-10">{category.description}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2 relative z-10 italic">"{category.description}"</p>
                   )}
                 </Link>
-              ))}
-            </div>
+              )}
+            />
           </div>
         </section>
       )}
 
-      {/* Amenities Section - Enhanced From CMS */}
+      {/* Amenities Section - Refined Minimal Design */}
       {amenities.length > 0 && (
-        <section className="py-28 bg-gradient-to-b from-logo-cream via-gold-50/50 to-logo-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC4wMyIvPjwvc3ZnPg==')] opacity-20"></div>
+        <section className="py-28 bg-white relative overflow-hidden">
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-20">
-              <div className="inline-block px-5 py-2.5 mb-5 bg-gradient-to-r from-primary-500/20 to-gold-400/20 text-primary-700 border border-primary-300/50 rounded-full text-sm font-bold tracking-wide shadow-sm">
-                ✨ Popular Features
-              </div>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-primary-800 via-primary-700 to-primary-600 bg-clip-text text-transparent mb-5 leading-tight">
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
                 Popular Amenities
               </h2>
               <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
@@ -817,85 +971,37 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 lg:gap-8">
-              {amenities.map((amenity, index) => (
+            <Carousel
+              items={amenities}
+              sectionKey="amenities"
+              currentIndex={currentAmenityIndex}
+              setCurrentIndex={setCurrentAmenityIndex}
+              isPaused={isPaused}
+              setIsPaused={setIsPaused}
+              itemsPerView={windowWidth >= 1280 ? 6 : windowWidth >= 1024 ? 4 : windowWidth >= 768 ? 3 : 2}
+              renderItem={(amenity) => (
                 <div
-                  key={amenity._id}
-                  className="group relative bg-white rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 hover:scale-105 border-2 border-gold-200/50 hover:border-primary-400 text-center"
-                  style={{ animationDelay: `${index * 50}ms` }}
+                  className="group relative bg-gray-50 rounded-2xl p-8 border border-gray-100 hover:bg-white hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 text-center h-full"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-gold-400/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  {amenity.icon && (
-                    <div className="text-4xl mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 relative z-10">
-                      {amenity.icon}
-                    </div>
-                  )}
-                  <h3 className="text-base md:text-lg font-bold text-gray-900 group-hover:text-primary-600 transition-colors duration-300 relative z-10">
+                  <div className="h-14 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 relative z-10 text-primary-600">
+                    <div className="text-3xl">{amenity.icon || '✨'}</div>
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-900 group-hover:text-primary-600 transition-colors duration-300 relative z-10 line-clamp-1">
                     {amenity.name}
                   </h3>
                 </div>
-              ))}
-            </div>
+              )}
+            />
           </div>
         </section>
       )}
 
-      {/* Features Section - Enhanced Modern Cards */}
-      <section className="py-28 bg-gradient-to-b from-logo-beige via-white to-logo-offWhite relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-30"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <div className="inline-block px-5 py-2.5 mb-5 bg-gradient-to-r from-primary-500/20 to-gold-400/20 text-primary-700 border border-primary-300/50 rounded-full text-sm font-bold tracking-wide shadow-sm">
-              ⭐ Why Choose Us
-            </div>
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-primary-800 via-primary-700 to-primary-600 bg-clip-text text-transparent mb-5 leading-tight">
-              Experience Excellence
-            </h2>
-            <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              We provide exceptional service and premium properties with unmatched expertise
-            </p>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              const isEmoji = typeof feature.iconName === 'string' && /[\u{1F300}-\u{1F9FF}]/u.test(feature.iconName)
-              return (
-                <div 
-                  key={index} 
-                  className="group relative bg-gradient-to-br from-white via-gold-50/50 to-white p-10 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 hover:scale-105 border-2 border-gold-200/50 hover:border-primary-400"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 via-gold-400/10 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="relative">
-                    <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-gold-500 w-24 h-24 rounded-3xl flex items-center justify-center mb-8 shadow-xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                      {isEmoji ? (
-                        <span className="text-5xl">{feature.iconName}</span>
-                      ) : (
-                        <Icon className="h-12 w-12 text-white" />
-                      )}
-                    </div>
-                    <h3 className="text-2xl font-bold bg-gradient-to-r from-primary-700 to-primary-600 bg-clip-text text-transparent mb-4 group-hover:from-primary-800 group-hover:to-gold-500 transition-all duration-300">
-                      {feature.title}
-                    </h3>
-                    <p className="text-gray-600 leading-relaxed text-base">
-                      {feature.description}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
 
-      {/* Testimonials - Enhanced Modern Design */}
-      <section className="py-28 bg-gradient-to-b from-logo-white via-logo-beige to-logo-white">
+      {/* Testimonials - Refined Minimal Design */}
+      <section className="py-28 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
-            <div className="inline-block px-5 py-2.5 mb-5 bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-700 rounded-full text-sm font-bold tracking-wide shadow-sm border border-yellow-200">
-              ⭐ Client Reviews
-            </div>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
               What Our Clients Say
             </h2>
@@ -904,48 +1010,51 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-10">
-            {testimonials.map((testimonial, index) => (
-              <div 
-                key={index} 
-                className="group relative bg-white p-10 rounded-3xl shadow-xl hover:shadow-2xl border border-gray-100 transition-all duration-500 transform hover:-translate-y-3 hover:scale-105"
-                style={{ animationDelay: `${index * 150}ms` }}
+          <Carousel
+            items={testimonials}
+            sectionKey="testimonials"
+            currentIndex={currentTestimonialIndex}
+            setCurrentIndex={setCurrentTestimonialIndex}
+            isPaused={isPaused}
+            setIsPaused={setIsPaused}
+            itemsPerView={windowWidth >= 1024 ? 3 : windowWidth >= 768 ? 2 : 1}
+            renderItem={(testimonial) => (
+              <div
+                className="group relative bg-gray-50 p-10 rounded-3xl border border-gray-100 transition-all duration-500 transform hover:-translate-y-3 hover:bg-white hover:shadow-2xl h-full"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary-100 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative">
+                <div className="relative h-full flex flex-col">
                   <div className="flex items-center mb-6">
                     {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="h-6 w-6 text-yellow-400 fill-current drop-shadow-sm" />
+                      <Star key={i} className="h-6 w-6 text-yellow-500 fill-current drop-shadow-sm" />
                     ))}
                   </div>
-                  <div className="mb-6">
-                    <svg className="w-12 h-12 text-primary-200 mb-4" fill="currentColor" viewBox="0 0 32 32">
+                  <div className="mb-6 flex-grow">
+                    <svg className="w-10 h-10 text-primary-200 mb-4" fill="currentColor" viewBox="0 0 32 32">
                       <path d="M10 8c-3.3 0-6 2.7-6 6v10h10V14H8c0-1.1.9-2 2-2V8zm16 0c-3.3 0-6 2.7-6 6v10h10V14h-6c0-1.1.9-2 2-2V8z" />
                     </svg>
-                    <p className="text-gray-700 text-lg leading-relaxed italic">
-                      "{testimonial.content}"
-                    </p>
+                    <div className="min-h-[120px]">
+                      <p className="text-gray-700 text-base leading-relaxed italic line-clamp-6">
+                        "{testimonial.content}"
+                      </p>
+                    </div>
                   </div>
-                  <div className="border-t border-gray-100 pt-6">
+                  <div className="border-t border-gray-200 pt-6 mt-auto">
                     <p className="font-bold text-gray-900 text-lg">{testimonial.name}</p>
                     <p className="text-sm text-gray-500 mt-1">{testimonial.role}</p>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         </div>
       </section>
 
-      {/* Blogs Section - Modern Design */}
+      {/* Blogs Section - Refined Minimal Design */}
       {blogs.length > 0 && (
-        <section className="py-24 bg-logo-offWhite">
+        <section className="py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-              <div className="inline-block px-4 py-2 mb-4 bg-gradient-to-r from-primary-500/20 to-gold-400/20 text-primary-700 border border-primary-300/50 rounded-full text-sm font-semibold">
-                📝 Latest Articles
-              </div>
-              <h2 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-primary-800 via-primary-700 to-primary-600 bg-clip-text text-transparent mb-4">
+              <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
                 Our Latest Blogs
               </h2>
               <p className="text-xl text-gray-600 max-w-2xl mx-auto">
@@ -953,12 +1062,18 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {blogs.map((blog) => (
+            <Carousel
+              items={blogs}
+              sectionKey="blogs"
+              currentIndex={currentBlogIndex}
+              setCurrentIndex={setCurrentBlogIndex}
+              isPaused={isPaused}
+              setIsPaused={setIsPaused}
+              itemsPerView={windowWidth >= 1024 ? 3 : windowWidth >= 768 ? 2 : 1}
+              renderItem={(blog) => (
                 <Link
-                  key={blog._id}
                   href={`/blog/${blog.slug || blog._id}`}
-                  className="group relative bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100"
+                  className="group relative bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 block h-full"
                 >
                   {/* Featured Image */}
                   <div className="relative h-64 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
@@ -975,7 +1090,7 @@ export default function HomePage() {
                     )}
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    
+
                     {/* Featured Badge */}
                     {blog.isFeatured && (
                       <div className="absolute top-4 left-4">
@@ -996,46 +1111,48 @@ export default function HomePage() {
                   </div>
 
                   {/* Content */}
-                  <div className="p-6">
+                  <div className="p-6 h-full flex flex-col">
                     <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-primary-600 transition-colors">
                       {blog.title}
                     </h3>
-                    
+
                     {blog.excerpt && (
                       <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                         {blog.excerpt}
                       </p>
                     )}
-                    
+
                     {!blog.excerpt && blog.content && (
                       <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                         {stripHtml(blog.content).substring(0, 150)}...
                       </p>
                     )}
 
-                    <div className="flex items-center justify-between text-sm text-gray-500 border-t border-gray-100 pt-4">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-primary-600" />
-                        <span>{formatDate(blog.publishedAt || blog.createdAt)}</span>
-                      </div>
-                      {blog.author && (
+                    <div className="mt-auto">
+                      <div className="flex items-center justify-between text-sm text-gray-500 border-t border-gray-100 pt-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-primary-600 font-semibold">
-                            {blog.author.firstName} {blog.author.lastName}
-                          </span>
+                          <Calendar className="h-4 w-4 text-primary-600" />
+                          <span>{formatDate(blog.publishedAt || blog.createdAt)}</span>
                         </div>
-                      )}
-                    </div>
+                        {blog.author && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-primary-600 font-semibold">
+                              {blog.author.firstName} {blog.author.lastName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Read More Button */}
-                    <div className="mt-4 flex items-center text-primary-600 font-semibold group-hover:text-primary-700 transition-colors">
-                      <span>Read More</span>
-                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      {/* Read More Button */}
+                      <div className="mt-4 flex items-center text-primary-600 font-semibold group-hover:text-primary-700 transition-colors">
+                        <span>Read More</span>
+                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
                     </div>
                   </div>
                 </Link>
-              ))}
-            </div>
+              )}
+            />
 
             {blogs.length >= 6 && (
               <div className="text-center mt-16">
@@ -1061,10 +1178,10 @@ export default function HomePage() {
             backgroundSize: '60px 60px'
           }}></div>
         </div>
-        
+
         {/* Animated gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-gold-500/10 via-transparent to-gold-500/10 animate-gradient"></div>
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-block px-6 py-3 mb-8 bg-white/20 backdrop-blur-md rounded-full text-sm font-bold border border-white/30 shadow-lg hover:bg-white/25 transition-all duration-300 transform hover:scale-105">
             🚀 {homePageContent?.cta?.subtitle || 'Get Started Today'}

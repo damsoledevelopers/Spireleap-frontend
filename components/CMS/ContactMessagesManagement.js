@@ -2,15 +2,24 @@
 
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
-import { Search, Mail, Phone, User, Calendar, Trash2, Eye } from 'lucide-react'
+import { Search, Mail, Phone, User, Calendar, Trash2, Eye, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAuth } from '../../contexts/AuthContext'
+import EntryPermissionModal from '../Permissions/EntryPermissionModal'
+import { checkEntryPermission } from '../../lib/permissions'
 
 export default function ContactMessagesManagement() {
+  const { user, checkPermission } = useAuth()
+  const isSuperAdmin = user?.role === 'super_admin'
+  const canViewMessages = checkPermission('contact_messages', 'view')
+  const canDeleteMessage = checkPermission('contact_messages', 'delete')
+
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMessage, setSelectedMessage] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [permissionModalEntry, setPermissionModalEntry] = useState(null)
 
   useEffect(() => {
     fetchMessages()
@@ -166,20 +175,36 @@ export default function ContactMessagesManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleView(message)}
-                          className="text-primary-600 hover:text-primary-900"
-                          title="View Details"
-                        >
-                          <Eye className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(message._id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                        {checkEntryPermission(message, user, 'view', canViewMessages) && (
+                          <button
+                            onClick={() => handleView(message)}
+                            className="text-primary-600 hover:text-primary-900"
+                            title="View Details"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
+                        )}
+                        {checkEntryPermission(message, user, 'delete', canDeleteMessage) && (
+                          <button
+                            onClick={() => handleDelete(message._id)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                        {isSuperAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setPermissionModalEntry(message)
+                            }}
+                            className="text-amber-600 hover:text-amber-900"
+                            title="Set Custom Permissions"
+                          >
+                            <ShieldCheck className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -282,11 +307,10 @@ export default function ContactMessagesManagement() {
                       window.location.href = mailtoLink
                     }}
                     disabled={!selectedMessage.email}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                      selectedMessage.email
-                        ? 'bg-primary-600 text-white hover:bg-primary-700 cursor-pointer'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${selectedMessage.email
+                      ? 'bg-primary-600 text-white hover:bg-primary-700 cursor-pointer'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
                   >
                     Reply via Email
                   </button>
@@ -296,6 +320,14 @@ export default function ContactMessagesManagement() {
           </div>
         </div>
       )}
+
+      <EntryPermissionModal
+        isOpen={!!permissionModalEntry}
+        onClose={() => setPermissionModalEntry(null)}
+        entry={permissionModalEntry}
+        entryType="contact-messages"
+        onSuccess={fetchMessages}
+      />
     </div>
   )
 }

@@ -20,14 +20,28 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAgentsForExport } from '../../../lib/exportUtils'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import LeadFunnelChart from '../../../components/Reports/Charts/LeadFunnelChart'
 import LeadSourceChart from '../../../components/Reports/Charts/LeadSourceChart'
 import AgentPerformanceChart from '../../../components/Reports/Charts/AgentPerformanceChart'
 import RevenueChart from '../../../components/Reports/Charts/RevenueChart'
 
-export default function AdminReports() {
-  const { user } = useAuth()
+export function AdminReportsContent() {
+  const { user, checkPermission } = useAuth()
+  const router = useRouter()
+
+  // Dynamic Permission Flags
+  const canViewReports = checkPermission('analytics', 'view')
+
+  // Page access check
+  useEffect(() => {
+    if (user && !canViewReports) {
+      toast.error('You do not have permission to view reports')
+      router.push('/admin/dashboard')
+    }
+  }, [user, canViewReports, router])
+
   const [loading, setLoading] = useState(true)
   const [reportData, setReportData] = useState({
     totalUsers: 0,
@@ -90,345 +104,33 @@ export default function AdminReports() {
       const stats = statsResponse.data || {}
       const agencies = agenciesResponse.data.agencies || []
 
-      // For detailed analysis, fetch limited data (only what's needed)
-      const [usersResponse, propertiesResponse, leadsResponse] = await Promise.all([
-        api.get('/users?limit=500').catch(() => ({ data: { users: [] } })),
-        api.get('/properties?limit=500').catch(() => ({ data: { properties: [] } })),
-        api.get('/leads?limit=500').catch(() => ({ data: { leads: [] } }))
-      ])
-
-      const users = usersResponse.data.users || []
-      const properties = propertiesResponse.data.properties || []
-      const leads = leadsResponse.data.leads || []
-
-      setAllData({ users, properties, leads, agencies })
-
-      // Use server-side filtered stats
-      const filteredProperties = properties.filter(p => {
-        const createdAt = new Date(p.createdAt)
-        return createdAt >= dateFilter
-      })
-      const filteredLeads = leads.filter(l => {
-        const createdAt = new Date(l.createdAt)
-        return createdAt >= dateFilter
-      })
-      const filteredUsers = users.filter(u => {
-        const createdAt = new Date(u.createdAt)
-        return createdAt >= dateFilter
-      })
-
-      // Use filtered data for period-based calculations
-      const dataToUse = {
-        properties: filteredProperties,
-        leads: filteredLeads,
-        users: filteredUsers
-      }
-
-      // Use server-side calculated stats, fallback to client-side for limited data
-      const totalPropertyValue = stats.totalPropertyValue || dataToUse.properties.reduce((sum, prop) => {
-        if (prop.price?.sale) {
-          return sum + (prop.price.sale || 0)
-        }
-        return sum
-      }, 0)
-
-      // Use server-side stats when available
-      const usersByRole = stats.usersByRole || dataToUse.users.reduce((acc, user) => {
-        acc[user.role] = (acc[user.role] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByStatus = stats.propertiesByStatus || dataToUse.properties.reduce((acc, prop) => {
-        acc[prop.status] = (acc[prop.status] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByType = stats.propertiesByType || dataToUse.properties.reduce((acc, prop) => {
-        acc[prop.propertyType] = (acc[prop.propertyType] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByListingType = stats.propertiesByListingType || dataToUse.properties.reduce((acc, prop) => {
-        acc[prop.listingType] = (acc[prop.listingType] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsByStatus = stats.leadsByStatus || dataToUse.leads.reduce((acc, lead) => {
-        acc[lead.status] = (acc[lead.status] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsBySource = stats.leadsBySource || dataToUse.leads.reduce((acc, lead) => {
-        acc[lead.source] = (acc[lead.source] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsByPriority = stats.leadsByPriority || dataToUse.leads.reduce((acc, lead) => {
-        acc[lead.priority] = (acc[lead.priority] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByLocation = stats.propertiesByLocation || dataToUse.properties.reduce((acc, prop) => {
-        const city = prop.location?.city || 'Unknown'
-        acc[city] = (acc[city] || 0) + 1
-        return acc
-      }, {})
-
-      // Agent performance - using filtered data
-      const agentPerformance = dataToUse.users
-        .filter(u => u.role === 'agent')
-        .map(agent => {
-          const agentProperties = dataToUse.properties.filter(p =>
-            p.agent && (p.agent._id === agent._id || p.agent.toString() === agent._id)
-          )
-          const agentLeads = dataToUse.leads.filter(l =>
-            l.assignedAgent && (l.assignedAgent._id === agent._id || l.assignedAgent.toString() === agent._id)
-          )
-          const activeLeads = agentLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
-          const convertedLeads = agentLeads.filter(l => l.status === 'converted').length
-
-          return {
-            id: agent._id,
-            name: `${agent.firstName || ''} ${agent.lastName || ''}`.trim() || agent.email,
-            email: agent.email,
-            totalProperties: agentProperties.length,
-            activeProperties: agentProperties.filter(p => p.status === 'active').length,
-            totalLeads: agentLeads.length,
-            activeLeads,
-            convertedLeads,
-            conversionRate: agentLeads.length > 0 ? ((convertedLeads / agentLeads.length) * 100).toFixed(1) : 0
-          }
-        })
-        .sort((a, b) => b.totalLeads - a.totalLeads)
-
-      // Agency Analysis with Health Score - using filtered data
-      const agencyAnalysis = agencies.map(agency => {
-        const agencyId = agency._id?.toString() || agency._id
-        const agencyProperties = dataToUse.properties.filter(p => {
-          const propAgencyId = p.agency?._id?.toString() || p.agency?.toString() || p.agency
-          return propAgencyId === agencyId
-        })
-        const agencyLeads = dataToUse.leads.filter(l => {
-          const leadAgencyId = l.agency?._id?.toString() || l.agency?.toString() || l.agency
-          return leadAgencyId === agencyId
-        })
-        const agencyAgents = dataToUse.users.filter(u => {
-          const userAgencyId = u.agency?._id?.toString() || u.agency?.toString() || u.agency
-          return userAgencyId === agencyId && u.role === 'agent'
-        })
-
-        const activeProperties = agencyProperties.filter(p => p.status === 'active').length
-        const soldProperties = agencyProperties.filter(p => p.status === 'sold').length
-        const rentedProperties = agencyProperties.filter(p => p.status === 'rented').length
-        const newLeads = agencyLeads.filter(l => l.status === 'new').length
-        const convertedLeads = agencyLeads.filter(l => l.status === 'converted').length
-        const activeLeads = agencyLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
-
-        const totalPropertyValue = agencyProperties.reduce((sum, prop) => {
-          if (prop.price?.sale) {
-            return sum + (prop.price.sale || 0)
-          }
-          return sum
-        }, 0)
-
-        const conversionRate = agencyLeads.length > 0
-          ? ((convertedLeads / agencyLeads.length) * 100).toFixed(1)
-          : 0
-
-        // Calculate Health Status
-        let healthStatus = 'poor'
-        let healthLabel = 'Poor'
-        if (agency.isActive && agencyAgents.length > 0 && agencyLeads.length > 5) {
-          healthStatus = 'good'
-          healthLabel = 'Good'
-        } else if (agency.isActive && (agencyAgents.length > 0 || agencyLeads.length > 0)) {
-          healthStatus = 'average'
-          healthLabel = 'Average'
-        }
-
-        // Calculate Last Activity (most recent lead or property creation)
-        const lastLeadDate = agencyLeads.length > 0
-          ? Math.max(...agencyLeads.map(l => new Date(l.createdAt).getTime()))
-          : null
-        const lastPropertyDate = agencyProperties.length > 0
-          ? Math.max(...agencyProperties.map(p => new Date(p.createdAt).getTime()))
-          : null
-        const lastActivityDate = lastLeadDate || lastPropertyDate || null
-        const daysSinceActivity = lastActivityDate
-          ? Math.floor((Date.now() - lastActivityDate) / (1000 * 60 * 60 * 24))
-          : null
-
-        return {
-          id: agencyId,
-          name: agency.name || 'Unknown Agency',
-          email: agency.contact?.email || '-',
-          phone: agency.contact?.phone || '-',
-          logo: agency.logo || null,
-          isActive: agency.isActive || false,
-          totalProperties: agencyProperties.length,
-          activeProperties,
-          soldProperties,
-          rentedProperties,
-          totalLeads: agencyLeads.length,
-          newLeads,
-          activeLeads,
-          convertedLeads,
-          conversionRate,
-          totalAgents: agencyAgents.length,
-          activeAgents: agencyAgents.filter(a => a.isActive).length,
-          totalPropertyValue,
-          healthStatus,
-          healthLabel,
-          lastActivityDate,
-          daysSinceActivity,
-          hasNoAgents: agencyAgents.length === 0,
-          hasNoLeads: agencyLeads.length === 0
-        }
-      }).sort((a, b) => b.totalLeads - a.totalLeads)
-
-      // Recent activity - using filtered data
-      const recentActivity = [
-        ...dataToUse.properties.slice(0, 5).map(p => ({
-          type: 'property_added',
-          message: `New property: ${p.title}`,
-          time: new Date(p.createdAt).toLocaleString(),
-          user: p.agent ? `${p.agent.firstName || ''} ${p.agent.lastName || ''}`.trim() : 'System',
-          link: `/admin/properties/${p._id}`
-        })),
-        ...dataToUse.leads.slice(0, 5).map(l => ({
-          type: 'lead_created',
-          message: `New lead: ${l.contact?.firstName || ''} ${l.contact?.lastName || ''}`.trim(),
-          time: new Date(l.createdAt).toLocaleString(),
-          user: l.source || 'Website',
-          link: `/admin/leads/${l._id}`
-        }))
-      ]
-        .sort((a, b) => new Date(b.time) - new Date(a.time))
-        .slice(0, 10)
-
-      setExportData({
-        leads,
-        properties,
-        agents: users.filter(u => u.role === 'agent')
-      })
-
-      // Calculate total property value for ALL properties (not filtered)
-      const totalPropertyValueAll = properties.reduce((sum, prop) => {
-        if (prop.price?.sale) {
-          return sum + (prop.price.sale || 0)
-        }
-        return sum
-      }, 0)
-
-      // Campaign ROI Analysis
-      const campaignROI = leads.reduce((acc, lead) => {
-        const campaign = lead.campaignName || 'No Campaign'
-        if (!acc[campaign]) {
-          acc[campaign] = {
-            name: campaign,
-            totalLeads: 0,
-            convertedLeads: 0,
-            revenue: 0,
-            cost: 0
-          }
-        }
-        acc[campaign].totalLeads++
-        if (lead.status === 'booked' || lead.status === 'closed') {
-          acc[campaign].convertedLeads++
-          // Estimate revenue from property price if available
-          if (lead.property && lead.property.price) {
-            const price = lead.property.price.sale || lead.property.price || 0
-            acc[campaign].revenue += price
-          }
-        }
-        return acc
-      }, {})
-
-      // Follow-up Compliance Analysis
-      const followUpCompliance = {
-        totalLeadsWithFollowUp: leads.filter(l => l.followUpDate).length,
-        totalFollowUpsCompleted: leads.filter(l => {
-          if (!l.followUpDate) return false
-          const followUpDate = new Date(l.followUpDate)
-          const now = new Date()
-          return followUpDate <= now && (l.status !== 'new' || l.communications?.length > 0)
-        }).length,
-        overdueFollowUps: leads.filter(l => {
-          if (!l.followUpDate) return false
-          const followUpDate = new Date(l.followUpDate)
-          const now = new Date()
-          return followUpDate < now && (l.status === 'new' && (!l.communications || l.communications.length === 0))
-        }).length,
-        upcomingFollowUps: leads.filter(l => {
-          if (!l.followUpDate) return false
-          const followUpDate = new Date(l.followUpDate)
-          const now = new Date()
-          const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-          return followUpDate >= now && followUpDate <= tomorrow
-        }).length,
-        complianceRate: 0
-      }
-      if (followUpCompliance.totalLeadsWithFollowUp > 0) {
-        followUpCompliance.complianceRate = ((followUpCompliance.totalFollowUpsCompleted / followUpCompliance.totalLeadsWithFollowUp) * 100).toFixed(1)
-      }
-
-      // Site Visit Conversion Analysis
-      const siteVisitConversion = {
-        totalScheduled: leads.filter(l => l.siteVisit?.scheduledDate || l.status === 'site_visit_scheduled').length,
-        totalCompleted: leads.filter(l => l.siteVisit?.status === 'completed' || l.status === 'site_visit_completed').length,
-        totalNoShow: leads.filter(l => l.siteVisit?.status === 'no_show').length,
-        totalCancelled: leads.filter(l => l.siteVisit?.status === 'cancelled').length,
-        convertedFromVisit: leads.filter(l => {
-          return (l.siteVisit?.status === 'completed' || l.status === 'site_visit_completed') &&
-            (l.status === 'booked' || l.status === 'closed' || l.status === 'negotiation')
-        }).length,
-        conversionRate: 0,
-        showUpRate: 0
-      }
-      if (siteVisitConversion.totalScheduled > 0) {
-        siteVisitConversion.conversionRate = ((siteVisitConversion.convertedFromVisit / siteVisitConversion.totalScheduled) * 100).toFixed(1)
-        siteVisitConversion.showUpRate = (((siteVisitConversion.totalCompleted) / siteVisitConversion.totalScheduled) * 100).toFixed(1)
-      }
-
-      // Lost Reasons Analysis
-      const lostReasons = leads
-        .filter(l => l.status === 'lost' && l.lostReason)
-        .reduce((acc, lead) => {
-          const reason = lead.lostReason || 'Not Specified'
-          acc[reason] = (acc[reason] || 0) + 1
-          return acc
-        }, {})
+      // For export only, we'll still need some data, but we can fetch it lazily or with smaller limits
+      // For now, let's just use what we have in stats for the view
+      setAllData({ users: [], properties: [], leads: [], agencies })
 
       setReportData({
-        totalUsers: users.length, // Show all users, not filtered
-        totalProperties: properties.length, // Show all properties, not filtered
-        totalLeads: leads.length, // Show all leads, not filtered
+        totalUsers: stats.totalUsers || 0,
+        totalProperties: stats.totalProperties || 0,
+        totalLeads: stats.totalLeads || 0,
         totalAgencies: agencies.length,
-        totalPropertyValue: totalPropertyValueAll, // Use all properties for total value
-        usersByRole,
-        propertiesByStatus,
-        propertiesByType,
-        propertiesByListingType,
-        leadsByStatus,
-        leadsBySource,
-        leadsByPriority,
-        propertiesByLocation,
-        agentPerformance,
-        agencyAnalysis,
-        recentActivity,
-        campaignROI: Object.values(campaignROI),
-        followUpCompliance,
-        siteVisitConversion,
-        lostReasons,
+        totalPropertyValue: stats.totalPropertyValue || 0,
+        usersByRole: stats.usersByRole || {},
+        propertiesByStatus: stats.propertiesByStatus || {},
+        propertiesByType: stats.propertiesByType || {},
+        propertiesByListingType: stats.propertiesByListingType || {},
+        leadsByStatus: stats.leadsByStatus || {},
+        leadsBySource: stats.leadsBySource || {},
+        leadsByPriority: stats.leadsByPriority || {},
+        propertiesByLocation: stats.propertiesByLocation || {},
+        agentPerformance: stats.agentPerformance || [],
+        recentActivity: stats.recentActivity || [],
         systemStats: {
-          activeUsers: users.filter(u => u.isActive).length, // All users
-          inactiveUsers: users.filter(u => !u.isActive).length, // All users
-          activeProperties: properties.filter(p => p.status === 'active').length, // All properties
-          pendingProperties: properties.filter(p => p.status === 'pending').length, // All properties
-          soldProperties: properties.filter(p => p.status === 'sold').length, // All properties
-          rentedProperties: properties.filter(p => p.status === 'rented').length, // All properties
-          newLeads: leads.filter(l => l.status === 'new').length, // All leads
-          convertedLeads: leads.filter(l => l.status === 'converted').length // All leads
+          activeProperties: stats.propertiesByStatus?.active || 0,
+          pendingProperties: stats.propertiesByStatus?.pending || 0,
+          soldProperties: stats.propertiesByStatus?.sold || 0,
+          rentedProperties: stats.propertiesByStatus?.rented || 0,
+          newLeads: stats.leadsByStatus?.new || 0,
+          convertedLeads: stats.leadsByStatus?.converted || 0
         }
       })
     } catch (error) {
@@ -541,8 +243,8 @@ export default function AdminReports() {
                   key={report.id}
                   onClick={() => setSelectedReport(report.id)}
                   className={`p-5 rounded-xl border-2 ${selectedReport === report.id
-                      ? 'border-green-500 bg-white text-gray-700'
-                      : 'border-gray-200 bg-white text-gray-700'
+                    ? 'border-green-500 bg-white text-gray-700'
+                    : 'border-gray-200 bg-white text-gray-700'
                     }`}
                 >
                   <div className="flex flex-col items-center justify-center space-y-3">
@@ -1375,8 +1077,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('all')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'all'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         All
@@ -1384,8 +1086,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('no-agents')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'no-agents'
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         No Agents
@@ -1393,8 +1095,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('no-leads')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'no-leads'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         No Leads
@@ -1402,8 +1104,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('poor-health')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'poor-health'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         Poor Health
@@ -1411,8 +1113,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('inactive-30d')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'inactive-30d'
-                            ? 'bg-yellow-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         Inactive 30+ Days
@@ -1420,8 +1122,8 @@ export default function AdminReports() {
                       <button
                         onClick={() => setAgencyFilter('active')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${agencyFilter === 'active'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                       >
                         Active Only
@@ -2193,6 +1895,10 @@ export default function AdminReports() {
       </div>
     </DashboardLayout>
   )
+}
+
+export default function AdminReports() {
+  return <AdminReportsContent />
 }
 
 

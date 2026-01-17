@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
-import { 
-  FileText, 
-  Image, 
-  Tag, 
-  Home, 
+import {
+  FileText,
+  Image,
+  Tag,
+  Home,
   Star,
   Plus,
   Edit,
@@ -17,7 +18,8 @@ import {
   Users,
   Phone,
   Layout,
-  Mail
+  Mail,
+  Code
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import BlogManagement from '../../../components/CMS/BlogManagement'
@@ -31,6 +33,7 @@ import AboutUsManagement from '../../../components/CMS/AboutUsManagement'
 import ContactUsManagement from '../../../components/CMS/ContactUsManagement'
 import FooterManagement from '../../../components/CMS/FooterManagement'
 import EmailTemplateManagement from '../../../components/CMS/EmailTemplateManagement'
+import ScriptManagement from '../../../components/CMS/ScriptManagement'
 
 const tabs = [
   { id: 'homepage', name: 'Homepage', icon: Home },
@@ -44,23 +47,24 @@ const tabs = [
   { id: 'contact', name: 'Contact Us', icon: Phone },
   { id: 'footer', name: 'Footer', icon: Layout },
   { id: 'email-templates', name: 'Email Templates', icon: Mail },
+  { id: 'scripts', name: 'Scripts', icon: Code },
 ]
 
-export default function CMSManagementPage() {
-  const { user } = useAuth()
+export function CMSManagementPageContent() {
+  const { user, checkPermission } = useAuth()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('homepage')
 
-  if (!user || (user.role !== 'super_admin' && user.role !== 'agency_admin')) {
-    return (
-      <DashboardLayout>
-        <div className="p-6">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">You don't have permission to access this page.</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    )
-  }
+  // Dynamic Permission Flags
+  const canViewCMS = checkPermission('cms', 'view')
+
+  // Page access check
+  useEffect(() => {
+    if (user && !canViewCMS) {
+      toast.error('You do not have permission to access CMS')
+      router.push('/admin/dashboard')
+    }
+  }, [user, canViewCMS, router])
 
   return (
     <DashboardLayout>
@@ -81,10 +85,9 @@ export default function CMSManagementPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`
                     whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
-                    ${
-                      activeTab === tab.id
-                        ? 'border-primary-500 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ${activeTab === tab.id
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }
                   `}
                 >
@@ -109,9 +112,14 @@ export default function CMSManagementPage() {
           {activeTab === 'contact' && <ContactUsManagement />}
           {activeTab === 'footer' && <FooterManagement />}
           {activeTab === 'email-templates' && <EmailTemplateManagement />}
+          {activeTab === 'scripts' && <ScriptManagement />}
         </div>
       </div>
     </DashboardLayout>
   )
+}
+
+export default function CMSManagementPage() {
+  return <CMSManagementPageContent />
 }
 

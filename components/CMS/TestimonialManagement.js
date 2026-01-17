@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function TestimonialManagement() {
+  const { checkPermission } = useAuth()
   const [testimonials, setTestimonials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -117,17 +119,19 @@ export default function TestimonialManagement() {
             />
           </div>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setEditingTestimonial(null)
-            setShowModal(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="h-5 w-5" />
-          New Testimonial
-        </button>
+        {checkPermission('cms', 'create') && (
+          <button
+            onClick={() => {
+              resetForm()
+              setEditingTestimonial(null)
+              setShowModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="h-5 w-5" />
+            New Testimonial
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -159,18 +163,21 @@ export default function TestimonialManagement() {
                 <p className="text-sm text-gray-600">{testimonial.role}</p>
               </div>
               <div className="flex items-center justify-between pt-4 border-t">
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  testimonial.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
+                <span className={`px-2 py-1 text-xs rounded-full ${testimonial.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
                   {testimonial.isActive ? 'Active' : 'Inactive'}
                 </span>
                 <div className="flex gap-2">
-                  <button onClick={() => handleEdit(testimonial)} className="text-primary-600 hover:text-primary-900">
-                    <Edit className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => handleDelete(testimonial._id)} className="text-red-600 hover:text-red-900">
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  {checkPermission('cms', 'edit') && (
+                    <button onClick={() => handleEdit(testimonial)} className="text-primary-600 hover:text-primary-900">
+                      <Edit className="h-5 w-5" />
+                    </button>
+                  )}
+                  {checkPermission('cms', 'delete') && (
+                    <button onClick={() => handleDelete(testimonial._id)} className="text-red-600 hover:text-red-900">
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

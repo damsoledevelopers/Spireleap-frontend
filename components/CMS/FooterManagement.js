@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Save, Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
 
 export default function FooterManagement() {
+  const { checkPermission } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -278,9 +280,8 @@ export default function FooterManagement() {
                   />
                   <label
                     htmlFor="logo-upload"
-                    className={`inline-flex items-center gap-2.5 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg cursor-pointer hover:from-primary-700 hover:to-primary-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 font-medium ${
-                      uploadingLogo ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''
-                    }`}
+                    className={`inline-flex items-center gap-2.5 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg cursor-pointer hover:from-primary-700 hover:to-primary-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 font-medium ${uploadingLogo ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''
+                      }`}
                   >
                     {uploadingLogo ? (
                       <>
@@ -470,14 +471,16 @@ export default function FooterManagement() {
               <div className="h-1 w-1 rounded-full bg-primary-600"></div>
               Quick Links
             </h3>
-            <button
-              type="button"
-              onClick={() => addLink('quickLinks')}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-            >
-              <span className="text-lg">+</span>
-              Add Link
-            </button>
+            {checkPermission('cms', 'edit') && (
+              <button
+                type="button"
+                onClick={() => addLink('quickLinks')}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                <span className="text-lg">+</span>
+                Add Link
+              </button>
+            )}
           </div>
           <div className="space-y-4">
             {formData.quickLinks.map((link, index) => (
@@ -498,13 +501,15 @@ export default function FooterManagement() {
                     placeholder="/link-url (e.g., /home)"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeLink('quickLinks', index)}
-                  className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
-                >
-                  Remove
-                </button>
+                {checkPermission('cms', 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => removeLink('quickLinks', index)}
+                    className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -517,14 +522,16 @@ export default function FooterManagement() {
               <div className="h-1 w-1 rounded-full bg-primary-600"></div>
               Properties for Sale Links
             </h3>
-            <button
-              type="button"
-              onClick={() => addLink('saleLinks')}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-            >
-              <span className="text-lg">+</span>
-              Add Link
-            </button>
+            {checkPermission('cms', 'edit') && (
+              <button
+                type="button"
+                onClick={() => addLink('saleLinks')}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                <span className="text-lg">+</span>
+                Add Link
+              </button>
+            )}
           </div>
           <div className="space-y-4">
             {formData.saleLinks.map((link, index) => (
@@ -545,13 +552,15 @@ export default function FooterManagement() {
                     placeholder="/link-url (e.g., /properties?type=apartment)"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeLink('saleLinks', index)}
-                  className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
-                >
-                  Remove
-                </button>
+                {checkPermission('cms', 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => removeLink('saleLinks', index)}
+                    className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -564,14 +573,16 @@ export default function FooterManagement() {
               <div className="h-1 w-1 rounded-full bg-primary-600"></div>
               Properties for Rent Links
             </h3>
-            <button
-              type="button"
-              onClick={() => addLink('rentLinks')}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-            >
-              <span className="text-lg">+</span>
-              Add Link
-            </button>
+            {checkPermission('cms', 'edit') && (
+              <button
+                type="button"
+                onClick={() => addLink('rentLinks')}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                <span className="text-lg">+</span>
+                Add Link
+              </button>
+            )}
           </div>
           <div className="space-y-4">
             {formData.rentLinks.map((link, index) => (
@@ -592,13 +603,15 @@ export default function FooterManagement() {
                     placeholder="/link-url (e.g., /properties?type=apartment&listingType=rent)"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeLink('rentLinks', index)}
-                  className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
-                >
-                  Remove
-                </button>
+                {checkPermission('cms', 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => removeLink('rentLinks', index)}
+                    className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-semibold transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -715,21 +728,23 @@ export default function FooterManagement() {
 
         {/* Submit Button */}
         <div className="flex justify-end pt-6 border-t-2 border-gray-200">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl hover:from-primary-700 hover:to-primary-800 font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
-          >
-            <Save className="h-5 w-5" />
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                Saving...
-              </>
-            ) : (
-              'Save Footer'
-            )}
-          </button>
+          {(footerData ? checkPermission('cms', 'edit') : checkPermission('cms', 'create')) && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl hover:from-primary-700 hover:to-primary-800 font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
+            >
+              <Save className="h-5 w-5" />
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                'Save Footer'
+              )}
+            </button>
+          )}
         </div>
       </form>
     </div>

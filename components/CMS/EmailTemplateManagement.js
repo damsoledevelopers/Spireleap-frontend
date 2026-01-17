@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Eye, EyeOff, Search, Mail, Code } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -11,6 +12,7 @@ const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
 import 'react-quill/dist/quill.snow.css'
 
 export default function EmailTemplateManagement() {
+  const { checkPermission } = useAuth()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -76,18 +78,18 @@ export default function EmailTemplateManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     // Client-side validation
     if (!formData.name || !formData.name.trim()) {
       toast.error('Template name is required')
       return
     }
-    
+
     if (!formData.subject || !formData.subject.trim()) {
       toast.error('Email subject is required')
       return
     }
-    
+
     // Check if HTML content has actual text (not just empty tags)
     const htmlContent = formData.htmlContent || ''
     const textContent = htmlContent.replace(/<[^>]*>/g, '').trim()
@@ -95,7 +97,7 @@ export default function EmailTemplateManagement() {
       toast.error('HTML content is required and cannot be empty')
       return
     }
-    
+
     try {
       const payload = {
         name: formData.name.trim(),
@@ -106,14 +108,14 @@ export default function EmailTemplateManagement() {
         variables: formData.variables || [],
         isActive: formData.isActive !== undefined ? formData.isActive : true
       }
-      
+
       console.log('Submitting email template:', {
         name: payload.name,
         subject: payload.subject,
         htmlContentLength: payload.htmlContent?.length || 0,
         category: payload.category
       })
-      
+
       if (editingTemplate) {
         await api.put(`/email-templates/${editingTemplate._id}`, payload)
         toast.success('Email template updated successfully')
@@ -129,7 +131,7 @@ export default function EmailTemplateManagement() {
     } catch (error) {
       console.error('Error saving email template:', error)
       console.error('Error response:', error.response?.data)
-      
+
       // Handle validation errors
       if (error.response?.data?.errors) {
         const validationErrors = error.response.data.errors
@@ -256,16 +258,18 @@ export default function EmailTemplateManagement() {
             <option value="notification">Notification</option>
             <option value="other">Other</option>
           </select>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowModal(true)
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-          >
-            <Plus className="h-5 w-5" />
-            New Template
-          </button>
+          {checkPermission('cms', 'create') && (
+            <button
+              onClick={() => {
+                resetForm()
+                setShowModal(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              <Plus className="h-5 w-5" />
+              New Template
+            </button>
+          )}
         </div>
       </div>
 
@@ -318,29 +322,32 @@ export default function EmailTemplateManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
                       onClick={() => toggleActive(template)}
-                      className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        template.isActive
+                      className={`px-2 py-1 text-xs font-semibold rounded-full ${template.isActive
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
-                      }`}
+                        }`}
                     >
                       {template.isActive ? 'Active' : 'Inactive'}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => handleEdit(template)}
-                        className="text-primary-600 hover:text-primary-900"
-                      >
-                        <Edit className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(template._id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
+                      {checkPermission('cms', 'edit') && (
+                        <button
+                          onClick={() => handleEdit(template)}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </button>
+                      )}
+                      {checkPermission('cms', 'delete') && (
+                        <button
+                          onClick={() => handleDelete(template._id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
