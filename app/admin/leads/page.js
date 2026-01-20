@@ -8,10 +8,15 @@ import { api } from '../../../lib/api'
 import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import Cookies from 'js-cookie'
 import * as XLSX from 'xlsx'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
+
+// Helper to get token from sessionStorage (browser-specific)
+const getSessionToken = () => {
+  if (typeof window === 'undefined') return null
+  return sessionStorage.getItem('token')
+}
 
 export default function AdminLeadsPage() {
   const { user, loading: authLoading, checkPermission } = useAuth()
@@ -104,11 +109,11 @@ export default function AdminLeadsPage() {
     if (isUploadingRef.current) {
       return
     }
-    const token = Cookies.get('token')
+    const token = getSessionToken()
 
     if (!authLoading && user) {
       if (!token) {
-        console.warn('User is logged in but no token cookie found. Please log in again.')
+        console.warn('User is logged in but no token session found. Please log in again.')
         toast.error('Session expired. Please log in again.')
       } else {
         fetchLeads()

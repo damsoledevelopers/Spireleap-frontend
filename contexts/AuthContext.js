@@ -2,10 +2,25 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Cookies from 'js-cookie'
 import { api } from '../lib/api'
 
 const AuthContext = createContext(undefined)
+
+// Helper functions for session storage (browser-specific, not shared)
+const getSessionToken = () => {
+  if (typeof window === 'undefined') return null
+  return sessionStorage.getItem('token')
+}
+
+const setSessionToken = (token) => {
+  if (typeof window === 'undefined') return
+  sessionStorage.setItem('token', token)
+}
+
+const removeSessionToken = () => {
+  if (typeof window === 'undefined') return
+  sessionStorage.removeItem('token')
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -14,7 +29,7 @@ export function AuthProvider({ children }) {
   const router = useRouter()
 
   useEffect(() => {
-    const token = Cookies.get('token')
+    const token = getSessionToken()
     if (token) {
       fetchUser()
     } else {
@@ -62,7 +77,8 @@ export function AuthProvider({ children }) {
       })
     } catch (error) {
       console.error('Failed to fetch user:', error)
-      Cookies.remove('token')
+      removeSessionToken()
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -78,13 +94,8 @@ export function AuthProvider({ children }) {
         throw new Error('Invalid login response')
       }
 
-      // Set cookie with proper attributes for cross-origin support
-      Cookies.set('token', token, {
-        expires: 7,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production', // Only secure in production (HTTPS)
-        path: '/' // Ensure cookie is accessible from all paths
-      })
+      // Store token in sessionStorage (browser-specific, not shared across browsers)
+      setSessionToken(token)
 
       // Fetch fresh user data from /auth/me to ensure we have latest data including agency
       try {
@@ -151,13 +162,8 @@ export function AuthProvider({ children }) {
       const response = await api.post('/auth/register', cleanedData)
       const { token, user: newUser, message } = response.data
 
-      // Set cookie with proper attributes for cross-origin support
-      Cookies.set('token', token, {
-        expires: 7,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production', // Only secure in production (HTTPS)
-        path: '/' // Ensure cookie is accessible from all paths
-      })
+      // Store token in sessionStorage (browser-specific, not shared across browsers)
+      setSessionToken(token)
       setUser(newUser)
 
       // Determine redirect path
@@ -206,7 +212,7 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
-    Cookies.remove('token')
+    removeSessionToken()
     setUser(null)
     router.push('/auth/login')
   }
@@ -216,7 +222,7 @@ export function AuthProvider({ children }) {
   }
 
   const refreshUser = async () => {
-    const token = Cookies.get('token')
+    const token = getSessionToken()
     if (token) {
       await fetchUser()
     }

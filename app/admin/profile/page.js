@@ -136,7 +136,15 @@ export default function ProfilePage() {
         e.preventDefault()
         setSaving(true)
         try {
-            await api.put(`/users/${user._id}`, formData)
+            const userId = user?._id || user?.id
+
+            if (!userId) {
+                toast.error('User information missing. Please refresh.')
+                setSaving(false)
+                return
+            }
+
+            await api.put(`/users/${userId}`, formData)
             toast.success('Profile updated successfully')
             await fetchUser() // Refresh user context
         } catch (error) {

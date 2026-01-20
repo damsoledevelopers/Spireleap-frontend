@@ -24,7 +24,7 @@ import {
 import toast from 'react-hot-toast'
 
 export default function PermissionsPage() {
-    const { user, loading: authLoading } = useAuth()
+    const { user, loading: authLoading, refreshUser } = useAuth()
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [selectedRole, setSelectedRole] = useState('agent')
@@ -106,6 +106,12 @@ export default function PermissionsPage() {
             setSaving(true)
             await api.put(`/permissions/${selectedRole}`, { permissions })
             setInitialPermissions(JSON.parse(JSON.stringify(permissions)))
+
+            // Critical: Refresh user session to apply new permissions immediately if they affect the current user
+            if (user?.role === selectedRole) {
+                await refreshUser()
+            }
+
             toast.success(`Permissions updated for ${selectedRole.replace('_', ' ')}`)
         } catch (error) {
             console.error('Error saving permissions:', error)
