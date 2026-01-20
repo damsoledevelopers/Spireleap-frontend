@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [permissions, setPermissions] = useState({})
   const [loading, setLoading] = useState(true)
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -48,14 +49,17 @@ export function AuthProvider({ children }) {
           contact_messages: { view: true, create: true, edit: true, delete: true }
         }
         setPermissions(fullPerms)
+        setPermissionsLoaded(true)
         return
       }
 
       const response = await api.get(`/permissions/${role}`)
       setPermissions(response.data.permissions || {})
+      setPermissionsLoaded(true)
     } catch (error) {
       console.error('Failed to fetch permissions:', error)
       setPermissions({})
+      setPermissionsLoaded(true)
     }
   }
 
@@ -76,6 +80,7 @@ export function AuthProvider({ children }) {
         agency: userData.agency ? 'Has agency' : 'No agency'
       })
     } catch (error) {
+      setPermissionsLoaded(true)
       console.error('Failed to fetch user:', error)
       removeSessionToken()
       setUser(null)
@@ -101,6 +106,12 @@ export function AuthProvider({ children }) {
       try {
         const meResponse = await api.get('/auth/me')
         setUser(meResponse.data.user)
+        
+        // Fetch permissions after setting user
+        if (meResponse.data.user.role) {
+          await fetchPermissions(meResponse.data.user.role)
+        }
+        
         console.log('User data after login:', {
           email: meResponse.data.user.email,
           role: meResponse.data.user.role,
@@ -110,6 +121,11 @@ export function AuthProvider({ children }) {
         // Fallback to login response data if /auth/me fails
         console.warn('Failed to fetch user from /auth/me, using login response data:', meError)
         setUser(userData)
+        
+        // Still fetch permissions from userData
+        if (userData.role) {
+          await fetchPermissions(userData.role)
+        }
       }
 
       // Determine redirect path based on role
@@ -238,7 +254,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, permissions, loading, login, register, logout, updateUser, refreshUser, checkPermission }}>
+    <AuthContext.Provider value={{ user, permissions, loading, permissionsLoaded, login, register, logout, updateUser, refreshUser, checkPermission }}>
       {children}
     </AuthContext.Provider>
   )

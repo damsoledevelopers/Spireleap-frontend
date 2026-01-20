@@ -104,6 +104,9 @@ export default function AdminLeadsPage() {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [searchDebounceTimer, setSearchDebounceTimer] = useState(null)
   const [permissionModalEntry, setPermissionModalEntry] = useState(null)
+  const [draggedLead, setDraggedLead] = useState(null)
+  const [draggedOverColumn, setDraggedOverColumn] = useState(null)
+  const [kanbanLeadsCapped, setKanbanLeadsCapped] = useState(false)
 
   useEffect(() => {
     if (isUploadingRef.current) {
@@ -181,29 +184,15 @@ export default function AdminLeadsPage() {
       setLoading(true)
       // Exclude date filters from the initial spread to avoid duplication
       const { startDate, endDate, ...otherFilters } = filters
-      const params = new URLSearchParams({
-        page: pagination.page,
-        limit: pagination.limit,
-        ...Object.fromEntries(Object.entries(otherFilters).filter(([_, v]) => v && v !== ''))
-      })
-
-      // Add date filters separately if provided
-      if (startDate) {
-        params.append('startDate', startDate)
-      }
-      if (endDate) {
-        params.append('endDate', endDate)
-      }
-
-      const response = await api.get(`/leads?${params}`)
-      const fetchedLeads = response.data.leads || []
-      setLeads(fetchedLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
-      setPagination(response.data.pagination || { page: 1, limit: 10, total: 0, pages: 0 })
-
-      // For Kanban view, fetch all leads without pagination (with all filters)
+      
+      // For Kanban view, fetch leads with optimized pagination
       if (viewMode === 'kanban') {
         try {
-          const kanbanParams = new URLSearchParams({ limit: '10000' })
+          // Optimize: Limit total leads fetched for Kanban (max 2000 leads = 4 pages of 500)
+          const maxLimit = 500
+          const maxTotalLeads = 2000 // Reasonable limit for Kanban view performance
+          const kanbanParams = new URLSearchParams({ limit: String(maxLimit), page: '1' })
+          
           // Use the destructured date variables
           if (startDate) {
             kanbanParams.append('startDate', startDate)
@@ -212,43 +201,148 @@ export default function AdminLeadsPage() {
             kanbanParams.append('endDate', endDate)
           }
           // Add all other filters
-          if (otherFilters.status) {
-            kanbanParams.append('status', otherFilters.status)
-          }
-          if (otherFilters.owner) {
-            kanbanParams.append('owner', otherFilters.owner)
-          }
-          if (otherFilters.source) {
-            kanbanParams.append('source', otherFilters.source)
-          }
-          if (otherFilters.agency) {
-            kanbanParams.append('agency', otherFilters.agency)
-          }
-          if (otherFilters.property) {
-            kanbanParams.append('property', otherFilters.property)
-          }
-          if (otherFilters.campaign) {
-            kanbanParams.append('campaign', otherFilters.campaign)
-          }
-          if (otherFilters.priority) {
-            kanbanParams.append('priority', otherFilters.priority)
-          }
-          if (otherFilters.reportingManager) {
-            kanbanParams.append('reportingManager', otherFilters.reportingManager)
-          }
-          if (otherFilters.team) {
-            kanbanParams.append('team', otherFilters.team)
-          }
-          if (otherFilters.search) {
-            kanbanParams.append('search', otherFilters.search)
-          }
+          Object.entries(otherFilters).forEach(([key, value]) => {
+            if (value && value !== '') {
+              // Trim search values to avoid issues with whitespace
+              const trimmedValue = key === 'search' ? String(value).trim() : value
+              if (trimmedValue) {
+                kanbanParams.append(key, trimmedValue)
+              }
+            }
+          })
+          
+          // Fetch first batch immediately
           const allResponse = await api.get(`/leads?${kanbanParams}`)
-          const fetchedAllLeads = allResponse.data.leads || []
-          setAllLeads(fetchedAllLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
+          let fetchedAllLeads = allResponse.data.leads || []
+          const totalLeads = allResponse.data.pagination?.total || fetchedAllLeads.length
+          
+          console.log('Kanban fetch - Initial batch:', fetchedAllLeads.length, 'Total from API:', totalLeads)
+          
+          // Calculate how many pages we need (capped at maxTotalLeads)
+          const leadsToFetch = Math.min(totalLeads, maxTotalLeads)
+          const totalPages = Math.ceil(leadsToFetch / maxLimit)
+          
+          // If there are more leads and we haven't hit the cap, fetch additional pages in parallel
+          if (totalPages > 1 && fetchedAllLeads.length < leadsToFetch) {
+            const additionalRequests = []
+            
+            // Limit parallel requests to avoid overwhelming the server
+            const maxParallelRequests = 3
+            const pagesToFetch = Math.min(totalPages - 1, Math.ceil((leadsToFetch - fetchedAllLeads.length) / maxLimit))
+            
+            // Fetch pages in batches to avoid too many simultaneous requests
+            for (let batch = 0; batch < Math.ceil(pagesToFetch / maxParallelRequests); batch++) {
+              const batchRequests = []
+              const startPage = 2 + (batch * maxParallelRequests)
+              const endPage = Math.min(startPage + maxParallelRequests - 1, totalPages)
+              
+              for (let page = startPage; page <= endPage; page++) {
+                const pageParams = new URLSearchParams(kanbanParams)
+                pageParams.set('page', String(page))
+                batchRequests.push(api.get(`/leads?${pageParams}`))
+              }
+              
+              // Fetch batch in parallel
+              const batchResponses = await Promise.all(batchRequests)
+              batchResponses.forEach(response => {
+                if (response.data.leads) {
+                  fetchedAllLeads = [...fetchedAllLeads, ...response.data.leads]
+                }
+              })
+              
+              // Stop if we've fetched enough leads
+              if (fetchedAllLeads.length >= leadsToFetch) {
+                break
+              }
+            }
+          }
+          
+          console.log('Kanban fetch - After all batches:', fetchedAllLeads.length)
+          
+          // Trim to maxTotalLeads if we fetched more
+          const wasCapped = fetchedAllLeads.length > maxTotalLeads || totalLeads > maxTotalLeads
+          if (fetchedAllLeads.length > maxTotalLeads) {
+            fetchedAllLeads = fetchedAllLeads.slice(0, maxTotalLeads)
+          }
+          
+          // Filter by permissions (do this after fetching to avoid multiple API calls)
+          const filteredLeads = fetchedAllLeads.filter(lead => {
+            const hasPermission = checkEntryPermission(lead, user, 'view', canViewLeads)
+            if (!hasPermission) {
+              console.log('Lead filtered out by permissions:', lead._id, lead.contact?.firstName, lead.contact?.lastName)
+            }
+            return hasPermission
+          })
+          
+          console.log('Kanban fetch - After permission filter:', filteredLeads.length, 'out of', fetchedAllLeads.length)
+          
+          // Update state - ensure we set the state even if filtered leads is empty (for debugging)
+          setAllLeads(filteredLeads)
+          setKanbanLeadsCapped(wasCapped)
+          setLeads(filteredLeads.slice(0, pagination.limit))
+          setPagination({
+            page: 1,
+            limit: pagination.limit,
+            total: filteredLeads.length,
+            pages: Math.ceil(filteredLeads.length / pagination.limit)
+          })
+          
+          // Log if we have fetched leads but they were all filtered out
+          if (fetchedAllLeads.length > 0 && filteredLeads.length === 0) {
+            console.warn('⚠️ Kanban: API returned', fetchedAllLeads.length, 'leads but all were filtered out by permissions')
+            console.warn('User permissions - canViewLeads:', canViewLeads, 'user:', user?.role, user?._id)
+          }
         } catch (error) {
           console.error('Error fetching all leads for Kanban:', error)
+          const errorMessage = error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || error.message || 'Failed to load leads for Kanban view'
+          toast.error(errorMessage)
           setAllLeads([])
+          setLeads([])
+          setKanbanLeadsCapped(false)
+        } finally {
+          // Ensure loading is set to false after Kanban fetch completes
+          setLoading(false)
         }
+      } else {
+        // For List view, fetch paginated leads
+        const filteredFilters = Object.entries(otherFilters)
+          .filter(([key, value]) => {
+            // Filter out empty values, and trim search values
+            if (!value || value === '') return false
+            if (key === 'search') {
+              return String(value).trim() !== ''
+            }
+            return true
+          })
+          .map(([key, value]) => {
+            // Trim search values
+            if (key === 'search') {
+              return [key, String(value).trim()]
+            }
+            return [key, value]
+          })
+        
+        const params = new URLSearchParams({
+          page: pagination.page,
+          limit: pagination.limit,
+          ...Object.fromEntries(filteredFilters)
+        })
+
+        // Add date filters separately if provided
+        if (startDate) {
+          params.append('startDate', startDate)
+        }
+        if (endDate) {
+          params.append('endDate', endDate)
+        }
+
+        const response = await api.get(`/leads?${params}`)
+        const fetchedLeads = response.data.leads || []
+        setLeads(fetchedLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
+        setPagination(response.data.pagination || { page: 1, limit: 10, total: 0, pages: 0 })
+        
+        // Clear allLeads when in list view
+        setAllLeads([])
       }
     } catch (error) {
       console.error('Error fetching leads:', error)
@@ -261,7 +355,10 @@ export default function AdminLeadsPage() {
       }
 
       setLeads([])
-      setAllLeads([])
+      if (viewMode === 'kanban') {
+        setAllLeads([])
+        setKanbanLeadsCapped(false)
+      }
       setPagination({ page: 1, limit: 10, total: 0, pages: 0 })
     } finally {
       setLoading(false)
@@ -970,6 +1067,112 @@ export default function AdminLeadsPage() {
     }
   }
 
+  const handleDragStart = (e, lead) => {
+    setDraggedLead(lead)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', e.target)
+  }
+
+  const handleDragOver = (e, columnId) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDraggedOverColumn(columnId)
+  }
+
+  const handleDragLeave = () => {
+    setDraggedOverColumn(null)
+  }
+
+  const handleDrop = async (e, targetStatus) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDraggedOverColumn(null)
+
+    if (!draggedLead) return
+
+    const leadId = getLeadId(draggedLead)
+    const currentStatus = draggedLead.status || 'new'
+    const normalizedCurrentStatus = currentStatus ? String(currentStatus).toLowerCase() : 'new'
+    const normalizedTargetStatus = targetStatus ? String(targetStatus).toLowerCase() : 'new'
+
+    // Don't update if dropped in the same column
+    if (normalizedCurrentStatus === normalizedTargetStatus) {
+      setDraggedLead(null)
+      return
+    }
+
+    // Store previous state for rollback
+    const previousAllLeadsState = [...allLeads]
+    const previousLeadsState = [...leads]
+
+    // Optimistically update UI - update the lead's status in place (no duplication)
+    setAllLeads(prevLeads =>
+      prevLeads.map(lead => {
+        const id = getLeadId(lead)
+        if (String(id) === String(leadId)) {
+          return { ...lead, status: targetStatus }
+        }
+        return lead
+      })
+    )
+
+    // Also update leads array for list view consistency
+    setLeads(prevLeads =>
+      prevLeads.map(lead => {
+        const id = getLeadId(lead)
+        if (String(id) === String(leadId)) {
+          return { ...lead, status: targetStatus }
+        }
+        return lead
+      })
+    )
+
+    try {
+      // Make API call to update status
+      const response = await api.put(`/leads/${leadId}`, { status: targetStatus })
+
+      // Update with server response to ensure consistency
+      if (response.data?.lead) {
+        const updatedLead = response.data.lead
+        setAllLeads(prevLeads =>
+          prevLeads.map(lead => {
+            const id = getLeadId(lead)
+            if (String(id) === String(leadId)) {
+              return { ...lead, ...updatedLead }
+            }
+            return lead
+          })
+        )
+        setLeads(prevLeads =>
+          prevLeads.map(lead => {
+            const id = getLeadId(lead)
+            if (String(id) === String(leadId)) {
+              return { ...lead, ...updatedLead }
+            }
+            return lead
+          })
+        )
+      }
+
+      toast.success('Lead status updated successfully')
+      fetchDashboardMetrics()
+      fetchMissedFollowUps()
+      setDraggedLead(null)
+    } catch (error) {
+      // Rollback on error
+      setAllLeads(previousAllLeadsState)
+      setLeads(previousLeadsState)
+      setDraggedLead(null)
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedLead(null)
+    setDraggedOverColumn(null)
+  }
+
   const handleDelete = async (leadId) => {
     if (!window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) return
     try {
@@ -1252,17 +1455,28 @@ export default function AdminLeadsPage() {
   // Group leads by status for Kanban view
   const kanbanColumns = [
     { id: 'new', title: 'New', colorClass: 'bg-yellow-400' },
+    { id: 'contacted', title: 'Contacted', colorClass: 'bg-orange-400' },
     { id: 'qualified', title: 'Qualified', colorClass: 'bg-blue-400' },
-    { id: 'discussion', title: 'Discussion', colorClass: 'bg-teal-400' },
+    { id: 'site_visit_scheduled', title: 'Site Visit Scheduled', colorClass: 'bg-cyan-400' },
+    { id: 'site_visit_completed', title: 'Site Visit Completed', colorClass: 'bg-teal-400' },
     { id: 'negotiation', title: 'Negotiation', colorClass: 'bg-indigo-400' },
-    { id: 'won', title: 'Won', colorClass: 'bg-green-400' }
+    { id: 'booked', title: 'Booked', colorClass: 'bg-green-400' },
+    { id: 'closed', title: 'Closed', colorClass: 'bg-emerald-600' },
+    { id: 'lost', title: 'Lost', colorClass: 'bg-red-400' },
+    { id: 'junk', title: 'Junk', colorClass: 'bg-gray-400' }
   ]
 
   const getLeadsByStatus = (status) => {
+    if (!allLeads || allLeads.length === 0) return []
     return allLeads.filter(lead => {
-      const leadStatus = lead.status?.toLowerCase()
-      if (status === 'new') return leadStatus === 'new'
-      return leadStatus === status
+      if (!lead.status) {
+        // If no status, only show in 'new' column
+        return status === 'new'
+      }
+      // Normalize both sides to lower case and remove underscores/spaces
+      const leadStatus = String(lead.status).toLowerCase().replace(/\s|_/g, '')
+      const colStatus = String(status).toLowerCase().replace(/\s|_/g, '')
+      return leadStatus === colStatus;
     })
   }
 
@@ -1936,7 +2150,7 @@ export default function AdminLeadsPage() {
                 <input
                   type="text"
                   placeholder="Search by name, email, phone, or lead ID"
-                  value={filters.search}
+                  value={filters.search || ''}
                   onChange={(e) => {
                     const searchValue = e.target.value
                     setFilters(prev => ({ ...prev, search: searchValue }))
@@ -1949,13 +2163,17 @@ export default function AdminLeadsPage() {
 
                     // Set new timer for debounced search
                     const timer = setTimeout(() => {
-                      fetchLeads()
+                      // Only fetch if search has a value (trimmed)
+                      if (searchValue.trim() || !searchValue) {
+                        fetchLeads()
+                      }
                     }, 500) // 500ms delay
 
                     setSearchDebounceTimer(timer)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
+                      e.preventDefault()
                       if (searchDebounceTimer) {
                         clearTimeout(searchDebounceTimer)
                       }
@@ -2570,54 +2788,176 @@ export default function AdminLeadsPage() {
 
         {/* Kanban View */}
         {viewMode === 'kanban' && (
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {kanbanColumns.map((column) => {
-              const columnLeads = getLeadsByStatus(column.id)
-              return (
+          loading ? (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {kanbanColumns.map((column) => (
                 <div key={column.id} className="flex-shrink-0 w-80 bg-gray-50 rounded-lg p-4">
                   <div className="mb-4">
                     <h3 className="text-sm font-semibold text-gray-900 mb-1">{column.title}</h3>
                     <div className={`h-1 rounded-full ${column.colorClass}`}></div>
                   </div>
                   <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
-                    {columnLeads.map((lead) => {
-                      const leadId = getLeadId(lead)
-                      const companyName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
-                      return (
-                        <div
-                          key={leadId}
-                          className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                          onClick={() => window.location.href = `/admin/leads/${leadId}`}
-                        >
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">{companyName}</h4>
-                          {lead.source && (
-                            <p className="text-xs text-gray-500 mb-1">Source: {lead.source}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-2">
-                            <User className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-600">
-                              Owner: {lead.assignedAgent
-                                ? `${lead.assignedAgent.firstName} ${lead.assignedAgent.lastName}`
-                                : 'Unassigned'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Users className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-600">1 person</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {columnLeads.length === 0 && (
-                      <div className="text-center text-gray-400 text-sm py-8">
-                        No leads
+                    {[...Array(3)].map((_, idx) => (
+                      <div key={idx} className="bg-white rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/2 mb-1"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/3 mb-1"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/4"></div>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (!allLeads || allLeads.length === 0) ? (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-lg">No leads found</p>
+              <p className="text-gray-400 text-sm mt-2">Try adjusting your filters or add new leads</p>
+            </div>
+          ) : (
+            <>
+              {kanbanLeadsCapped && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-yellow-600" />
+                    <p className="text-sm text-yellow-800">
+                      <strong>Note:</strong> Displaying up to 2,000 leads for optimal performance. Use filters to narrow down results.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {kanbanColumns.map((column) => {
+                const columnLeads = getLeadsByStatus(column.id)
+                const isDraggedOver = draggedOverColumn === column.id
+                return (
+                  <div
+                    key={column.id}
+                    className={`flex-shrink-0 w-80 bg-gray-50 rounded-lg p-4 transition-colors ${isDraggedOver ? 'bg-blue-50 border-2 border-blue-300 border-dashed' : ''}`}
+                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, column.id)}
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-sm font-semibold text-gray-900">{column.title}</h3>
+                        <span className="text-xs font-medium text-gray-600 bg-white px-2 py-1 rounded-full">
+                          {columnLeads.length}
+                        </span>
+                      </div>
+                      <div className={`h-1 rounded-full ${column.colorClass}`}></div>
+                    </div>
+                    <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+                      {columnLeads.map((lead) => {
+                        const leadId = getLeadId(lead)
+                        const contactName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
+                        const isDragging = draggedLead && getLeadId(draggedLead) === leadId
+                        const getStatusLabel = (status) => {
+                          if (!status) return 'New Lead'
+                          const statusLabels = {
+                            new: 'New Lead',
+                            contacted: 'Contacted',
+                            qualified: 'Qualified',
+                            site_visit_scheduled: 'Site Visit Scheduled',
+                            site_visit_completed: 'Site Visit Completed',
+                            negotiation: 'Negotiation',
+                            booked: 'Booked',
+                            lost: 'Lost',
+                            closed: 'Closed',
+                            junk: 'Junk / Invalid'
+                          }
+                          return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
+                        }
+                        const getPriorityColor = (priority) => {
+                          if (!priority) return 'bg-gray-100 text-gray-800'
+                          const p = String(priority).toLowerCase()
+                          if (p === 'hot') return 'bg-red-100 text-red-800'
+                          if (p === 'warm') return 'bg-orange-100 text-orange-800'
+                          if (p === 'cold') return 'bg-blue-100 text-blue-800'
+                          return 'bg-gray-100 text-gray-800'
+                        }
+                        const getPriorityLabel = (priority) => {
+                          if (!priority) return 'Warm'
+                          const priorityLabels = {
+                            Hot: 'Hot',
+                            Warm: 'Warm',
+                            Cold: 'Cold',
+                            Not_interested: 'Not Interested'
+                          }
+                          const p = String(priority).toLowerCase()
+                          const key = Object.keys(priorityLabels).find(k => k.toLowerCase() === p)
+                          return priorityLabels[key] || priority.charAt(0).toUpperCase() + priority.slice(1)
+                        }
+                        return (
+                          <div
+                            key={leadId}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, lead)}
+                            onDragEnd={handleDragEnd}
+                            className={`bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-move border border-gray-200 ${isDragging ? 'opacity-50' : 'hover:border-primary-300'}`}
+                            onClick={(e) => {
+                              // Prevent navigation during drag operations
+                              e.stopPropagation()
+                              if (!draggedLead && !isDragging) {
+                                router.push(`/admin/leads/${leadId}`)
+                              }
+                            }}
+                          >
+                            {/* Lead Name */}
+                            <h4 className="text-sm font-medium text-gray-900 mb-2 truncate">{contactName}</h4>
+                            
+                            {/* Two Column Layout */}
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Left Column */}
+                              <div className="space-y-1.5">
+                                {/* Status */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(lead.status)}`}>
+                                    {getStatusLabel(lead.status)}
+                                  </span>
+                                </div>
+                                
+                                {/* Follow Up with Icon */}
+                                {lead.followUpDate ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className={`h-3.5 w-3.5 ${new Date(lead.followUpDate) < new Date() ? 'text-red-500' : 'text-gray-500'}`} />
+                                    <span className={`text-xs ${new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                                      {new Date(lead.followUpDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-gray-300" />
+                                    <span className="text-xs text-gray-400">No follow-up</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Right Column */}
+                              <div className="space-y-1.5">
+                                {/* Priority */}
+                                <div className="flex items-center justify-end">
+                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPriorityColor(lead.priority)}`}>
+                                    {getPriorityLabel(lead.priority)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {columnLeads.length === 0 && (
+                        <div className="text-center text-gray-400 text-sm py-8">
+                          No leads
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              </div>
+            </>
+          )
         )}
 
         {/* Upload Modal */}

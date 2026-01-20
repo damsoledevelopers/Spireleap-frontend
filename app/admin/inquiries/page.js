@@ -1062,29 +1062,28 @@ export default function AdminInquiriesPage() {
                           {checkEntryPermission(inquiry, user, 'view', canViewInquiries) && (
                             <button
                               onClick={() => handleViewDetails(inquiry._id)}
-                              className="text-primary-600 hover:text-primary-900 flex items-center gap-1"
+                              className="text-primary-600 hover:text-primary-900 transition-colors"
+                              title="View Details"
                             >
-                              <Eye className="h-4 w-4" />
-                              View
+                              <Eye className="h-5 w-5" />
                             </button>
                           )}
                           {checkEntryPermission(inquiry, user, 'edit', canEditInquiry) && (
                             <Link
                               href={`/admin/leads/${inquiry._id}/edit`}
-                              className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                              className="text-gray-600 hover:text-gray-900 transition-colors"
+                              title="Edit Inquiry"
                             >
-                              <Edit className="h-4 w-4" />
-                              Edit
+                              <Edit className="h-5 w-5" />
                             </Link>
                           )}
                           {user?.role === 'super_admin' && (
                             <button
                               onClick={() => handleOpenEntryPermissions(inquiry)}
-                              className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                              className="text-amber-600 hover:text-amber-900 transition-colors"
                               title="Set Custom Permissions"
                             >
-                              <ShieldCheck className="h-4 w-4" />
-                              Permissions
+                              <ShieldCheck className="h-5 w-5" />
                             </button>
                           )}
                         </div>

@@ -15,12 +15,6 @@ export function ContactMessagesPageContent() {
   const canViewMessages = checkPermission('contact_messages', 'view')
 
   // Page access check
-  useEffect(() => {
-    if (user && !canViewMessages) {
-      toast.error('You do not have permission to access contact messages')
-      router.push('/admin/dashboard')
-    }
-  }, [user, canViewMessages, router])
 
   return (
     <DashboardLayout>

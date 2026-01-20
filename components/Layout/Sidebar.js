@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   LayoutDashboard,
@@ -42,33 +42,33 @@ const navigation = [
       { name: 'Users', href: '/admin/users?tab=users', icon: UserCheck, module: 'users' },
     ]
   },
-  { name: 'Permissions', href: '/admin/permissions', icon: Shield, module: 'permissions' },
   { name: 'Properties', href: '/admin/properties', icon: Package, module: 'properties' },
   { name: 'Leads', href: '/admin/leads', icon: Users, module: 'leads' },
   { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare, module: 'inquiries' },
   { name: 'Contact Messages', href: '/admin/contact-messages', icon: Mail, module: 'contact_messages' },
-  { name: 'CMS', href: '/admin/cms', icon: FileText, module: 'cms' },
   { name: 'Reports', href: '/admin/reports', icon: TrendingUp, module: 'analytics' },
+  { name: 'Permissions', href: '/admin/permissions', icon: Shield, module: 'permissions' },
+  { name: 'CMS', href: '/admin/cms', icon: FileText, module: 'cms' },
   { name: 'Settings', href: '/admin/settings', icon: Settings, module: 'settings' },
   { name: 'Profile', href: '/admin/profile', icon: UserCircle }
 ]
 
 export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, onToggleCollapse }) {
-  const { user, logout, checkPermission } = useAuth()
+  const { user, logout, checkPermission, permissionsLoaded } = useAuth()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [openDropdowns, setOpenDropdowns] = useState({})
 
   const userNavigation = navigation.reduce((acc, item) => {
-    // Check main permissions
-    if (item.module && !checkPermission(item.module, 'view')) return acc
-
-    // Hide Contact Messages for all agency roles (only visible to super_admin)
-    if (item.module === 'contact_messages' && user?.role !== 'super_admin') return acc
+    // Check main permissions - only filter if permissions are loaded
+    if (permissionsLoaded && item.module && !checkPermission(item.module, 'view')) return acc
 
     // Handle submenu filtering
     if (item.submenu) {
       const filteredSubmenu = item.submenu.filter(subItem => {
         if (!subItem.module) return true
+        // Only filter if permissions are loaded
+        if (!permissionsLoaded) return true
         return checkPermission(subItem.module, 'view')
       })
 
@@ -97,8 +97,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
 
   // Auto-open dropdown if submenu item is active and keep it open
   useEffect(() => {
-    const currentParams = new URLSearchParams(window.location.search)
-    const tabParam = currentParams.get('tab')
+    const tabParam = searchParams.get('tab')
 
     userNavigation.forEach((item) => {
       if (item.submenu) {
@@ -136,7 +135,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
         }
       }
     })
-  }, [pathname])
+  }, [pathname, searchParams])
 
   const toggleDropdown = (itemName) => {
     setOpenDropdowns(prev => ({
@@ -163,8 +162,8 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
         const params = new URLSearchParams(query)
         const tabParam = params.get('tab')
         if (tabParam) {
-          const currentParams = new URLSearchParams(window.location.search)
-          return currentParams.get('tab') === tabParam && pathname === path
+          const currentTabParam = searchParams.get('tab')
+          return currentTabParam === tabParam && pathname === path
         }
         return pathname === path || pathname.includes(path)
       }
@@ -246,8 +245,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                               const params = new URLSearchParams(subQuery)
                               const tabParam = params.get('tab')
                               if (tabParam) {
-                                const currentParams = new URLSearchParams(window.location.search)
-                                subIsActive = currentParams.get('tab') === tabParam && pathname === subPath
+                                subIsActive = searchParams.get('tab') === tabParam && pathname === subPath
                               }
                             } else {
                               subIsActive = pathname === subPath || pathname.includes(subPath)
@@ -410,8 +408,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                                   const params = new URLSearchParams(subQuery)
                                   const tabParam = params.get('tab')
                                   if (tabParam) {
-                                    const currentParams = new URLSearchParams(window.location.search)
-                                    subIsActive = currentParams.get('tab') === tabParam && pathname === subPath
+                                    subIsActive = searchParams.get('tab') === tabParam && pathname === subPath
                                   }
                                 } else {
                                   subIsActive = pathname === subPath || pathname.includes(subPath)
