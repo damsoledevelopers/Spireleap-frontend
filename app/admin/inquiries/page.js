@@ -10,6 +10,7 @@ import {
   Filter,
   Eye,
   Edit,
+  Trash2,
   Phone,
   Mail,
   MapPin,
@@ -50,6 +51,7 @@ export default function AdminInquiriesPage() {
   // Dynamic Permission Flags
   const canViewInquiries = checkPermission('inquiries', 'view')
   const canEditInquiry = checkPermission('leads', 'edit')
+  const canDeleteInquiry = checkPermission('inquiries', 'delete')
 
   // Role-based access control & permission check
   useEffect(() => {
@@ -415,6 +417,20 @@ export default function AdminInquiriesPage() {
     } catch (error) {
       console.error('Failed to fetch inquiry details:', error)
       toast.error('Failed to load inquiry details')
+    }
+  }
+
+  const handleDelete = async (inquiryId) => {
+    if (!window.confirm('Are you sure you want to delete this inquiry? This action cannot be undone.')) {
+      return
+    }
+    try {
+      await api.delete(`/leads/${inquiryId}`)
+      toast.success('Inquiry deleted successfully')
+      await fetchInquiries()
+    } catch (error) {
+      console.error('Failed to delete inquiry:', error)
+      toast.error(error.response?.data?.message || 'Failed to delete inquiry')
     }
   }
 
@@ -1076,6 +1092,15 @@ export default function AdminInquiriesPage() {
                             >
                               <Edit className="h-5 w-5" />
                             </Link>
+                          )}
+                          {canDeleteInquiry && (
+                            <button
+                              onClick={() => handleDelete(inquiry._id)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
                           )}
                           {user?.role === 'super_admin' && (
                             <button

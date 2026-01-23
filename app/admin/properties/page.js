@@ -1321,7 +1321,7 @@ export default function AdminPropertiesPage() {
                                 </Link>
                               )}
 
-                              {checkEntryPermission(property, user, 'delete', canDeleteProperty) && (
+                              {canDeleteProperty && (
                                 <button
                                   onClick={() => handleDelete(propertyId)}
                                   className="text-red-600 hover:text-red-900 transition-colors"

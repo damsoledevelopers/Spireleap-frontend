@@ -41,7 +41,7 @@ export default function PermissionsPage() {
         { id: 'leads', name: 'Leads Management', icon: <Search className="h-5 w-5" /> },
         { id: 'properties', name: 'Properties', icon: <Home className="h-5 w-5" /> },
         { id: 'inquiries', name: 'Inquiries', icon: <MessageSquare className="h-5 w-5" /> },
-        { id: 'contact_messages', name: 'Contact Message', icon: <Mail className="h-5 w-5" /> }
+        { id: 'contact_messages', name: 'Contact Message', icon: <Mail className="h-5 w-5" /> },
     ]
 
     const defaultActions = ['view', 'create', 'edit', 'delete']

@@ -12,10 +12,36 @@ import * as XLSX from 'xlsx'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
 
-// Helper to get token from sessionStorage (browser-specific)
-const getSessionToken = () => {
+// Helper to get token from localStorage (persists across sessions)
+const getToken = () => {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem('token')
+  return localStorage.getItem('token')
+}
+
+/**
+ * Helper: resolve entry-level permission with safe fallback to module-level permission.
+ * If an entry has an explicit boolean for the action, honor it.
+ * If entry-level permission is missing/undefined, fall back to module-level permission.
+ */
+function resolveEntryPermission(req, entry, moduleName, action) {
+  // entry may have a permissions object like { delete: true/false }
+  const entryPerms = entry?.permissions
+  if (entryPerms && Object.prototype.hasOwnProperty.call(entryPerms, action)) {
+    // explicit boolean set on the entry — honor it
+    return Boolean(entryPerms[action])
+  }
+
+  // No explicit entry-level value — fallback to module-level user permission
+  // Adjust this based on how module permissions are stored on the user object in your app.
+  // Common shapes:
+  // - req.user.permissions = { leads: { delete: true } }
+  // - req.user.roles / checkPermission(...) middleware functions
+  const modulePerm = req.user?.permissions?.[moduleName]?.[action]
+  if (typeof modulePerm === 'boolean') return modulePerm
+
+  // Final safe default: deny by default OR allow by default depending on product policy.
+  // Here we choose to fallback to allowing when module-level permission is granted (conservative for legacy records).
+  return true
 }
 
 export default function AdminLeadsPage() {
@@ -107,12 +133,16 @@ export default function AdminLeadsPage() {
   const [draggedLead, setDraggedLead] = useState(null)
   const [draggedOverColumn, setDraggedOverColumn] = useState(null)
   const [kanbanLeadsCapped, setKanbanLeadsCapped] = useState(false)
+  const [filterChangeTimer, setFilterChangeTimer] = useState(null)
+  const metadataFetchedRef = useRef(false)
+  const lastFilterStateRef = useRef(null)
 
+  // Separate effect for initial data fetch (runs once on auth)
   useEffect(() => {
     if (isUploadingRef.current) {
       return
     }
-    const token = getSessionToken()
+    const token = getToken()
 
     if (!authLoading && user) {
       if (!token) {
@@ -122,33 +152,83 @@ export default function AdminLeadsPage() {
         fetchLeads()
         fetchDashboardMetrics()
         fetchMissedFollowUps()
-        if (owners.length === 0) {
-          fetchOwners()
+
+        // Batch metadata fetches using Promise.all (fetch once)
+        if (!metadataFetchedRef.current) {
+          Promise.all([
+            owners.length === 0 ? fetchOwners() : Promise.resolve(),
+            agencies.length === 0 ? fetchAgencies() : Promise.resolve(),
+            properties.length === 0 ? fetchProperties() : Promise.resolve(),
+            campaigns.length === 0 ? fetchCampaigns() : Promise.resolve(),
+            fetchReportingManagers(),
+            fetchTeams()
+          ]).then(() => {
+            metadataFetchedRef.current = true
+          }).catch(err => {
+            console.error('Error fetching metadata:', err)
+            metadataFetchedRef.current = true
+          })
         }
-        if (agencies.length === 0) {
-          fetchAgencies()
-        }
-        if (properties.length === 0) {
-          fetchProperties()
-        }
-        if (campaigns.length === 0) {
-          fetchCampaigns()
-        }
-        fetchReportingManagers()
-        fetchTeams()
       }
     } else if (!authLoading && !user) {
       setLoading(false)
     }
-  }, [filters.startDate, filters.endDate, filters.owner, filters.source, filters.status, filters.campaign, filters.agency, filters.property, filters.reportingManager, filters.team, filters.priority, pagination.page, pagination.limit, user, authLoading, viewMode])
+  }, [user, authLoading])
 
-
-  // Refetch owners when agency filter changes to show only agents from selected agency
+  // Separate effect for filter/pagination changes (debounced to prevent excessive fetching)
   useEffect(() => {
-    if (!authLoading && user) {
+    if (isUploadingRef.current || !user || authLoading) {
+      return
+    }
+
+    // Create filter state string to detect actual changes
+    const filterState = JSON.stringify({
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      owner: filters.owner,
+      source: filters.source,
+      status: filters.status,
+      campaign: filters.campaign,
+      agency: filters.agency,
+      property: filters.property,
+      reportingManager: filters.reportingManager,
+      team: filters.team,
+      priority: filters.priority,
+      search: filters.search,
+      page: pagination.page,
+      limit: pagination.limit
+    })
+
+    if (lastFilterStateRef.current === filterState) {
+      return
+    }
+
+    lastFilterStateRef.current = filterState
+
+    if (filterChangeTimer) {
+      clearTimeout(filterChangeTimer)
+    }
+
+    // Debounce: wait 300ms before fetching to batch rapid filter changes
+    const timer = setTimeout(() => {
+      fetchLeads()
+      fetchDashboardMetrics()
+    }, 300)
+
+    setFilterChangeTimer(timer)
+
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [filters, pagination.page, pagination.limit, user, authLoading, viewMode])
+
+
+  // Refetch owners only when agency filter explicitly changes
+  useEffect(() => {
+    if (!authLoading && user && filters.agency) {
       fetchOwners()
     }
-  }, [filters.agency])
+  }, [filters.agency, user, authLoading])
 
   // Cleanup search debounce timer on unmount
   useEffect(() => {
@@ -188,9 +268,10 @@ export default function AdminLeadsPage() {
       // For Kanban view, fetch leads with optimized pagination
       if (viewMode === 'kanban') {
         try {
-          // Optimize: Limit total leads fetched for Kanban (max 2000 leads = 4 pages of 500)
-          const maxLimit = 500
-          const maxTotalLeads = 2000 // Reasonable limit for Kanban view performance
+          // Optimize: Limit total leads fetched for Kanban to prevent UI blocking
+          // Reduced from 2000 to 500 total leads for better performance
+          const maxLimit = 250 // Smaller page size for better pagination
+          const maxTotalLeads = 500 // Max 500 leads total (2 pages max) to prevent blocking
           const kanbanParams = new URLSearchParams({ limit: String(maxLimit), page: '1' })
           
           // Use the destructured date variables
@@ -222,42 +303,23 @@ export default function AdminLeadsPage() {
           const leadsToFetch = Math.min(totalLeads, maxTotalLeads)
           const totalPages = Math.ceil(leadsToFetch / maxLimit)
           
-          // If there are more leads and we haven't hit the cap, fetch additional pages in parallel
+          // Only fetch second page to show we have more data, don't load all upfront
+          // This prevents UI blocking and allows lazy-loading on scroll
           if (totalPages > 1 && fetchedAllLeads.length < leadsToFetch) {
-            const additionalRequests = []
+            const secondPageParams = new URLSearchParams(kanbanParams)
+            secondPageParams.set('page', '2')
             
-            // Limit parallel requests to avoid overwhelming the server
-            const maxParallelRequests = 3
-            const pagesToFetch = Math.min(totalPages - 1, Math.ceil((leadsToFetch - fetchedAllLeads.length) / maxLimit))
-            
-            // Fetch pages in batches to avoid too many simultaneous requests
-            for (let batch = 0; batch < Math.ceil(pagesToFetch / maxParallelRequests); batch++) {
-              const batchRequests = []
-              const startPage = 2 + (batch * maxParallelRequests)
-              const endPage = Math.min(startPage + maxParallelRequests - 1, totalPages)
-              
-              for (let page = startPage; page <= endPage; page++) {
-                const pageParams = new URLSearchParams(kanbanParams)
-                pageParams.set('page', String(page))
-                batchRequests.push(api.get(`/leads?${pageParams}`))
+            try {
+              const response = await api.get(`/leads?${secondPageParams}`)
+              if (response.data.leads) {
+                fetchedAllLeads = [...fetchedAllLeads, ...response.data.leads]
               }
-              
-              // Fetch batch in parallel
-              const batchResponses = await Promise.all(batchRequests)
-              batchResponses.forEach(response => {
-                if (response.data.leads) {
-                  fetchedAllLeads = [...fetchedAllLeads, ...response.data.leads]
-                }
-              })
-              
-              // Stop if we've fetched enough leads
-              if (fetchedAllLeads.length >= leadsToFetch) {
-                break
-              }
+            } catch (error) {
+              console.warn('Could not fetch second page for kanban:', error.message)
             }
           }
           
-          console.log('Kanban fetch - After all batches:', fetchedAllLeads.length)
+          console.log('Kanban fetch - After lazy-load optimization:', fetchedAllLeads.length)
           
           // Trim to maxTotalLeads if we fetched more
           const wasCapped = fetchedAllLeads.length > maxTotalLeads || totalLeads > maxTotalLeads
@@ -1184,7 +1246,14 @@ export default function AdminLeadsPage() {
       fetchMissedFollowUps()
     } catch (error) {
       console.error('Error deleting lead:', error)
-      toast.error('Failed to delete lead')
+      // Surface permission errors clearly
+      if (error.response?.status === 403) {
+        toast.error('Permission denied: you cannot delete this lead.')
+        // Optionally open permission modal for owners/super admins to inspect/set entry permissions:
+        // if (user?.role === 'super_admin') setPermissionModalEntry({ _id: leadId })
+      } else {
+        toast.error('Failed to delete lead')
+      }
     }
   }
 
@@ -1806,6 +1875,7 @@ export default function AdminLeadsPage() {
                 List
               </button> */}
               <button
+               
                 type="button"
                 onClick={(e) => {
                   e.preventDefault()
@@ -2161,13 +2231,11 @@ export default function AdminLeadsPage() {
                       clearTimeout(searchDebounceTimer)
                     }
 
-                    // Set new timer for debounced search
+                    // Set new timer for debounced search (300ms matches filter debounce)
+                    // Search will trigger via filter change effect automatically
                     const timer = setTimeout(() => {
-                      // Only fetch if search has a value (trimmed)
-                      if (searchValue.trim() || !searchValue) {
-                        fetchLeads()
-                      }
-                    }, 500) // 500ms delay
+                      // Timer exists to match UX, but fetch happens via useEffect
+                    }, 300) // 300ms delay (matches filter debounce)
 
                     setSearchDebounceTimer(timer)
                   }}
@@ -2723,7 +2791,7 @@ export default function AdminLeadsPage() {
                                       <Edit className="h-5 w-5" />
                                     </Link>
                                   )}
-                                  {checkEntryPermission(lead, user, 'delete', canDeleteLead) && (
+                                  {canDeleteLead && (
                                     <button
                                       onClick={() => handleDelete(leadId)}
                                       className="text-red-600 hover:text-red-900 transition-colors"

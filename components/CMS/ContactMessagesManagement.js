@@ -184,7 +184,7 @@ export default function ContactMessagesManagement() {
                             <Eye className="h-5 w-5" />
                           </button>
                         )}
-                        {checkEntryPermission(message, user, 'delete', canDeleteMessage) && (
+                        {canDeleteMessage && (
                           <button
                             onClick={() => handleDelete(message._id)}
                             className="text-red-600 hover:text-red-900"

@@ -6,20 +6,20 @@ import { api } from '../lib/api'
 
 const AuthContext = createContext(undefined)
 
-// Helper functions for session storage (browser-specific, not shared)
-const getSessionToken = () => {
+// Helper functions for localStorage (browser-specific, persists across sessions)
+const getToken = () => {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem('token')
+  return localStorage.getItem('token')
 }
 
-const setSessionToken = (token) => {
+const setToken = (token) => {
   if (typeof window === 'undefined') return
-  sessionStorage.setItem('token', token)
+  localStorage.setItem('token', token)
 }
 
-const removeSessionToken = () => {
+const removeToken = () => {
   if (typeof window === 'undefined') return
-  sessionStorage.removeItem('token')
+  localStorage.removeItem('token')
 }
 
 export function AuthProvider({ children }) {
@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   const router = useRouter()
 
   useEffect(() => {
-    const token = getSessionToken()
+    const token = getToken()
     if (token) {
       fetchUser()
     } else {
@@ -46,7 +46,9 @@ export function AuthProvider({ children }) {
           leads: { view: true, create: true, edit: true, delete: true },
           properties: { view: true, create: true, edit: true, delete: true },
           inquiries: { view: true, create: true, edit: true, delete: true },
-          contact_messages: { view: true, create: true, edit: true, delete: true }
+          contact_messages: { view: true, create: true, edit: true, delete: true },
+          users: { view: true, create: true, edit: true, delete: true },
+          agencies: { view: true, create: true, edit: true, delete: true }
         }
         setPermissions(fullPerms)
         setPermissionsLoaded(true)
@@ -82,7 +84,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       setPermissionsLoaded(true)
       console.error('Failed to fetch user:', error)
-      removeSessionToken()
+      removeToken()
       setUser(null)
     } finally {
       setLoading(false)
@@ -99,8 +101,8 @@ export function AuthProvider({ children }) {
         throw new Error('Invalid login response')
       }
 
-      // Store token in sessionStorage (browser-specific, not shared across browsers)
-      setSessionToken(token)
+      // Store token in localStorage (persists across browser sessions)
+      setToken(token)
 
       // Fetch fresh user data from /auth/me to ensure we have latest data including agency
       try {
@@ -178,8 +180,8 @@ export function AuthProvider({ children }) {
       const response = await api.post('/auth/register', cleanedData)
       const { token, user: newUser, message } = response.data
 
-      // Store token in sessionStorage (browser-specific, not shared across browsers)
-      setSessionToken(token)
+      // Store token in localStorage (persists across browser sessions)
+      setToken(token)
       setUser(newUser)
 
       // Determine redirect path
@@ -228,7 +230,7 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
-    removeSessionToken()
+    removeToken()
     setUser(null)
     router.push('/auth/login')
   }
@@ -238,7 +240,7 @@ export function AuthProvider({ children }) {
   }
 
   const refreshUser = async () => {
-    const token = getSessionToken()
+    const token = getToken()
     if (token) {
       await fetchUser()
     }
