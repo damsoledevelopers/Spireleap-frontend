@@ -38,7 +38,8 @@ import {
   TrendingUp,
   TrendingDown,
   Filter,
-  Download
+  Download,
+  Shield
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -49,14 +50,15 @@ export default function AdminUsers() {
   // Page access check
   useEffect(() => {
     if (user && !checkPermission('users', 'view')) {
-      toast.error('You do not have permission to view Users')
-      router.push('/admin/dashboard')
+      // toast.error('You do not have permission to view Users')
+      // router.push('/admin/dashboard')
     }
   }, [user, checkPermission, router])
 
   const canCreateUser = checkPermission('users', 'create')
   const canEditUser = checkPermission('users', 'edit')
   const canDeleteUser = checkPermission('users', 'delete')
+  const isSuperAdmin = user?.role === 'super_admin'
 
   const searchParams = useSearchParams()
   const [adminUsers, setAdminUsers] = useState([])
@@ -713,6 +715,15 @@ export default function AdminUsers() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-3">
+                          {isSuperAdmin && (
+                            <Link
+                              href={`/admin/permissions?type=user&id=${String(admin._id || admin.id)}`}
+                              className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                              title="Permissions (this user only)"
+                            >
+                              <Shield className="h-5 w-5" />
+                            </Link>
+                          )}
                           <Link
                             href={`/admin/users/${String(admin._id || admin.id)}`}
                             className="text-primary-600 hover:text-primary-900 transition-colors"

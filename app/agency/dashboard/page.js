@@ -155,7 +155,7 @@ export default function AgencyAdminDashboard() {
                             {value}
                           </div>
                           <div className={`ml-2 flex items-baseline text-sm font-semibold ${stat.changeType === 'positive' ? 'text-green-600' :
-                              stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
+                            stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-600'
                             }`}>
                             {stat.change}
                           </div>
@@ -278,7 +278,7 @@ export default function AgencyAdminDashboard() {
               <p className="text-sm font-medium text-gray-700">Manage Leads</p>
             </Link>
             <Link
-              href="/admin/users?tab=agents"
+              href="/admin/agents"
               className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center cursor-pointer block"
             >
               <UserCheck className="h-8 w-8 text-gray-400 mx-auto mb-2" />

@@ -69,9 +69,13 @@ export function AuthProvider({ children }) {
     try {
       const response = await api.get('/auth/me')
       const userData = response.data.user
+      const effectivePermissions = response.data.permissions
       setUser(userData)
 
-      if (userData.role) {
+      if (effectivePermissions && Object.keys(effectivePermissions).length > 0) {
+        setPermissions(effectivePermissions)
+        setPermissionsLoaded(true)
+      } else if (userData.role) {
         await fetchPermissions(userData.role)
       }
 
@@ -104,16 +108,17 @@ export function AuthProvider({ children }) {
       // Store token in localStorage (persists across browser sessions)
       setToken(token)
 
-      // Fetch fresh user data from /auth/me to ensure we have latest data including agency
+      // Fetch fresh user data from /auth/me to ensure we have latest data including agency and effective permissions
       try {
         const meResponse = await api.get('/auth/me')
         setUser(meResponse.data.user)
-        
-        // Fetch permissions after setting user
-        if (meResponse.data.user.role) {
+        const effectivePermissions = meResponse.data.permissions
+        if (effectivePermissions && Object.keys(effectivePermissions).length > 0) {
+          setPermissions(effectivePermissions)
+          setPermissionsLoaded(true)
+        } else if (meResponse.data.user.role) {
           await fetchPermissions(meResponse.data.user.role)
         }
-        
         console.log('User data after login:', {
           email: meResponse.data.user.email,
           role: meResponse.data.user.role,
@@ -123,8 +128,6 @@ export function AuthProvider({ children }) {
         // Fallback to login response data if /auth/me fails
         console.warn('Failed to fetch user from /auth/me, using login response data:', meError)
         setUser(userData)
-        
-        // Still fetch permissions from userData
         if (userData.role) {
           await fetchPermissions(userData.role)
         }

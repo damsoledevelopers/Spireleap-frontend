@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
-import { Plus, Edit, Trash2, Eye, EyeOff, Search, FileText } from 'lucide-react'
+import { Plus, Edit, Trash2, Eye, EyeOff, Search, FileText, Camera, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
 
@@ -18,6 +18,7 @@ export default function BlogManagement() {
   const [showModal, setShowModal] = useState(false)
   const [editingBlog, setEditingBlog] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     excerpt: '',
@@ -32,6 +33,35 @@ export default function BlogManagement() {
       keywords: ''
     }
   })
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formDataUpload = new FormData()
+    formDataUpload.append('file', file)
+
+    try {
+      setUploading(true)
+      const response = await api.post('/upload?folder=cms', formDataUpload, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      const imageUrl = response.data.url
+      setFormData(prev => ({
+        ...prev,
+        featuredImage: imageUrl
+      }))
+      toast.success('Image uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      toast.error('Failed to upload image')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     fetchBlogs()
@@ -290,13 +320,44 @@ export default function BlogManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Featured Image URL</label>
-                  <input
-                    type="url"
-                    value={formData.featuredImage}
-                    onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Featured Image</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="url"
+                        value={formData.featuredImage}
+                        onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        placeholder="Image URL"
+                      />
+                    </div>
+                    <label className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors">
+                      {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </div>
+                  {formData.featuredImage && (
+                    <div className="mt-2 relative inline-block">
+                      <img
+                        src={formData.featuredImage}
+                        alt="Preview"
+                        className="h-20 w-32 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, featuredImage: '' })}
+                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 hover:bg-red-200 shadow-sm"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

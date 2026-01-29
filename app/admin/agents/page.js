@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { UserCircle, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building } from 'lucide-react'
+import { UserCircle, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
@@ -28,8 +28,8 @@ export default function AgentsPage() {
       }
 
       if (!canViewAgents) {
-        toast.error('You do not have permission to view agents')
-        router.push('/admin/dashboard')
+        // toast.error('You do not have permission to view agents')
+        // router.push('/admin/dashboard')
       }
     }
   }, [user, authLoading, router, canViewAgents])
@@ -597,6 +597,15 @@ export default function AgentsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                           <div className="flex items-center justify-center gap-3">
+                            {isSuperAdmin && (
+                              <Link
+                                href={`/admin/permissions?type=agent&id=${String(agent._id)}`}
+                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                title="Permissions (this agent only)"
+                              >
+                                <Shield className="h-5 w-5" />
+                              </Link>
+                            )}
                             {canEditAgent && (
                               <Link
                                 href={`/admin/agents/${String(agent._id)}/edit`}

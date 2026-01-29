@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Users, Plus, Edit, Trash2, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Briefcase } from 'lucide-react'
+import { Users, Plus, Edit, Trash2, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Briefcase, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
@@ -18,12 +18,13 @@ export function StaffPageContent() {
   const canCreateStaff = checkPermission('users', 'create')
   const canEditStaff = checkPermission('users', 'edit')
   const canDeleteStaff = checkPermission('users', 'delete')
+  const isSuperAdmin = user?.role === 'super_admin'
 
   // Page access check
   useEffect(() => {
     if (user && !canViewStaff) {
-      toast.error('You do not have permission to view staff')
-      router.push('/admin/dashboard')
+      // toast.error('You do not have permission to view staff')
+      // router.push('/admin/dashboard')
     }
   }, [user, canViewStaff, router])
 
@@ -570,6 +571,15 @@ export function StaffPageContent() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                           <div className="flex items-center justify-center gap-3">
+                            {isSuperAdmin && (
+                              <Link
+                                href={`/admin/permissions?type=staff&id=${String(member._id)}`}
+                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                title="Permissions (this staff only)"
+                              >
+                                <Shield className="h-5 w-5" />
+                              </Link>
+                            )}
                             {canEditStaff && (
                               <Link
                                 href={`/admin/staff/${String(member._id)}/edit`}

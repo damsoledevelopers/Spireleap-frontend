@@ -11,7 +11,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
 // Dynamically import Google Maps to avoid SSR issues
-const GoogleMapPicker = dynamic(() => import('@/components/GoogleMapPicker'), { ssr: false })
+const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
 
 export default function AdminAddPropertyPage() {
   const { user, loading: authLoading } = useAuth()

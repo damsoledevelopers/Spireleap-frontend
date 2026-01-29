@@ -1169,19 +1169,21 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* CTA Section - Enhanced Modern Design */}
+      {/* CTA Section - Button styling from CMS */}
+      {(() => {
+        const ctaStyles = homePageContent?.styles?.cta || {}
+        const primaryBg = ctaStyles.backgroundColor?.trim() || undefined
+        const primaryText = ctaStyles.titleColor?.trim() || undefined
+        const secondaryBorder = ctaStyles.descriptionColor?.trim() || undefined
+        return (
       <section className="relative py-32 bg-gradient-to-br from-primary-900 via-primary-800 via-primary-700 to-primary-600 text-white overflow-hidden">
-        {/* Enhanced Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0" style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: '60px 60px'
           }}></div>
         </div>
-
-        {/* Animated gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-gold-500/10 via-transparent to-gold-500/10 animate-gradient"></div>
-
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-block px-6 py-3 mb-8 bg-white/20 backdrop-blur-md rounded-full text-sm font-bold border border-white/30 shadow-lg hover:bg-white/25 transition-all duration-300 transform hover:scale-105">
             🚀 {homePageContent?.cta?.subtitle || 'Get Started Today'}
@@ -1204,7 +1206,8 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <Link
               href={homePageContent?.cta?.primaryButtonLink || '/properties'}
-              className="group relative inline-flex items-center px-10 py-5 bg-gradient-to-br from-white via-gold-50 to-cream-50 text-primary-700 rounded-2xl hover:from-gold-50 hover:to-gold-100 font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-gold-200/50 overflow-hidden"
+              className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-110 active:scale-95 transition-all duration-300 border-2 overflow-hidden ${!primaryBg ? 'bg-gradient-to-br from-white via-gold-50 to-cream-50 text-primary-700 border-gold-200/50 hover:from-gold-50 hover:to-gold-100' : ''}`}
+              style={primaryBg || primaryText ? { ...(primaryBg && { backgroundColor: primaryBg }), ...(primaryText && { color: primaryText }) } : undefined}
             >
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
               <span className="relative z-10">{homePageContent?.cta?.primaryButtonText || 'Browse Properties'}</span>
@@ -1213,7 +1216,8 @@ export default function HomePage() {
             {homePageContent?.cta?.secondaryButtonText && (
               <Link
                 href={homePageContent?.cta?.secondaryButtonLink || '/contact'}
-                className="group relative inline-flex items-center px-10 py-5 bg-transparent border-2 border-gold-400/90 text-white rounded-2xl hover:bg-gradient-to-r hover:from-gold-500 hover:to-gold-400 hover:text-white font-bold text-lg backdrop-blur-sm transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-xl hover:shadow-2xl overflow-hidden"
+                className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg backdrop-blur-sm transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-xl hover:shadow-2xl overflow-hidden border-2 ${!secondaryBorder ? 'bg-transparent border-gold-400/90 text-white hover:from-gold-500 hover:to-gold-400 hover:bg-gradient-to-r' : ''}`}
+                style={secondaryBorder ? { borderColor: secondaryBorder, color: secondaryBorder } : undefined}
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
                 <span className="relative z-10">{homePageContent.cta.secondaryButtonText}</span>
@@ -1223,6 +1227,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+        )
+      })()}
 
       <Footer />
     </div>

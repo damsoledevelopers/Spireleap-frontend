@@ -36,10 +36,10 @@ const navigation = [
     icon: UserCheck,
     module: 'users',
     submenu: [
-      { name: 'Agencies', href: '/admin/users?tab=agencies', icon: Building, module: 'agencies' },
-      { name: 'Agents', href: '/admin/users?tab=agents', icon: UserCircle, module: 'agents' },
-      { name: 'Staff', href: '/admin/users?tab=staff', icon: Briefcase, module: 'staff' },
-      { name: 'Users', href: '/admin/users?tab=users', icon: UserCheck, module: 'users' },
+      { name: 'Agencies', href: '/admin/agencies', icon: Building, module: 'agencies' },
+      { name: 'Agents', href: '/admin/agents', icon: UserCircle, module: 'agents' },
+      { name: 'Staff', href: '/admin/staff', icon: Briefcase, module: 'staff' },
+      { name: 'Users', href: '/admin/users', icon: UserCheck, module: 'users' },
     ]
   },
   { name: 'Properties', href: '/admin/properties', icon: Package, module: 'properties' },
@@ -92,19 +92,8 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
       } else if (!item.submenu.length) {
         // If original submenu was empty (unlikely)
         acc.push(item)
-      } else if (user?.role === 'agent') {
-        // Agent: hide Users section entirely when no submenu items left
       }
-      // If all subitems filtered out, do we show parent? 
-      // If parent has its own functioning HREF (like /admin/users), yes.
-      // But if parent behavior depends on submenu (e.g. dropdown only), maybe not?
-      // For now, if subitems exist after filter, show. If filtered to 0, check if parent is valid standalone.
-      // 'Users' href is /admin/users. If they have permission 'users', they can go there.
-      // So we push it even if submenu empty?
-      // Let's push it with empty submenu if filteredSubmenu is empty but parent allowed.
-      else {
-        acc.push({ ...item, submenu: [] })
-      }
+      // When all submenu items filtered out by permission (or role), hide the entire section - do not push parent
     } else {
       acc.push(item)
     }

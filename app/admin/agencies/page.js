@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Building, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Building, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
@@ -18,6 +18,7 @@ export function AgenciesPageContent() {
   const canCreateAgency = checkPermission('agencies', 'create')
   const canEditAgency = checkPermission('agencies', 'edit')
   const canDeleteAgency = checkPermission('agencies', 'delete')
+  const isSuperAdmin = user?.role === 'super_admin'
 
   // Page access check
   useEffect(() => {
@@ -564,6 +565,15 @@ export function AgenciesPageContent() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                           <div className="flex items-center justify-center gap-3">
+                            {isSuperAdmin && (
+                              <Link
+                                href={`/admin/permissions?type=agency&id=${String(agency._id)}`}
+                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                title="Permissions (this agency only)"
+                              >
+                                <Shield className="h-5 w-5" />
+                              </Link>
+                            )}
                             {canEditAgency && (
                               <Link
                                 href={`/admin/agencies/${String(agency._id)}/edit`}

@@ -513,22 +513,37 @@ export default function HomepageContentManagement() {
                   placeholder="Button Link"
                 />
               </div>
-              {/* CTA Styles */}
+              {/* CTA Button Styles */}
               <div className="pt-4 border-t border-gray-100 mt-4">
-                <h4 className="text-xs font-semibold text-gray-800 mb-2">CTA Styling</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="color"
-                    value={formData.styles.cta.backgroundColor || '#0a213e'}
-                    onChange={(e) => updateStyle('cta', 'backgroundColor', e.target.value)}
-                    className="h-8 w-full cursor-pointer"
-                  />
-                  <input
-                    type="color"
-                    value={formData.styles.cta.titleColor || '#ffffff'}
-                    onChange={(e) => updateStyle('cta', 'titleColor', e.target.value)}
-                    className="h-8 w-full cursor-pointer"
-                  />
+                <h4 className="text-xs font-semibold text-gray-800 mb-2">CTA Button Styling</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Primary button background</label>
+                    <input
+                      type="color"
+                      value={formData.styles.cta.backgroundColor || '#fef3c7'}
+                      onChange={(e) => updateStyle('cta', 'backgroundColor', e.target.value)}
+                      className="h-8 w-full cursor-pointer rounded border border-gray-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Primary button text</label>
+                    <input
+                      type="color"
+                      value={formData.styles.cta.titleColor || '#1e3a5f'}
+                      onChange={(e) => updateStyle('cta', 'titleColor', e.target.value)}
+                      className="h-8 w-full cursor-pointer rounded border border-gray-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Secondary button border & text</label>
+                    <input
+                      type="color"
+                      value={formData.styles.cta.descriptionColor || '#fbbf24'}
+                      onChange={(e) => updateStyle('cta', 'descriptionColor', e.target.value)}
+                      className="h-8 w-full cursor-pointer rounded border border-gray-200"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

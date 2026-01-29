@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
-import { Plus, Edit, Trash2, Search, Image } from 'lucide-react'
+import { Plus, Edit, Trash2, Search, Image, Camera, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function BannerManagement() {
@@ -13,6 +13,7 @@ export default function BannerManagement() {
   const [showModal, setShowModal] = useState(false)
   const [editingBanner, setEditingBanner] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
     image: '',
@@ -38,6 +39,35 @@ export default function BannerManagement() {
       toast.error('Failed to load banners')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formDataUpload = new FormData()
+    formDataUpload.append('file', file)
+
+    try {
+      setUploading(true)
+      const response = await api.post('/upload?folder=cms', formDataUpload, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      const imageUrl = response.data.url
+      setFormData(prev => ({
+        ...prev,
+        image: imageUrl
+      }))
+      toast.success('Image uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      toast.error('Failed to upload image')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -197,14 +227,46 @@ export default function BannerManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL *</label>
-                  <input
-                    type="url"
-                    required
-                    value={formData.image}
-                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banner Image *</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="url"
+                        required
+                        value={formData.image}
+                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        placeholder="Image URL"
+                      />
+                    </div>
+                    <label className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors">
+                      {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </div>
+                  {formData.image && (
+                    <div className="mt-2 relative inline-block">
+                      <img
+                        src={formData.image}
+                        alt="Preview"
+                        className="h-24 w-full object-cover rounded-lg border border-gray-200"
+                        style={{ minWidth: '200px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, image: '' })}
+                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 hover:bg-red-200 shadow-sm"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Link</label>

@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
-const GoogleMapPicker = dynamic(() => import('@/components/GoogleMapPicker'), { ssr: false })
+const GoogleMapPicker = dynamic(() => import('../../../../../components/GoogleMapPicker'), { ssr: false })
 
 export default function AdminEditPropertyPage() {
   const params = useParams()
