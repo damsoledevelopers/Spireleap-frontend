@@ -60,17 +60,31 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
   const [openDropdowns, setOpenDropdowns] = useState({})
 
   const userNavigation = navigation.reduce((acc, item) => {
+    // Agent panel: hide entire Users menu
+    if (user?.role === 'agent' && item.module === 'users') return acc
+
     // Check main permissions - only filter if permissions are loaded
     if (permissionsLoaded && item.module && !checkPermission(item.module, 'view')) return acc
 
     // Handle submenu filtering
     if (item.submenu) {
-      const filteredSubmenu = item.submenu.filter(subItem => {
+      let filteredSubmenu = item.submenu.filter(subItem => {
         if (!subItem.module) return true
-        // Only filter if permissions are loaded
         if (!permissionsLoaded) return true
-        return checkPermission(subItem.module, 'view')
+        // Agents & Staff use 'users' permission (no separate module in backend)
+        const moduleToCheck = (subItem.module === 'agents' || subItem.module === 'staff') ? 'users' : subItem.module
+        return checkPermission(moduleToCheck, 'view')
       })
+      // Agency admin: only Agents and Users (no Agencies, Staff)
+      if (user?.role === 'agency_admin') {
+        filteredSubmenu = filteredSubmenu.filter(subItem =>
+          subItem.module === 'agents' || subItem.module === 'users'
+        )
+      }
+      // Agent panel: hide Users section
+      if (user?.role === 'agent') {
+        filteredSubmenu = filteredSubmenu.filter(subItem => subItem.module !== 'users')
+      }
 
       // If submenu has items or parent has no module restriction (implied access), include it
       if (filteredSubmenu.length > 0) {
@@ -78,6 +92,8 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
       } else if (!item.submenu.length) {
         // If original submenu was empty (unlikely)
         acc.push(item)
+      } else if (user?.role === 'agent') {
+        // Agent: hide Users section entirely when no submenu items left
       }
       // If all subitems filtered out, do we show parent? 
       // If parent has its own functioning HREF (like /admin/users), yes.

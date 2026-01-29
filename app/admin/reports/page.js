@@ -123,6 +123,7 @@ export function AdminReportsContent() {
         leadsByPriority: stats.leadsByPriority || {},
         propertiesByLocation: stats.propertiesByLocation || {},
         agentPerformance: stats.agentPerformance || [],
+        agencyAnalysis: stats.agencyAnalysis || [],
         recentActivity: stats.recentActivity || [],
         systemStats: {
           activeProperties: stats.propertiesByStatus?.active || 0,
@@ -863,8 +864,9 @@ export function AdminReportsContent() {
 
         {/* Agency Analysis */}
         {selectedReport === 'agencies' && (() => {
+          const agencyList = reportData.agencyAnalysis || []
           // Filter agencies based on selected filter
-          let filteredAgencies = reportData.agencyAnalysis
+          let filteredAgencies = agencyList
 
           if (agencyFilter === 'no-agents') {
             filteredAgencies = filteredAgencies.filter(a => a.hasNoAgents)
@@ -882,20 +884,20 @@ export function AdminReportsContent() {
           if (agencySearch.trim()) {
             const searchLower = agencySearch.toLowerCase()
             filteredAgencies = filteredAgencies.filter(a =>
-              a.name.toLowerCase().includes(searchLower) ||
-              a.email.toLowerCase().includes(searchLower) ||
-              a.phone.includes(searchLower)
+              (a.name || '').toLowerCase().includes(searchLower) ||
+              (a.email || '').toLowerCase().includes(searchLower) ||
+              (a.phone || '').includes(searchLower)
             )
           }
 
           // Calculate summary stats
-          const totalAgencies = reportData.agencyAnalysis.length
-          const activeAgencies = reportData.agencyAnalysis.filter(a => a.isActive).length
-          const agenciesWithoutAgents = reportData.agencyAnalysis.filter(a => a.hasNoAgents).length
-          const agenciesWithNoLeads = reportData.agencyAnalysis.filter(a => a.hasNoLeads).length
+          const totalAgencies = agencyList.length
+          const activeAgencies = agencyList.filter(a => a.isActive).length
+          const agenciesWithoutAgents = agencyList.filter(a => a.hasNoAgents).length
+          const agenciesWithNoLeads = agencyList.filter(a => a.hasNoLeads).length
 
           // Prepare chart data
-          const leadsChartData = [...reportData.agencyAnalysis]
+          const leadsChartData = [...agencyList]
             .sort((a, b) => b.totalLeads - a.totalLeads)
             .slice(0, 10)
           const maxLeads = Math.max(...leadsChartData.map(a => a.totalLeads), 1)

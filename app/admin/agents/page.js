@@ -109,6 +109,11 @@ export default function AgentsPage() {
       if (agencyFilter) {
         params.append('agency', agencyFilter)
       }
+      // Agency admin: fetch only agents belonging to their agency (backend also enforces this)
+      if (isAgencyAdmin && user?.agency) {
+        const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
+        if (agencyId) params.append('agency', agencyId)
+      }
       if (startDate) {
         params.append('startDate', startDate)
       }

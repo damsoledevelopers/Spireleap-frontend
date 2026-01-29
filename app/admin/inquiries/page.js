@@ -742,7 +742,8 @@ export default function AdminInquiriesPage() {
               )}
             </div>
 
-            {/* Agency Filter */}
+            {/* Agency Filter - hidden for agent (they only see their own inquiries) */}
+            {!isAgent && (
             <select
               value={filters.agency}
               onChange={(e) => {
@@ -783,8 +784,10 @@ export default function AdminInquiriesPage() {
                 </option>
               ))}
             </select>
+            )}
 
-            {/* Agent Filter */}
+            {/* Agent Filter - hidden for agent */}
+            {!isAgent && (
             <select
               value={filters.assignedAgent}
               onChange={(e) => {
@@ -810,6 +813,7 @@ export default function AdminInquiriesPage() {
                   </option>
                 ))}
             </select>
+            )}
 
             {/* Property Filter */}
             <select
