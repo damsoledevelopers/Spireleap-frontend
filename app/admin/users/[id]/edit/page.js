@@ -126,11 +126,18 @@ export default function AdminUserEditPage() {
 
       await api.put(`/users/${params.id}`, updateData)
       toast.success('User updated successfully')
-      router.push(`/admin/users/${params.id}`)
+      router.push('/admin/users')
     } catch (error) {
       console.error('Error updating user:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to update user'
-      toast.error(errorMessage)
+      const errorData = error.response?.data
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        // If it's a validation error array, show each one
+        errorData.errors.forEach(err => {
+          toast.error(`${err.path}: ${err.msg}`)
+        })
+      } else {
+        toast.error(errorData?.message || 'Failed to update user')
+      }
     } finally {
       setSaving(false)
     }
@@ -152,7 +159,7 @@ export default function AdminUserEditPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href={`/admin/users/${params.id}`} className="text-gray-600 hover:text-gray-900">
+            <Link href="/admin/users" className="text-gray-600 hover:text-gray-900">
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
@@ -329,7 +336,7 @@ export default function AdminUserEditPage() {
           {/* Actions */}
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200">
             <Link
-              href={`/admin/users/${params.id}`}
+              href="/admin/users"
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Cancel

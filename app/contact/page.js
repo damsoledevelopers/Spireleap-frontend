@@ -50,7 +50,7 @@ export default function ContactPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    
+
     try {
       // Save contact message to database
       const response = await api.post('/cms/contact-messages', {
@@ -63,25 +63,8 @@ export default function ContactPage() {
 
       console.log('Contact message saved:', response.data)
 
-      // Also create a lead from contact form (for backward compatibility)
-      try {
-        await api.post('/leads', {
-          contact: {
-            firstName: formData.name.split(' ')[0] || formData.name,
-            lastName: formData.name.split(' ').slice(1).join(' ') || '',
-            email: formData.email,
-            phone: formData.phone
-          },
-          inquiry: {
-            message: `Subject: ${formData.subject}\n\n${formData.message}`
-          },
-          source: 'website'
-        })
-      } catch (leadError) {
-        // If lead creation fails, don't fail the whole submission
-        console.error('Error creating lead:', leadError)
-      }
-      
+
+
       toast.success('Thank you! Your message has been sent successfully. We will contact you soon.')
       setFormData({
         name: '',
@@ -93,10 +76,10 @@ export default function ContactPage() {
     } catch (error) {
       console.error('Error submitting contact form:', error)
       console.error('Error response:', error.response?.data)
-      
+
       // Better error handling
       let errorMessage = 'Failed to send message. Please try again.'
-      
+
       if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
         errorMessage = error.response.data.errors.map(err => err.msg || err.message).join(', ')
       } else if (error.response?.data?.message) {
@@ -104,7 +87,7 @@ export default function ContactPage() {
       } else if (error.message) {
         errorMessage = error.message
       }
-      
+
       toast.error(errorMessage)
     } finally {
       setLoading(false)
@@ -216,7 +199,7 @@ export default function ContactPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 mb-1">Email</h3>
-                        <a 
+                        <a
                           href={`mailto:${pageContent.parsedContent.email}`}
                           className="text-primary-600 hover:text-primary-700"
                         >

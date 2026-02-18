@@ -2,6 +2,7 @@
 
 import { formatDistanceToNow } from 'date-fns'
 import {
+    Activity,
     GitCommit,
     Edit,
     MessageSquare,
@@ -40,6 +41,8 @@ const getActivityIcon = (action) => {
             return <Upload className="h-5 w-5 text-gray-600" />
         case 'site_visit_scheduled':
         case 'site_visit_completed':
+        case 'site_visit_cancelled':
+        case 'site_visit_updated':
             return <Calendar className="h-5 w-5 text-pink-600" />
         case 'merged':
             return <GitCommit className="h-5 w-5 text-purple-600" />
@@ -57,7 +60,9 @@ const getActivityColor = (action) => {
         case 'assignment_change': return 'bg-purple-100 border-purple-200'
         case 'lead_created': return 'bg-green-100 border-green-200'
         case 'site_visit_scheduled':
-        case 'site_visit_completed': return 'bg-pink-100 border-pink-200'
+        case 'site_visit_completed':
+        case 'site_visit_cancelled':
+        case 'site_visit_updated': return 'bg-pink-100 border-pink-200'
         default: return 'bg-gray-50 border-gray-200'
     }
 }

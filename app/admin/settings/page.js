@@ -9,13 +9,15 @@ import {
   Save,
   RefreshCw,
   Database,
-  Mail,
   Shield,
   Bell,
   Globe,
   Key,
   User,
-  Server
+  Server,
+  Eye,
+  EyeOff,
+  Mail
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -41,6 +43,14 @@ export function SettingsPageContent() {
   }, [user, canViewSettings, router])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [visiblePasswords, setVisiblePasswords] = useState({})
+
+  const togglePasswordVisibility = (fieldName) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [fieldName]: !prev[fieldName]
+    }))
+  }
   const [settings, setSettings] = useState({
     general: {
       siteName: 'SPIRELEAP Real Estate',
@@ -48,14 +58,6 @@ export function SettingsPageContent() {
       defaultCurrency: 'USD',
       timezone: 'UTC',
       language: 'en'
-    },
-    email: {
-      smtpHost: 'smtp.gmail.com',
-      smtpPort: 587,
-      smtpUser: '',
-      smtpPass: '',
-      fromEmail: 'noreply@spireleap.com',
-      fromName: 'SPIRELEAP Real Estate'
     },
     security: {
       sessionTimeout: 30,
@@ -68,13 +70,22 @@ export function SettingsPageContent() {
       emailNotifications: true,
       proposalNotifications: true,
       userNotifications: true,
-      systemNotifications: true
+      systemNotifications: true,
+      loginAlerts: true
     },
     system: {
       maintenanceMode: false,
       debugMode: false,
       logLevel: 'info',
       backupFrequency: 'daily'
+    },
+    email: {
+      smtpHost: '',
+      smtpPort: 465,
+      smtpUser: '',
+      smtpPass: '',
+      fromEmail: '',
+      fromName: ''
     }
   })
 
@@ -92,17 +103,23 @@ export function SettingsPageContent() {
       // Convert flat API structure to nested structure
       const nestedSettings = {
         general: {},
-        email: {},
         security: {},
         notifications: {},
-        system: {}
+        system: {},
+        email: {}
       }
 
       // Map API settings to nested structure
       Object.keys(apiSettings).forEach(category => {
         if (nestedSettings[category]) {
           Object.keys(apiSettings[category]).forEach(key => {
-            nestedSettings[category][key] = apiSettings[category][key]
+            // Strip category prefix if present (e.g. "email.smtpHost" -> "smtpHost")
+            // This ensures the value maps to the correct field in the state
+            let fieldName = key;
+            if (key.startsWith(`${category}.`)) {
+              fieldName = key.substring(category.length + 1);
+            }
+            nestedSettings[category][fieldName] = apiSettings[category][key]
           })
         }
       })
@@ -191,20 +208,6 @@ export function SettingsPageContent() {
       ]
     },
     {
-      id: 'email',
-      title: 'Email Settings',
-      icon: Mail,
-      description: 'SMTP configuration for email notifications',
-      fields: [
-        { name: 'smtpHost', label: 'SMTP Host', type: 'text' },
-        { name: 'smtpPort', label: 'SMTP Port', type: 'number' },
-        { name: 'smtpUser', label: 'SMTP Username', type: 'text' },
-        { name: 'smtpPass', label: 'SMTP Password', type: 'password' },
-        { name: 'fromEmail', label: 'From Email', type: 'email' },
-        { name: 'fromName', label: 'From Name', type: 'text' }
-      ]
-    },
-    {
       id: 'security',
       title: 'Security Settings',
       icon: Shield,
@@ -226,7 +229,8 @@ export function SettingsPageContent() {
         { name: 'emailNotifications', label: 'Email Notifications', type: 'checkbox' },
         { name: 'proposalNotifications', label: 'Proposal Notifications', type: 'checkbox' },
         { name: 'userNotifications', label: 'User Notifications', type: 'checkbox' },
-        { name: 'systemNotifications', label: 'System Notifications', type: 'checkbox' }
+        { name: 'systemNotifications', label: 'System Notifications', type: 'checkbox' },
+        { name: 'loginAlerts', label: 'Login Security Alerts (Email)', type: 'checkbox' }
       ]
     },
     {
@@ -239,6 +243,20 @@ export function SettingsPageContent() {
         { name: 'debugMode', label: 'Debug Mode', type: 'checkbox' },
         { name: 'logLevel', label: 'Log Level', type: 'select', options: ['debug', 'info', 'warn', 'error'] },
         { name: 'backupFrequency', label: 'Backup Frequency', type: 'select', options: ['hourly', 'daily', 'weekly', 'monthly'] }
+      ]
+    },
+    {
+      id: 'email',
+      title: 'Email Settings',
+      icon: Mail,
+      description: 'SMTP and email delivery configuration',
+      fields: [
+        { name: 'smtpHost', label: 'SMTP Host', type: 'text' },
+        { name: 'smtpPort', label: 'SMTP Port', type: 'number' },
+        { name: 'smtpUser', label: 'SMTP User', type: 'text' },
+        { name: 'smtpPass', label: 'SMTP Password', type: 'password' },
+        { name: 'fromEmail', label: 'From Email', type: 'email' },
+        { name: 'fromName', label: 'From Name', type: 'text' }
       ]
     }
   ]
@@ -344,12 +362,25 @@ export function SettingsPageContent() {
                         />
                       )}
                       {field.type === 'password' && (
-                        <input
-                          type="password"
-                          className="form-input"
-                          value={settings[section.id][field.name]}
-                          onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
-                        />
+                        <div className="relative">
+                          <input
+                            type={visiblePasswords[field.name] ? "text" : "password"}
+                            className="form-input pr-10"
+                            value={settings[section.id][field.name]}
+                            onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                            onClick={() => togglePasswordVisibility(field.name)}
+                          >
+                            {visiblePasswords[field.name] ? (
+                              <EyeOff className="h-5 w-5" />
+                            ) : (
+                              <Eye className="h-5 w-5" />
+                            )}
+                          </button>
+                        </div>
                       )}
                       {field.type === 'number' && (
                         <input

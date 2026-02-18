@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck } from 'lucide-react'
+import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck, DollarSign, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
@@ -85,7 +85,6 @@ export default function AdminLeadsPage() {
   const [filters, setFilters] = useState({
     owner: '',
     source: '',
-    status: '',
     search: '',
     startDate: '',
     endDate: '',
@@ -94,7 +93,9 @@ export default function AdminLeadsPage() {
     property: '',
     reportingManager: '',
     team: '',
-    priority: ''
+    priority: '',
+    minPrice: '',
+    maxPrice: ''
   })
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 })
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -115,6 +116,7 @@ export default function AdminLeadsPage() {
   const [showBulkActions, setShowBulkActions] = useState(false)
   const [bulkAction, setBulkAction] = useState('')
   const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkPriority, setBulkPriority] = useState('')
   const [bulkAgent, setBulkAgent] = useState('')
   const [bulkAgency, setBulkAgency] = useState('')
   const [showBulkModal, setShowBulkModal] = useState(false)
@@ -128,6 +130,7 @@ export default function AdminLeadsPage() {
   const [teams, setTeams] = useState([])
   const [rescoring, setRescoring] = useState(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showPricePicker, setShowPricePicker] = useState(false)
   const [searchDebounceTimer, setSearchDebounceTimer] = useState(null)
   const [permissionModalEntry, setPermissionModalEntry] = useState(null)
   const [draggedLead, setDraggedLead] = useState(null)
@@ -136,6 +139,43 @@ export default function AdminLeadsPage() {
   const [filterChangeTimer, setFilterChangeTimer] = useState(null)
   const metadataFetchedRef = useRef(false)
   const lastFilterStateRef = useRef(null)
+
+  const setRange = (range) => {
+    const today = new Date()
+    let start = new Date()
+    let end = new Date()
+
+    switch (range) {
+      case 'today':
+        break
+      case 'yesterday':
+        start.setDate(today.getDate() - 1)
+        end.setDate(today.getDate() - 1)
+        break
+      case 'last7':
+        start.setDate(today.getDate() - 6)
+        break
+      case 'last30':
+        start.setDate(today.getDate() - 29)
+        break
+      case 'thisMonth':
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        break
+      case 'lastMonth':
+        start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+        end = new Date(today.getFullYear(), today.getMonth(), 0)
+        break
+      default:
+        return
+    }
+
+    const startStr = start.toISOString().split('T')[0]
+    const endStr = end.toISOString().split('T')[0]
+    setFilters(prev => ({ ...prev, startDate: startStr, endDate: endStr }))
+    setShowDatePicker(false)
+    setPagination(prev => ({ ...prev, page: 1 }))
+    fetchLeads()
+  }
 
   // Separate effect for initial data fetch (runs once on auth)
   useEffect(() => {
@@ -196,7 +236,9 @@ export default function AdminLeadsPage() {
       priority: filters.priority,
       search: filters.search,
       page: pagination.page,
-      limit: pagination.limit
+      limit: pagination.limit,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice
     })
 
     if (lastFilterStateRef.current === filterState) {
@@ -263,8 +305,8 @@ export default function AdminLeadsPage() {
     try {
       setLoading(true)
       // Exclude date filters from the initial spread to avoid duplication
-      const { startDate, endDate, ...otherFilters } = filters
-      
+      const { startDate, endDate, minPrice, maxPrice, ...otherFilters } = filters
+
       // For Kanban view, fetch leads with optimized pagination
       if (viewMode === 'kanban') {
         try {
@@ -273,13 +315,19 @@ export default function AdminLeadsPage() {
           const maxLimit = 250 // Smaller page size for better pagination
           const maxTotalLeads = 500 // Max 500 leads total (2 pages max) to prevent blocking
           const kanbanParams = new URLSearchParams({ limit: String(maxLimit), page: '1' })
-          
+
           // Use the destructured date variables
           if (startDate) {
             kanbanParams.append('startDate', startDate)
           }
           if (endDate) {
             kanbanParams.append('endDate', endDate)
+          }
+          if (minPrice) {
+            kanbanParams.append('minPrice', minPrice)
+          }
+          if (maxPrice) {
+            kanbanParams.append('maxPrice', maxPrice)
           }
           // Add all other filters
           Object.entries(otherFilters).forEach(([key, value]) => {
@@ -291,24 +339,24 @@ export default function AdminLeadsPage() {
               }
             }
           })
-          
+
           // Fetch first batch immediately
           const allResponse = await api.get(`/leads?${kanbanParams}`)
           let fetchedAllLeads = allResponse.data.leads || []
           const totalLeads = allResponse.data.pagination?.total || fetchedAllLeads.length
-          
+
           console.log('Kanban fetch - Initial batch:', fetchedAllLeads.length, 'Total from API:', totalLeads)
-          
+
           // Calculate how many pages we need (capped at maxTotalLeads)
           const leadsToFetch = Math.min(totalLeads, maxTotalLeads)
           const totalPages = Math.ceil(leadsToFetch / maxLimit)
-          
+
           // Only fetch second page to show we have more data, don't load all upfront
           // This prevents UI blocking and allows lazy-loading on scroll
           if (totalPages > 1 && fetchedAllLeads.length < leadsToFetch) {
             const secondPageParams = new URLSearchParams(kanbanParams)
             secondPageParams.set('page', '2')
-            
+
             try {
               const response = await api.get(`/leads?${secondPageParams}`)
               if (response.data.leads) {
@@ -318,15 +366,15 @@ export default function AdminLeadsPage() {
               console.warn('Could not fetch second page for kanban:', error.message)
             }
           }
-          
+
           console.log('Kanban fetch - After lazy-load optimization:', fetchedAllLeads.length)
-          
+
           // Trim to maxTotalLeads if we fetched more
           const wasCapped = fetchedAllLeads.length > maxTotalLeads || totalLeads > maxTotalLeads
           if (fetchedAllLeads.length > maxTotalLeads) {
             fetchedAllLeads = fetchedAllLeads.slice(0, maxTotalLeads)
           }
-          
+
           // Filter by permissions (do this after fetching to avoid multiple API calls)
           const filteredLeads = fetchedAllLeads.filter(lead => {
             const hasPermission = checkEntryPermission(lead, user, 'view', canViewLeads)
@@ -335,9 +383,9 @@ export default function AdminLeadsPage() {
             }
             return hasPermission
           })
-          
+
           console.log('Kanban fetch - After permission filter:', filteredLeads.length, 'out of', fetchedAllLeads.length)
-          
+
           // Update state - ensure we set the state even if filtered leads is empty (for debugging)
           setAllLeads(filteredLeads)
           setKanbanLeadsCapped(wasCapped)
@@ -348,7 +396,7 @@ export default function AdminLeadsPage() {
             total: filteredLeads.length,
             pages: Math.ceil(filteredLeads.length / pagination.limit)
           })
-          
+
           // Log if we have fetched leads but they were all filtered out
           if (fetchedAllLeads.length > 0 && filteredLeads.length === 0) {
             console.warn('⚠️ Kanban: API returned', fetchedAllLeads.length, 'leads but all were filtered out by permissions')
@@ -383,7 +431,7 @@ export default function AdminLeadsPage() {
             }
             return [key, value]
           })
-        
+
         const params = new URLSearchParams({
           page: pagination.page,
           limit: pagination.limit,
@@ -397,12 +445,18 @@ export default function AdminLeadsPage() {
         if (endDate) {
           params.append('endDate', endDate)
         }
+        if (minPrice) {
+          params.append('minPrice', minPrice)
+        }
+        if (maxPrice) {
+          params.append('maxPrice', maxPrice)
+        }
 
         const response = await api.get(`/leads?${params}`)
         const fetchedLeads = response.data.leads || []
         setLeads(fetchedLeads.filter(lead => checkEntryPermission(lead, user, 'view', canViewLeads)))
         setPagination(response.data.pagination || { page: 1, limit: 10, total: 0, pages: 0 })
-        
+
         // Clear allLeads when in list view
         setAllLeads([])
       }
@@ -621,7 +675,6 @@ export default function AdminLeadsPage() {
     setFilters({
       owner: '',
       source: '',
-      status: '',
       search: '',
       startDate: '',
       endDate: '',
@@ -630,7 +683,9 @@ export default function AdminLeadsPage() {
       property: '',
       reportingManager: '',
       team: '',
-      priority: ''
+      priority: '',
+      minPrice: '',
+      maxPrice: ''
     })
     setPagination(prev => ({ ...prev, page: 1 }))
     toast.success('All filters cleared')
@@ -1145,7 +1200,7 @@ export default function AdminLeadsPage() {
     setDraggedOverColumn(null)
   }
 
-  const handleDrop = async (e, targetStatus) => {
+  const handleDrop = async (e, targetPriority) => {
     e.preventDefault()
     e.stopPropagation()
     setDraggedOverColumn(null)
@@ -1153,12 +1208,12 @@ export default function AdminLeadsPage() {
     if (!draggedLead) return
 
     const leadId = getLeadId(draggedLead)
-    const currentStatus = draggedLead.status || 'new'
-    const normalizedCurrentStatus = currentStatus ? String(currentStatus).toLowerCase() : 'new'
-    const normalizedTargetStatus = targetStatus ? String(targetStatus).toLowerCase() : 'new'
+    const currentPriority = draggedLead.priority || 'Warm'
+    const normalizedCurrentPriority = currentPriority ? String(currentPriority).toLowerCase() : 'Warm'
+    const normalizedTargetPriority = targetPriority ? String(targetPriority).toLowerCase() : 'Warm'
 
     // Don't update if dropped in the same column
-    if (normalizedCurrentStatus === normalizedTargetStatus) {
+    if (normalizedCurrentPriority === normalizedTargetPriority) {
       setDraggedLead(null)
       return
     }
@@ -1167,33 +1222,31 @@ export default function AdminLeadsPage() {
     const previousAllLeadsState = [...allLeads]
     const previousLeadsState = [...leads]
 
-    // Optimistically update UI - update the lead's status in place (no duplication)
+    // Optimistically update UI
     setAllLeads(prevLeads =>
       prevLeads.map(lead => {
         const id = getLeadId(lead)
         if (String(id) === String(leadId)) {
-          return { ...lead, status: targetStatus }
+          return { ...lead, priority: targetPriority }
         }
         return lead
       })
     )
 
-    // Also update leads array for list view consistency
     setLeads(prevLeads =>
       prevLeads.map(lead => {
         const id = getLeadId(lead)
         if (String(id) === String(leadId)) {
-          return { ...lead, status: targetStatus }
+          return { ...lead, priority: targetPriority }
         }
         return lead
       })
     )
 
     try {
-      // Make API call to update status
-      const response = await api.put(`/leads/${leadId}`, { status: targetStatus })
+      // Make API call to update priority
+      const response = await api.put(`/leads/${leadId}`, { priority: targetPriority })
 
-      // Update with server response to ensure consistency
       if (response.data?.lead) {
         const updatedLead = response.data.lead
         setAllLeads(prevLeads =>
@@ -1216,17 +1269,16 @@ export default function AdminLeadsPage() {
         )
       }
 
-      toast.success('Lead status updated successfully')
+      toast.success('Lead priority updated successfully')
       fetchDashboardMetrics()
-      fetchMissedFollowUps()
       setDraggedLead(null)
     } catch (error) {
       // Rollback on error
       setAllLeads(previousAllLeadsState)
       setLeads(previousLeadsState)
       setDraggedLead(null)
-      console.error('Error updating lead status:', error)
-      toast.error('Failed to update lead status')
+      console.error('Error updating lead priority:', error)
+      toast.error('Failed to update lead priority')
     }
   }
 
@@ -1314,7 +1366,29 @@ export default function AdminLeadsPage() {
       fetchMissedFollowUps()
     } catch (error) {
       console.error('Error bulk updating status:', error)
-      toast.error('Failed to update some leads')
+      toast.error('Failed to update status for some leads')
+    }
+  }
+
+  const handleBulkUpdatePriority = async () => {
+    if (selectedLeads.length === 0 || !bulkPriority) {
+      toast.error('Please select leads and a priority')
+      return
+    }
+
+    try {
+      const updatePromises = selectedLeads.map(id => api.put(`/leads/${id}`, { priority: bulkPriority }))
+      await Promise.all(updatePromises)
+      toast.success(`${selectedLeads.length} lead(s) priority updated successfully`)
+      setSelectedLeads([])
+      setShowBulkActions(false)
+      setBulkPriority('')
+      setShowBulkModal(false)
+      fetchLeads()
+      fetchDashboardMetrics()
+    } catch (error) {
+      console.error('Error bulk updating priority:', error)
+      toast.error('Failed to update priority for some leads')
     }
   }
 
@@ -1523,29 +1597,21 @@ export default function AdminLeadsPage() {
 
   // Group leads by status for Kanban view
   const kanbanColumns = [
-    { id: 'new', title: 'New', colorClass: 'bg-yellow-400' },
-    { id: 'contacted', title: 'Contacted', colorClass: 'bg-orange-400' },
-    { id: 'qualified', title: 'Qualified', colorClass: 'bg-blue-400' },
-    { id: 'site_visit_scheduled', title: 'Site Visit Scheduled', colorClass: 'bg-cyan-400' },
-    { id: 'site_visit_completed', title: 'Site Visit Completed', colorClass: 'bg-teal-400' },
-    { id: 'negotiation', title: 'Negotiation', colorClass: 'bg-indigo-400' },
-    { id: 'booked', title: 'Booked', colorClass: 'bg-green-400' },
-    { id: 'closed', title: 'Closed', colorClass: 'bg-emerald-600' },
-    { id: 'lost', title: 'Lost', colorClass: 'bg-red-400' },
-    { id: 'junk', title: 'Junk', colorClass: 'bg-gray-400' }
+    { id: 'Hot', title: 'Hot', colorClass: 'bg-red-500' },
+    { id: 'Warm', title: 'Warm', colorClass: 'bg-orange-500' },
+    { id: 'Cold', title: 'Cold', colorClass: 'bg-blue-500' },
+    { id: 'Not_interested', title: 'Not Interested', colorClass: 'bg-gray-500' }
   ]
 
-  const getLeadsByStatus = (status) => {
+  const getLeadsByPriority = (priority) => {
     if (!allLeads || allLeads.length === 0) return []
     return allLeads.filter(lead => {
-      if (!lead.status) {
-        // If no status, only show in 'new' column
-        return status === 'new'
+      if (!lead.priority) {
+        return priority === 'Warm'
       }
-      // Normalize both sides to lower case and remove underscores/spaces
-      const leadStatus = String(lead.status).toLowerCase().replace(/\s|_/g, '')
-      const colStatus = String(status).toLowerCase().replace(/\s|_/g, '')
-      return leadStatus === colStatus;
+      const leadPriority = String(lead.priority).toLowerCase().replace(/\s|_/g, '')
+      const colPriority = String(priority).toLowerCase().replace(/\s|_/g, '')
+      return leadPriority === colPriority;
     })
   }
 
@@ -1875,7 +1941,7 @@ export default function AdminLeadsPage() {
                 List
               </button> */}
               <button
-               
+
                 type="button"
                 onClick={(e) => {
                   e.preventDefault()
@@ -1960,7 +2026,7 @@ export default function AdminLeadsPage() {
                     pages: Math.ceil(prev.total / newLimit)
                   }))
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer"
+                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>
@@ -1975,7 +2041,7 @@ export default function AdminLeadsPage() {
                 <select
                   value={filters.owner}
                   onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
                 >
                   <option value="">- Agent -</option>
                   {owners.map((owner) => (
@@ -1992,7 +2058,7 @@ export default function AdminLeadsPage() {
                   setFilters(prev => ({ ...prev, source: e.target.value }))
                   setPagination(prev => ({ ...prev, page: 1 }))
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
               >
                 <option value="">- Source -</option>
                 <option value="website">Website</option>
@@ -2010,28 +2076,12 @@ export default function AdminLeadsPage() {
                 ))}
               </select>
 
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Status -</option>
-                <option value="new">New Lead</option>
-                <option value="contacted">Contacted</option>
-                <option value="qualified">Qualified</option>
-                <option value="site_visit_scheduled">Site Visit Scheduled</option>
-                <option value="site_visit_completed">Site Visit Completed</option>
-                <option value="negotiation">Negotiation</option>
-                <option value="booked">Booked</option>
-                <option value="lost">Lost</option>
-                <option value="closed">Closed</option>
-                <option value="junk">Junk / Invalid</option>
-              </select>
+
 
               <select
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
               >
                 <option value="">- Priority -</option>
                 <option value="Hot">Hot</option>
@@ -2045,7 +2095,7 @@ export default function AdminLeadsPage() {
                 <select
                   value={filters.team}
                   onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">- Team -</option>
                   {teams.map((team) => (
@@ -2064,7 +2114,7 @@ export default function AdminLeadsPage() {
                     setFilters(prev => ({ ...prev, campaign: e.target.value }))
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">- Campaign -</option>
                   {campaigns.map((campaign) => (
@@ -2084,7 +2134,7 @@ export default function AdminLeadsPage() {
                     setFilters(prev => ({ ...prev, agency: selectedAgency }))
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">- Agency -</option>
                   {agencies.map((agency) => {
@@ -2105,7 +2155,7 @@ export default function AdminLeadsPage() {
                   setFilters(prev => ({ ...prev, property: selectedProperty }))
                   setPagination(prev => ({ ...prev, page: 1 }))
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">- Property -</option>
                 {properties.map((property) => {
@@ -2123,19 +2173,19 @@ export default function AdminLeadsPage() {
                 <button
                   type="button"
                   onClick={() => setShowDatePicker(!showDatePicker)}
-                  className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
+                  className={`inline-flex items-center px-4 h-[42px] border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
                     ? 'border-primary-500 text-gray-900'
                     : 'border-gray-300 text-gray-700'
                     }`}
                 >
-                  <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                  <span>
+                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                  <span className="truncate max-w-[200px]">
                     {filters.startDate && filters.endDate
-                      ? `Date: ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                      ? `${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                       : filters.startDate
-                        ? `Date: ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ...`
+                        ? `From ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                         : filters.endDate
-                          ? `Date: ... - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                          ? `Until ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                           : 'Date Range'}
                   </span>
                   {filters.startDate || filters.endDate ? (
@@ -2148,7 +2198,7 @@ export default function AdminLeadsPage() {
                         fetchLeads()
                       }}
                     />
-                  ) : null}
+                  ) : <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />}
                 </button>
                 {showDatePicker && (
                   <>
@@ -2156,59 +2206,86 @@ export default function AdminLeadsPage() {
                       className="fixed inset-0 z-40"
                       onClick={() => setShowDatePicker(false)}
                     />
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
-                          <input
-                            type="date"
-                            value={filters.startDate}
-                            onChange={(e) => {
-                              const newStartDate = e.target.value
-                              setFilters(prev => ({ ...prev, startDate: newStartDate }))
-                              if (filters.endDate && newStartDate && filters.endDate < newStartDate) {
-                                setFilters(prev => ({ ...prev, endDate: '' }))
-                              }
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                          />
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 min-w-[600px] overflow-hidden">
+                      <div className="flex flex-col md:flex-row">
+                        {/* Presets */}
+                        <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-2">
+                          <div className="flex flex-col gap-1">
+                            {[
+                              { label: 'Today', value: 'today' },
+                              { label: 'Yesterday', value: 'yesterday' },
+                              { label: 'Last 7 Days', value: 'last7' },
+                              { label: 'Last 30 Days', value: 'last30' },
+                              { label: 'This Month', value: 'thisMonth' },
+                              { label: 'Last Month', value: 'lastMonth' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.value}
+                                onClick={() => setRange(preset.value)}
+                                className="text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
-                          <input
-                            type="date"
-                            value={filters.endDate}
-                            onChange={(e) => {
-                              const newEndDate = e.target.value
-                              setFilters(prev => ({ ...prev, endDate: newEndDate }))
-                            }}
-                            min={filters.startDate || undefined}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                          />
+
+                        {/* Custom Range */}
+                        <div className="flex-1 p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex-1">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                              <input
+                                type="date"
+                                value={filters.startDate}
+                                onChange={(e) => {
+                                  const newStartDate = e.target.value
+                                  setFilters(prev => ({ ...prev, startDate: newStartDate }))
+                                  if (filters.endDate && newStartDate && filters.endDate < newStartDate) {
+                                    setFilters(prev => ({ ...prev, endDate: '' }))
+                                  }
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                              <input
+                                type="date"
+                                value={filters.endDate}
+                                onChange={(e) => {
+                                  const newEndDate = e.target.value
+                                  setFilters(prev => ({ ...prev, endDate: newEndDate }))
+                                }}
+                                min={filters.startDate || undefined}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 mt-6">
+                            <button
+                              onClick={() => {
+                                setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
+                                setShowDatePicker(false)
+                                setPagination(prev => ({ ...prev, page: 1 }))
+                                fetchLeads()
+                              }}
+                              className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            >
+                              Clear
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowDatePicker(false)
+                                setPagination(prev => ({ ...prev, page: 1 }))
+                                fetchLeads()
+                              }}
+                              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                            >
+                              Apply
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex justify-end gap-2 mt-4">
-                        <button
-                          onClick={() => {
-                            setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
-                            setShowDatePicker(false)
-                            setPagination(prev => ({ ...prev, page: 1 }))
-                            fetchLeads()
-                          }}
-                          className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-                        >
-                          Clear
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowDatePicker(false)
-                            setPagination(prev => ({ ...prev, page: 1 }))
-                            fetchLeads()
-                          }}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
-                        >
-                          Apply
-                        </button>
                       </div>
                     </div>
                   </>
@@ -2248,7 +2325,7 @@ export default function AdminLeadsPage() {
                       fetchLeads()
                     }
                   }}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 w-64"
+                  className="pl-10 pr-4 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 w-64"
                 />
                 {filters.search && (
                   <button
@@ -2312,6 +2389,15 @@ export default function AdminLeadsPage() {
                           className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm"
                         >
                           Update Status
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowBulkModal(true)
+                            setBulkAction('priority')
+                          }}
+                          className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm"
+                        >
+                          Update Priority
                         </button>
                         <button
                           onClick={() => {
@@ -2442,17 +2528,7 @@ export default function AdminLeadsPage() {
                           <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
                             Priority
                           </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('status')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Status
-                              {sortColumn === 'status' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
+
                           <th
                             className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
                             onClick={() => handleSort('createdDate')}
@@ -2579,12 +2655,11 @@ export default function AdminLeadsPage() {
                                 )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <Link
-                                  href={`/admin/leads/${leadId}`}
-                                  className="text-sm font-medium text-primary-600 hover:text-primary-800"
+                                <span
+                                  className="text-sm font-medium text-gray-900"
                                 >
                                   {contactName}
-                                </Link>
+                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
@@ -2702,48 +2777,15 @@ export default function AdminLeadsPage() {
                                   </select>
                                 ) : (
                                   <span className={`px-2 py-1 rounded text-xs font-semibold ${String(lead.priority).toLowerCase() === 'hot' ? 'bg-red-100 text-red-800' :
-                                    String(lead.priority).toLowerCase() === 'warm' ? 'bg-yellow-100 text-yellow-800' :
-                                      String(lead.priority).toLowerCase() === 'cold' ? 'bg-blue-100 text-blue-800' :
+                                    String(lead.priority).toLowerCase() === 'Warm' ? 'bg-yellow-100 text-yellow-800' :
+                                      String(lead.priority).toLowerCase() === 'Cold' ? 'bg-blue-100 text-blue-800' :
                                         'bg-gray-100 text-gray-800'
                                     }`}>
                                     {lead.priority ? lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1).replace('_', ' ') : '-'}
                                   </span>
                                 )}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                {canEditLead ? (
-                                  <select
-                                    value={lead.status || ''}
-                                    onChange={(e) => handleQuickStatusChange(leadId, e.target.value)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className={`text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]
-                                      ${lead.status === 'booked' || lead.status === 'closed' ? 'bg-green-50 text-green-800 border-green-200' :
-                                        lead.status === 'lost' || lead.status === 'junk' ? 'bg-red-50 text-red-800 border-red-200' :
-                                          lead.status === 'new' ? 'bg-blue-50 text-blue-800 border-blue-200' :
-                                            'bg-primary-50 text-primary-800 border-primary-200'}`}
-                                    title="Change Status"
-                                  >
-                                    <option value="">Select Status</option>
-                                    <option value="new">New Lead</option>
-                                    <option value="contacted">Contacted</option>
-                                    <option value="qualified">Qualified</option>
-                                    <option value="site_visit_scheduled">Site Visit Scheduled</option>
-                                    <option value="site_visit_completed">Site Visit Completed</option>
-                                    <option value="negotiation">Negotiation</option>
-                                    <option value="booked">Booked</option>
-                                    <option value="lost">Lost</option>
-                                    <option value="closed">Closed</option>
-                                    <option value="junk">Junk / Invalid</option>
-                                  </select>
-                                ) : (
-                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${lead.status === 'booked' || lead.status === 'closed' ? 'bg-green-100 text-green-800' :
-                                    lead.status === 'lost' || lead.status === 'junk' ? 'bg-red-100 text-red-800' :
-                                      'bg-primary-100 text-primary-800'
-                                    }`}>
-                                    {lead.status ? lead.status.replace(/_/g, ' ').charAt(0).toUpperCase() + lead.status.replace(/_/g, ' ').slice(1) : '-'}
-                                  </span>
-                                )}
-                              </td>
+
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {new Date(lead.createdAt).toLocaleDateString()}
                               </td>
@@ -2896,133 +2938,133 @@ export default function AdminLeadsPage() {
               )}
               <div className="flex gap-4 overflow-x-auto pb-4">
                 {kanbanColumns.map((column) => {
-                const columnLeads = getLeadsByStatus(column.id)
-                const isDraggedOver = draggedOverColumn === column.id
-                return (
-                  <div
-                    key={column.id}
-                    className={`flex-shrink-0 w-80 bg-gray-50 rounded-lg p-4 transition-colors ${isDraggedOver ? 'bg-blue-50 border-2 border-blue-300 border-dashed' : ''}`}
-                    onDragOver={(e) => handleDragOver(e, column.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, column.id)}
-                  >
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="text-sm font-semibold text-gray-900">{column.title}</h3>
-                        <span className="text-xs font-medium text-gray-600 bg-white px-2 py-1 rounded-full">
-                          {columnLeads.length}
-                        </span>
+                  const columnLeads = getLeadsByPriority(column.id)
+                  const isDraggedOver = draggedOverColumn === column.id
+                  return (
+                    <div
+                      key={column.id}
+                      className={`flex-shrink-0 w-80 bg-gray-50 rounded-lg p-4 transition-colors ${isDraggedOver ? 'bg-blue-50 border-2 border-blue-300 border-dashed' : ''}`}
+                      onDragOver={(e) => handleDragOver(e, column.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, column.id)}
+                    >
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <h3 className="text-sm font-semibold text-gray-900">{column.title}</h3>
+                          <span className="text-xs font-medium text-gray-600 bg-white px-2 py-1 rounded-full">
+                            {columnLeads.length}
+                          </span>
+                        </div>
+                        <div className={`h-1 rounded-full ${column.colorClass}`}></div>
                       </div>
-                      <div className={`h-1 rounded-full ${column.colorClass}`}></div>
-                    </div>
-                    <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
-                      {columnLeads.map((lead) => {
-                        const leadId = getLeadId(lead)
-                        const contactName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
-                        const isDragging = draggedLead && getLeadId(draggedLead) === leadId
-                        const getStatusLabel = (status) => {
-                          if (!status) return 'New Lead'
-                          const statusLabels = {
-                            new: 'New Lead',
-                            contacted: 'Contacted',
-                            qualified: 'Qualified',
-                            site_visit_scheduled: 'Site Visit Scheduled',
-                            site_visit_completed: 'Site Visit Completed',
-                            negotiation: 'Negotiation',
-                            booked: 'Booked',
-                            lost: 'Lost',
-                            closed: 'Closed',
-                            junk: 'Junk / Invalid'
+                      <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+                        {columnLeads.map((lead) => {
+                          const leadId = getLeadId(lead)
+                          const contactName = `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A'
+                          const isDragging = draggedLead && getLeadId(draggedLead) === leadId
+                          const getStatusLabel = (status) => {
+                            if (!status) return 'New Lead'
+                            const statusLabels = {
+                              new: 'New Lead',
+                              contacted: 'Contacted',
+                              qualified: 'Qualified',
+                              site_visit_scheduled: 'Site Visit Scheduled',
+                              site_visit_completed: 'Site Visit Completed',
+                              negotiation: 'Negotiation',
+                              booked: 'Booked',
+                              lost: 'Lost',
+                              closed: 'Closed',
+                              junk: 'Junk / Invalid'
+                            }
+                            return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
                           }
-                          return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
-                        }
-                        const getPriorityColor = (priority) => {
-                          if (!priority) return 'bg-gray-100 text-gray-800'
-                          const p = String(priority).toLowerCase()
-                          if (p === 'hot') return 'bg-red-100 text-red-800'
-                          if (p === 'warm') return 'bg-orange-100 text-orange-800'
-                          if (p === 'cold') return 'bg-blue-100 text-blue-800'
-                          return 'bg-gray-100 text-gray-800'
-                        }
-                        const getPriorityLabel = (priority) => {
-                          if (!priority) return 'Warm'
-                          const priorityLabels = {
-                            Hot: 'Hot',
-                            Warm: 'Warm',
-                            Cold: 'Cold',
-                            Not_interested: 'Not Interested'
+                          const getPriorityColor = (priority) => {
+                            if (!priority) return 'bg-gray-100 text-gray-800'
+                            const p = String(priority).toLowerCase()
+                            if (p === 'hot') return 'bg-red-100 text-red-800'
+                            if (p === 'warm') return 'bg-orange-100 text-orange-800'
+                            if (p === 'cold') return 'bg-blue-100 text-blue-800'
+                            return 'bg-gray-100 text-gray-800'
                           }
-                          const p = String(priority).toLowerCase()
-                          const key = Object.keys(priorityLabels).find(k => k.toLowerCase() === p)
-                          return priorityLabels[key] || priority.charAt(0).toUpperCase() + priority.slice(1)
-                        }
-                        return (
-                          <div
-                            key={leadId}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, lead)}
-                            onDragEnd={handleDragEnd}
-                            className={`bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-move border border-gray-200 ${isDragging ? 'opacity-50' : 'hover:border-primary-300'}`}
-                            onClick={(e) => {
-                              // Prevent navigation during drag operations
-                              e.stopPropagation()
-                              if (!draggedLead && !isDragging) {
-                                router.push(`/admin/leads/${leadId}`)
-                              }
-                            }}
-                          >
-                            {/* Lead Name */}
-                            <h4 className="text-sm font-medium text-gray-900 mb-2 truncate">{contactName}</h4>
-                            
-                            {/* Two Column Layout */}
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Left Column */}
-                              <div className="space-y-1.5">
-                                {/* Status */}
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(lead.status)}`}>
-                                    {getStatusLabel(lead.status)}
-                                  </span>
-                                </div>
-                                
-                                {/* Follow Up with Icon */}
-                                {lead.followUpDate ? (
+                          const getPriorityLabel = (priority) => {
+                            if (!priority) return 'Warm'
+                            const priorityLabels = {
+                              Hot: 'Hot',
+                              Warm: 'Warm',
+                              Cold: 'Cold',
+                              Not_interested: 'Not Interested'
+                            }
+                            const p = String(priority).toLowerCase()
+                            const key = Object.keys(priorityLabels).find(k => k.toLowerCase() === p)
+                            return priorityLabels[key] || priority.charAt(0).toUpperCase() + priority.slice(1)
+                          }
+                          return (
+                            <div
+                              key={leadId}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, lead)}
+                              onDragEnd={handleDragEnd}
+                              className={`bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-move border border-gray-200 ${isDragging ? 'opacity-50' : 'hover:border-primary-300'}`}
+                              onClick={(e) => {
+                                // Prevent navigation during drag operations
+                                e.stopPropagation()
+                                if (!draggedLead && !isDragging) {
+                                  router.push(`/admin/leads/${leadId}`)
+                                }
+                              }}
+                            >
+                              {/* Lead Name */}
+                              <h4 className="text-sm font-medium text-gray-900 mb-2 truncate">{contactName}</h4>
+
+                              {/* Two Column Layout */}
+                              <div className="grid grid-cols-2 gap-2">
+                                {/* Left Column */}
+                                <div className="space-y-1.5">
+                                  {/* Status */}
                                   <div className="flex items-center gap-1.5">
-                                    <Calendar className={`h-3.5 w-3.5 ${new Date(lead.followUpDate) < new Date() ? 'text-red-500' : 'text-gray-500'}`} />
-                                    <span className={`text-xs ${new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
-                                      {new Date(lead.followUpDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(lead.status)}`}>
+                                      {getStatusLabel(lead.status)}
                                     </span>
                                   </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-gray-300" />
-                                    <span className="text-xs text-gray-400">No follow-up</span>
+
+                                  {/* Follow Up with Icon */}
+                                  {lead.followUpDate ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <Calendar className={`h-3.5 w-3.5 ${new Date(lead.followUpDate) < new Date() ? 'text-red-500' : 'text-gray-500'}`} />
+                                      <span className={`text-xs ${new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                                        {new Date(lead.followUpDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <Calendar className="h-3.5 w-3.5 text-gray-300" />
+                                      <span className="text-xs text-gray-400">No follow-up</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Right Column */}
+                                <div className="space-y-1.5">
+                                  {/* Priority */}
+                                  <div className="flex items-center justify-end">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPriorityColor(lead.priority)}`}>
+                                      {getPriorityLabel(lead.priority)}
+                                    </span>
                                   </div>
-                                )}
-                              </div>
-                              
-                              {/* Right Column */}
-                              <div className="space-y-1.5">
-                                {/* Priority */}
-                                <div className="flex items-center justify-end">
-                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPriorityColor(lead.priority)}`}>
-                                    {getPriorityLabel(lead.priority)}
-                                  </span>
                                 </div>
                               </div>
                             </div>
+                          )
+                        })}
+                        {columnLeads.length === 0 && (
+                          <div className="text-center text-gray-400 text-sm py-8">
+                            No leads
                           </div>
-                        )
-                      })}
-                      {columnLeads.length === 0 && (
-                        <div className="text-center text-gray-400 text-sm py-8">
-                          No leads
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
               </div>
             </>
           )
@@ -3197,6 +3239,21 @@ export default function AdminLeadsPage() {
                       <option value="junk">Junk / Invalid</option>
                     </select>
                   </div>
+                ) : bulkAction === 'priority' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Update Priority</label>
+                    <select
+                      value={bulkPriority}
+                      onChange={(e) => setBulkPriority(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Select Priority</option>
+                      <option value="Hot">Hot</option>
+                      <option value="Warm">Warm</option>
+                      <option value="Cold">Cold</option>
+                      <option value="Not_interested">Not Interested</option>
+                    </select>
+                  </div>
                 ) : bulkAction === 'agency' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Agency</label>
@@ -3237,6 +3294,7 @@ export default function AdminLeadsPage() {
                     setShowBulkModal(false)
                     setBulkAction('')
                     setBulkStatus('')
+                    setBulkPriority('')
                     setBulkAgent('')
                     setBulkAgency('')
                   }}
@@ -3245,10 +3303,17 @@ export default function AdminLeadsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={bulkAction === 'status' ? handleBulkUpdateStatus : bulkAction === 'agency' ? handleBulkAssignAgency : handleBulkAssign}
+                  onClick={() => {
+                    if (bulkAction === 'status') handleBulkUpdateStatus()
+                    else if (bulkAction === 'priority') handleBulkUpdatePriority()
+                    else if (bulkAction === 'agency') handleBulkAssignAgency()
+                    else handleBulkAssign()
+                  }}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                 >
-                  {bulkAction === 'status' ? 'Update Status' : 'Assign Agent'}
+                  {bulkAction === 'status' ? 'Update Status' :
+                    bulkAction === 'priority' ? 'Update Priority' :
+                      bulkAction === 'agency' ? 'Assign Agency' : 'Assign Agent'}
                 </button>
               </div>
             </div>

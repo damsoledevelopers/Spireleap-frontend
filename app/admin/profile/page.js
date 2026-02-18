@@ -149,8 +149,15 @@ export default function ProfilePage() {
             await fetchUser() // Refresh user context
         } catch (error) {
             console.error('Error updating profile:', error)
-            toast.error(error.response?.data?.message || 'Failed to update profile')
-        } finally {
+            const errorData = error.response?.data
+            if (errorData?.errors && Array.isArray(errorData.errors)) {
+                // If it's a validation error array, show the first one or join them
+                errorData.errors.forEach(err => {
+                    toast.error(`${err.path}: ${err.msg}`)
+                })
+            } else {
+                toast.error(errorData?.message || 'Failed to update profile')
+            }
             setSaving(false)
         }
     }

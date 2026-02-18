@@ -81,7 +81,7 @@ export default function AgencyReports() {
       const allAgents = agentsResponse.data.users || []
 
       // Filter agents by agency
-      const agents = allAgents.filter(a => 
+      const agents = allAgents.filter(a =>
         a.agency && (a.agency._id === user.agency || a.agency.toString() === user.agency)
       )
 
@@ -95,10 +95,10 @@ export default function AgencyReports() {
       const allLeads = leadsResponse.data.leads || []
 
       // Filter by agency
-      const properties = allProperties.filter(p => 
+      const properties = allProperties.filter(p =>
         p.agency && (p.agency._id === user.agency || p.agency.toString() === user.agency)
       )
-      const leads = allLeads.filter(l => 
+      const leads = allLeads.filter(l =>
         l.agency && (l.agency._id === user.agency || l.agency.toString() === user.agency)
       )
 
@@ -148,10 +148,10 @@ export default function AgencyReports() {
 
       // Agent performance
       const agentPerformance = agents.map(agent => {
-        const agentProperties = properties.filter(p => 
+        const agentProperties = properties.filter(p =>
           p.agent && (p.agent._id === agent._id || p.agent.toString() === agent._id)
         )
-        const agentLeads = leads.filter(l => 
+        const agentLeads = leads.filter(l =>
           l.assignedAgent && (l.assignedAgent._id === agent._id || l.assignedAgent.toString() === agent._id)
         )
         const activeLeads = agentLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
@@ -169,7 +169,7 @@ export default function AgencyReports() {
           conversionRate: agentLeads.length > 0 ? ((convertedLeads / agentLeads.length) * 100).toFixed(1) : 0
         }
       })
-      .sort((a, b) => b.totalLeads - a.totalLeads)
+        .sort((a, b) => b.totalLeads - a.totalLeads)
 
       // Recent activity
       const recentActivity = [
@@ -188,8 +188,8 @@ export default function AgencyReports() {
           link: `/agency/leads/${l._id}`
         }))
       ]
-      .sort((a, b) => new Date(b.time) - new Date(a.time))
-      .slice(0, 10)
+        .sort((a, b) => new Date(b.time) - new Date(a.time))
+        .slice(0, 10)
 
       setExportData({
         leads,
@@ -346,11 +346,10 @@ export default function AgencyReports() {
                 <button
                   key={report.id}
                   onClick={() => setSelectedReport(report.id)}
-                  className={`p-4 rounded-lg border-2 transition-colors ${
-                    selectedReport === report.id
+                  className={`p-4 rounded-lg border-2 transition-colors ${selectedReport === report.id
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <report.icon className="h-6 w-6 mx-auto mb-2" />
                   <div className="text-sm font-medium">{report.name}</div>
@@ -527,7 +526,7 @@ export default function AgencyReports() {
                   <div>
                     <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {reportData.totalLeads > 0 
+                      {reportData.totalLeads > 0
                         ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
                         : 0}%
                     </p>
@@ -800,7 +799,7 @@ export default function AgencyReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-gray-900">
-                        {reportData.totalLeads > 0 
+                        {reportData.totalLeads > 0
                           ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
                           : 0}%
                       </span>
@@ -885,9 +884,8 @@ export default function AgencyReports() {
                       <li key={index} className="py-4">
                         <div className="flex items-center space-x-4">
                           <div className="flex-shrink-0">
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                              activity.type === 'property_added' ? 'bg-green-100' : 'bg-purple-100'
-                            }`}>
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${activity.type === 'property_added' ? 'bg-green-100' : 'bg-purple-100'
+                              }`}>
                               {activity.type === 'property_added' ? (
                                 <Package className="h-4 w-4 text-green-600" />
                               ) : (

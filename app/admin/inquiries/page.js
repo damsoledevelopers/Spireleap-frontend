@@ -37,7 +37,9 @@ import {
   Building2,
   Lock,
   Download,
-  Upload
+  Upload,
+  DollarSign,
+  XCircle
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -79,8 +81,11 @@ export default function AdminInquiriesPage() {
     source: '',
     search: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    minPrice: '',
+    maxPrice: ''
   })
+  const [showPricePicker, setShowPricePicker] = useState(false)
 
   // Per-entry Permission State
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
@@ -140,9 +145,9 @@ export default function AdminInquiriesPage() {
       if (inquiry.status === 'lost' || inquiry.status === 'closed') statsData.lost++
 
       // Priority counts
-      if (inquiry.priority === 'hot') statsData.hot++
-      if (inquiry.priority === 'warm') statsData.warm++
-      if (inquiry.priority === 'cold') statsData.cold++
+      if (inquiry.priority === 'Hot') statsData.hot++
+      if (inquiry.priority === 'Warm') statsData.warm++
+      if (inquiry.priority === 'Cold') statsData.cold++
 
       // Unassigned count (no agency)
       const agencyId = inquiry.agency?._id || inquiry.agency
@@ -172,6 +177,42 @@ export default function AdminInquiriesPage() {
     })
 
     setStats(statsData)
+  }, [])
+
+  const setRange = useCallback((range) => {
+    const today = new Date()
+    let start = new Date()
+    let end = new Date()
+
+    switch (range) {
+      case 'today':
+        break
+      case 'yesterday':
+        start.setDate(today.getDate() - 1)
+        end.setDate(today.getDate() - 1)
+        break
+      case 'last7':
+        start.setDate(today.getDate() - 6)
+        break
+      case 'last30':
+        start.setDate(today.getDate() - 29)
+        break
+      case 'thisMonth':
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        break
+      case 'lastMonth':
+        start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+        end = new Date(today.getFullYear(), today.getMonth(), 0)
+        break
+      default:
+        return
+    }
+
+    const startStr = start.toISOString().split('T')[0]
+    const endStr = end.toISOString().split('T')[0]
+    setFilters(prev => ({ ...prev, startDate: startStr, endDate: endStr }))
+    setShowDatePicker(false)
+    setCurrentPage(1)
   }, [])
 
   // Calculate stats when allInquiries changes
@@ -456,10 +497,10 @@ export default function AdminInquiriesPage() {
 
   const getPriorityBadge = (priority) => {
     const priorityStyles = {
-      hot: 'bg-red-100 text-red-800',
-      warm: 'bg-orange-100 text-orange-800',
-      cold: 'bg-blue-100 text-blue-800',
-      not_interested: 'bg-gray-100 text-gray-800'
+      Hot: 'bg-red-100 text-red-800',
+      Warm: 'bg-orange-100 text-orange-800',
+      Cold: 'bg-blue-100 text-blue-800',
+      Not_interested: 'bg-gray-100 text-gray-800'
     }
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityStyles[priority] || 'bg-gray-100 text-gray-800'}`}>
@@ -650,22 +691,22 @@ export default function AdminInquiriesPage() {
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
-                  ? 'border-primary-500 text-gray-900'
+                className={`inline-flex items-center px-4 h-[42px] border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${filters.startDate || filters.endDate
+                  ? 'border-primary-500 text-gray-900 list-filter-active'
                   : 'border-gray-300 text-gray-700'
                   }`}
               >
-                <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                <span>
+                <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                <span className="truncate max-w-[200px]">
                   {filters.startDate && filters.endDate
-                    ? `Date: ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    ? `${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                     : filters.startDate
-                      ? `Date: ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ...`
+                      ? `From ${new Date(filters.startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                       : filters.endDate
-                        ? `Date: ... - ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        ? `Until ${new Date(filters.endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                         : 'Date Range'}
                 </span>
-                {(filters.startDate || filters.endDate) && (
+                {filters.startDate || filters.endDate ? (
                   <X
                     className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
                     onClick={(e) => {
@@ -674,7 +715,7 @@ export default function AdminInquiriesPage() {
                       setCurrentPage(1)
                     }}
                   />
-                )}
+                ) : <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />}
               </button>
               {showDatePicker && (
                 <>
@@ -682,60 +723,87 @@ export default function AdminInquiriesPage() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
-                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
-                        <input
-                          type="date"
-                          value={filters.startDate}
-                          onChange={(e) => {
-                            const newStartDate = e.target.value
-                            setFilters(prev => ({ ...prev, startDate: newStartDate }))
-                            setCurrentPage(1)
-                            if (filters.endDate && newStartDate && filters.endDate < newStartDate) {
-                              setFilters(prev => ({ ...prev, endDate: '' }))
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
+                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 min-w-[600px] overflow-hidden">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Presets */}
+                      <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-2">
+                        <div className="flex flex-col gap-1">
+                          {[
+                            { label: 'Today', value: 'today' },
+                            { label: 'Yesterday', value: 'yesterday' },
+                            { label: 'Last 7 Days', value: 'last7' },
+                            { label: 'Last 30 Days', value: 'last30' },
+                            { label: 'This Month', value: 'thisMonth' },
+                            { label: 'Last Month', value: 'lastMonth' }
+                          ].map((preset) => (
+                            <button
+                              key={preset.value}
+                              onClick={() => setRange(preset.value)}
+                              className="text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors"
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
-                        <input
-                          type="date"
-                          value={filters.endDate}
-                          onChange={(e) => {
-                            const newEndDate = e.target.value
-                            if (filters.startDate && newEndDate && newEndDate < filters.startDate) {
-                              toast.error('End date must be after start date')
-                              return
-                            }
-                            setFilters(prev => ({ ...prev, endDate: newEndDate }))
-                            setCurrentPage(1)
-                          }}
-                          min={filters.startDate || undefined}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
+
+                      {/* Custom Range */}
+                      <div className="flex-1 p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                            <input
+                              type="date"
+                              value={filters.startDate}
+                              onChange={(e) => {
+                                const newStartDate = e.target.value
+                                setFilters(prev => ({ ...prev, startDate: newStartDate }))
+                                setCurrentPage(1)
+                                if (filters.endDate && newStartDate && filters.endDate < newStartDate) {
+                                  setFilters(prev => ({ ...prev, endDate: '' }))
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                            <input
+                              type="date"
+                              value={filters.endDate}
+                              onChange={(e) => {
+                                const newEndDate = e.target.value
+                                if (filters.startDate && newEndDate && newEndDate < filters.startDate) {
+                                  toast.error('End date must be after start date')
+                                  return
+                                }
+                                setFilters(prev => ({ ...prev, endDate: newEndDate }))
+                                setCurrentPage(1)
+                              }}
+                              min={filters.startDate || undefined}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                          <button
+                            onClick={() => {
+                              setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
+                              setCurrentPage(1)
+                              setShowDatePicker(false)
+                            }}
+                            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={() => setShowDatePicker(false)}
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                          >
+                            Apply
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <button
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, startDate: '', endDate: '' }))
-                          setCurrentPage(1)
-                          setShowDatePicker(false)
-                        }}
-                        className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => setShowDatePicker(false)}
-                        className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                      >
-                        Apply
-                      </button>
                     </div>
                   </div>
                 </>
@@ -744,75 +812,75 @@ export default function AdminInquiriesPage() {
 
             {/* Agency Filter - hidden for agent (they only see their own inquiries) */}
             {!isAgent && (
-            <select
-              value={filters.agency}
-              onChange={(e) => {
-                const newAgency = e.target.value
-                setFilters(prev => {
-                  // Clear assignedAgent if unassigned is selected or if it doesn't belong to the new agency
-                  let newAssignedAgent = prev.assignedAgent
-                  if (newAgency === 'unassigned') {
-                    // Clear assignedAgent when unassigned is selected
-                    newAssignedAgent = ''
-                  } else if (newAgency && prev.assignedAgent) {
-                    const selectedAgent = agents.find(agent => {
-                      const agentId = agent._id || agent.id
-                      return agentId === prev.assignedAgent || agentId?.toString() === prev.assignedAgent
-                    })
-                    if (selectedAgent) {
-                      const agentAgencyId = selectedAgent.agency?._id || selectedAgent.agency
-                      const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
-                      if (agencyIdStr !== newAgency) {
-                        newAssignedAgent = ''
+              <select
+                value={filters.agency}
+                onChange={(e) => {
+                  const newAgency = e.target.value
+                  setFilters(prev => {
+                    // Clear assignedAgent if unassigned is selected or if it doesn't belong to the new agency
+                    let newAssignedAgent = prev.assignedAgent
+                    if (newAgency === 'unassigned') {
+                      // Clear assignedAgent when unassigned is selected
+                      newAssignedAgent = ''
+                    } else if (newAgency && prev.assignedAgent) {
+                      const selectedAgent = agents.find(agent => {
+                        const agentId = agent._id || agent.id
+                        return agentId === prev.assignedAgent || agentId?.toString() === prev.assignedAgent
+                      })
+                      if (selectedAgent) {
+                        const agentAgencyId = selectedAgent.agency?._id || selectedAgent.agency
+                        const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
+                        if (agencyIdStr !== newAgency) {
+                          newAssignedAgent = ''
+                        }
                       }
+                    } else if (newAgency === '') {
+                      // If agency filter is cleared, keep assignedAgent
+                      newAssignedAgent = prev.assignedAgent
                     }
-                  } else if (newAgency === '') {
-                    // If agency filter is cleared, keep assignedAgent
-                    newAssignedAgent = prev.assignedAgent
-                  }
-                  return { ...prev, agency: newAgency, assignedAgent: newAssignedAgent }
-                })
-                setCurrentPage(1)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Agencies</option>
-              <option value="unassigned">Unassigned</option>
-              {agencies && agencies.length > 0 && agencies.map((agency) => (
-                <option key={agency._id} value={agency._id}>
-                  {agency.name}
-                </option>
-              ))}
-            </select>
+                    return { ...prev, agency: newAgency, assignedAgent: newAssignedAgent }
+                  })
+                  setCurrentPage(1)
+                }}
+                className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
+              >
+                <option value="">All Agencies</option>
+                <option value="unassigned">Unassigned</option>
+                {agencies && agencies.length > 0 && agencies.map((agency) => (
+                  <option key={agency._id} value={agency._id}>
+                    {agency.name}
+                  </option>
+                ))}
+              </select>
             )}
 
             {/* Agent Filter - hidden for agent */}
             {!isAgent && (
-            <select
-              value={filters.assignedAgent}
-              onChange={(e) => {
-                setFilters(prev => ({ ...prev, assignedAgent: e.target.value }))
-                setCurrentPage(1)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Agents</option>
-              {agents && agents.length > 0 && agents
-                .filter(agent => {
-                  // If agency filter is selected, show only agents from that agency
-                  if (!filters.agency) {
-                    return true // Show all agents if no agency filter
-                  }
-                  const agentAgencyId = agent.agency?._id || agent.agency
-                  const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
-                  return agencyIdStr === filters.agency || agencyIdStr === filters.agency.toString()
-                })
-                .map((agent) => (
-                  <option key={agent._id} value={agent._id}>
-                    {agent.firstName} {agent.lastName}
-                  </option>
-                ))}
-            </select>
+              <select
+                value={filters.assignedAgent}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, assignedAgent: e.target.value }))
+                  setCurrentPage(1)
+                }}
+                className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
+              >
+                <option value="">All Agents</option>
+                {agents && agents.length > 0 && agents
+                  .filter(agent => {
+                    // If agency filter is selected, show only agents from that agency
+                    if (!filters.agency) {
+                      return true // Show all agents if no agency filter
+                    }
+                    const agentAgencyId = agent.agency?._id || agent.agency
+                    const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
+                    return agencyIdStr === filters.agency || agencyIdStr === filters.agency.toString()
+                  })
+                  .map((agent) => (
+                    <option key={agent._id} value={agent._id}>
+                      {agent.firstName} {agent.lastName}
+                    </option>
+                  ))}
+              </select>
             )}
 
             {/* Property Filter */}
@@ -822,7 +890,7 @@ export default function AdminInquiriesPage() {
                 setFilters(prev => ({ ...prev, property: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
+              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
             >
               <option value="">All Properties</option>
               {properties && properties.length > 0 ? properties.map((property) => (
@@ -841,7 +909,7 @@ export default function AdminInquiriesPage() {
                 setFilters(prev => ({ ...prev, status: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
+              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
             >
               <option value="">All Status</option>
               <option value="new">New</option>
@@ -862,13 +930,13 @@ export default function AdminInquiriesPage() {
                 setFilters(prev => ({ ...prev, priority: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
+              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
             >
               <option value="">All Priority</option>
-              <option value="hot">Hot</option>
-              <option value="warm">Warm</option>
-              <option value="cold">Cold</option>
-              <option value="not_interested">Not Interested</option>
+              <option value="Hot">Hot</option>
+              <option value="Warm">Warm</option>
+              <option value="Cold">Cold</option>
+              <option value="Not_interested">Not Interested</option>
             </select>
           </div>
         </div>

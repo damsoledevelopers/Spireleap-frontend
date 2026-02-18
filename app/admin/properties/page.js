@@ -62,7 +62,12 @@ export default function AdminPropertiesPage() {
     bedrooms: searchParams.get('bedrooms') || '',
     bathrooms: searchParams.get('bathrooms') || '',
     minArea: searchParams.get('minArea') || '',
-    maxArea: searchParams.get('maxArea') || ''
+    maxArea: searchParams.get('maxArea') || '',
+    balconies: searchParams.get('balconies') || '',
+    livingRoom: searchParams.get('livingRoom') || '',
+    unfurnished: searchParams.get('unfurnished') === '1' ? 'true' : '',
+    semiFurnished: searchParams.get('semiFurnished') === '1' ? 'true' : '',
+    fullyFurnished: searchParams.get('fullyFurnished') === '1' ? 'true' : ''
   })
   const [agencies, setAgencies] = useState([])
   const [uniqueLocations, setUniqueLocations] = useState({
@@ -116,7 +121,12 @@ export default function AdminPropertiesPage() {
       bedrooms: searchParams.get('bedrooms') || '',
       bathrooms: searchParams.get('bathrooms') || '',
       minArea: searchParams.get('minArea') || '',
-      maxArea: searchParams.get('maxArea') || ''
+      maxArea: searchParams.get('maxArea') || '',
+      balconies: searchParams.get('balconies') || '',
+      livingRoom: searchParams.get('livingRoom') || '',
+      unfurnished: searchParams.get('unfurnished') === '1' ? 'true' : '',
+      semiFurnished: searchParams.get('semiFurnished') === '1' ? 'true' : '',
+      fullyFurnished: searchParams.get('fullyFurnished') === '1' ? 'true' : ''
     })
     setSearchTerm(searchParams.get('search') || '')
     setStartDate(searchParams.get('startDate') || '')
@@ -148,6 +158,11 @@ export default function AdminPropertiesPage() {
     if (filters.bathrooms) params.set('bathrooms', filters.bathrooms)
     if (filters.minArea) params.set('minArea', filters.minArea)
     if (filters.maxArea) params.set('maxArea', filters.maxArea)
+    if (filters.balconies) params.set('balconies', filters.balconies)
+    if (filters.livingRoom) params.set('livingRoom', filters.livingRoom)
+    if (filters.unfurnished) params.set('unfurnished', '1')
+    if (filters.semiFurnished) params.set('semiFurnished', '1')
+    if (filters.fullyFurnished) params.set('fullyFurnished', '1')
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
     if (pagination.current > 1) params.set('page', pagination.current.toString())
@@ -229,6 +244,21 @@ export default function AdminPropertiesPage() {
       }
       if (filters.maxArea && filters.maxArea.trim()) {
         params.append('maxArea', filters.maxArea.trim())
+      }
+      if (filters.balconies && filters.balconies.trim()) {
+        params.append('balconies', filters.balconies.trim())
+      }
+      if (filters.livingRoom && filters.livingRoom.trim()) {
+        params.append('livingRoom', filters.livingRoom.trim())
+      }
+      if (filters.unfurnished === 'true') {
+        params.append('unfurnished', '1')
+      }
+      if (filters.semiFurnished === 'true') {
+        params.append('semiFurnished', '1')
+      }
+      if (filters.fullyFurnished === 'true') {
+        params.append('fullyFurnished', '1')
       }
 
       const response = await api.get(`/properties?${params.toString()}`, {
@@ -382,7 +412,12 @@ export default function AdminPropertiesPage() {
       bedrooms: '',
       bathrooms: '',
       minArea: '',
-      maxArea: ''
+      maxArea: '',
+      balconies: '',
+      livingRoom: '',
+      unfurnished: '',
+      semiFurnished: '',
+      fullyFurnished: ''
     })
     setSearchTerm('')
     setStartDate('')
@@ -405,6 +440,11 @@ export default function AdminPropertiesPage() {
       filters.bathrooms !== '' ||
       filters.minArea !== '' ||
       filters.maxArea !== '' ||
+      filters.balconies !== '' ||
+      filters.livingRoom !== '' ||
+      filters.unfurnished !== '' ||
+      filters.semiFurnished !== '' ||
+      filters.fullyFurnished !== '' ||
       searchTerm.trim() !== '' ||
       startDate !== '' ||
       endDate !== ''
@@ -543,6 +583,7 @@ export default function AdminPropertiesPage() {
             <option value="sold">Sold</option>
             <option value="rented">Rented</option>
             <option value="inactive">Inactive</option>
+            <option value="booked">Booked</option>
             <option value="draft">Draft</option>
           </select>
 
@@ -578,10 +619,10 @@ export default function AdminPropertiesPage() {
                 }`}
             >
               <DollarSign className="h-4 w-4" />
-              Price
+              Price Range
               {(filters.minPrice || filters.maxPrice) && (
                 <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {filters.minPrice && filters.maxPrice ? `${filters.minPrice}-${filters.maxPrice}` : filters.minPrice ? `${filters.minPrice}+` : `Up to ${filters.maxPrice}`}
+                  {filters.minPrice && filters.maxPrice ? `${Number(filters.minPrice).toLocaleString()}-${Number(filters.maxPrice).toLocaleString()}` : filters.minPrice ? `${Number(filters.minPrice).toLocaleString()}+` : `Up to ${Number(filters.maxPrice).toLocaleString()}`}
                 </span>
               )}
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'price' ? 'rotate-180' : ''}`} />
@@ -589,50 +630,52 @@ export default function AdminPropertiesPage() {
             {openFilter === 'price' && (
               <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
                 <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold text-gray-900">Price Range</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-900 text-sm">Price Range</h3>
                     {(filters.minPrice || filters.maxPrice) && (
                       <button
                         onClick={() => {
                           setFilters(prev => ({ ...prev, minPrice: '', maxPrice: '' }))
                           setPagination(prev => ({ ...prev, current: 1 }))
                         }}
-                        className="text-xs text-primary-600 hover:text-primary-800"
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
                       >
-                        Clear
+                        Clear Range
                       </button>
                     )}
                   </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Min Price</label>
-                      <input
-                        type="number"
-                        value={filters.minPrice}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, minPrice: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Enter min price"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Price</label>
-                      <input
-                        type="number"
-                        value={filters.maxPrice}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, maxPrice: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Enter max price"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Min Price</label>
+                        <input
+                          type="number"
+                          value={filters.minPrice}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, minPrice: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="0"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Max Price</label>
+                        <input
+                          type="number"
+                          value={filters.maxPrice}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, maxPrice: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="Any"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
                     </div>
                     <button
                       onClick={() => setOpenFilter(null)}
-                      className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                      className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium transition-colors"
                     >
                       Apply
                     </button>
@@ -646,14 +689,14 @@ export default function AdminPropertiesPage() {
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'specification' ? null : 'specification')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
                 }`}
             >
               <Bed className="h-4 w-4" />
               Specification
-              {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea) && (
+              {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
                 <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {[filters.bedrooms && `${filters.bedrooms}BR`, filters.bathrooms && `${filters.bathrooms}BA`].filter(Boolean).join(', ')}
+                  {[filters.bedrooms && `${filters.bedrooms}BR`, filters.bathrooms && `${filters.bathrooms}BA`, filters.balconies && `${filters.balconies} Balc`, filters.livingRoom && `${filters.livingRoom} LR`, filters.unfurnished && 'Unfurn', filters.semiFurnished && 'Semi', filters.fullyFurnished && 'Full'].filter(Boolean).join(', ')}
                 </span>
               )}
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'specification' ? 'rotate-180' : ''}`} />
@@ -663,10 +706,10 @@ export default function AdminPropertiesPage() {
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-semibold text-gray-900">Specifications</h3>
-                    {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea) && (
+                    {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
                       <button
                         onClick={() => {
-                          setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '' }))
+                          setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '', balconies: '', livingRoom: '', unfurnished: '', semiFurnished: '', fullyFurnished: '' }))
                           setPagination(prev => ({ ...prev, current: 1 }))
                         }}
                         className="text-xs text-primary-600 hover:text-primary-800"
@@ -738,6 +781,75 @@ export default function AdminPropertiesPage() {
                         placeholder="Enter max area"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={filters.balconies}
+                        onChange={(e) => {
+                          setFilters(prev => ({ ...prev, balconies: e.target.value }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                        }}
+                        placeholder="Min balconies"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={filters.livingRoom}
+                        onChange={(e) => {
+                          setFilters(prev => ({ ...prev, livingRoom: e.target.value }))
+                          setPagination(prev => ({ ...prev, current: 1 }))
+                        }}
+                        placeholder="Min living rooms"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2 pt-2">
+                      <label className="block text-sm font-medium text-gray-700">Furnishing</label>
+                      <div className="flex flex-col gap-2">
+                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={filters.unfurnished === 'true'}
+                            onChange={(e) => {
+                              setFilters(prev => ({ ...prev, unfurnished: e.target.checked ? 'true' : '' }))
+                              setPagination(prev => ({ ...prev, current: 1 }))
+                            }}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          Unfurnished
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={filters.semiFurnished === 'true'}
+                            onChange={(e) => {
+                              setFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? 'true' : '' }))
+                              setPagination(prev => ({ ...prev, current: 1 }))
+                            }}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          Semi-Furnished
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={filters.fullyFurnished === 'true'}
+                            onChange={(e) => {
+                              setFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? 'true' : '' }))
+                              setPagination(prev => ({ ...prev, current: 1 }))
+                            }}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          Fully Furnished
+                        </label>
+                      </div>
                     </div>
                     <button
                       onClick={() => setOpenFilter(null)}
@@ -1081,9 +1193,10 @@ export default function AdminPropertiesPage() {
           {hasActiveFilters() && (
             <button
               onClick={clearFilters}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+              className="inline-flex items-center px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors whitespace-nowrap"
+              title="Clear all filters"
             >
-              <X className="h-4 w-4" />
+              <XCircle className="h-4 w-4 mr-2" />
               Clear All
             </button>
           )}
@@ -1238,13 +1351,15 @@ export default function AdminPropertiesPage() {
                                 onChange={(e) => handleQuickStatusUpdate(propertyId, e.target.value)}
                                 className={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
                                   ${property.status === 'active' ? 'text-green-800 bg-green-50' :
-                                    property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
-                                      property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
-                                        property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
-                                          'text-gray-800 bg-gray-50'}`}
+                                    property.status === 'booked' ? 'text-orange-800 bg-orange-50' :
+                                      property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
+                                        property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
+                                          property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
+                                            'text-gray-800 bg-gray-50'}`}
                               >
                                 <option value="active">Active</option>
                                 <option value="pending">Pending</option>
+                                <option value="booked">Booked</option>
                                 <option value="sold">Sold</option>
                                 <option value="rented">Rented</option>
                                 <option value="inactive">Inactive</option>
@@ -1263,6 +1378,10 @@ export default function AdminPropertiesPage() {
                               ) : property.status === 'rented' ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                                   Rented
+                                </span>
+                              ) : property.status === 'booked' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  Booked
                                 </span>
                               ) : property.status === 'pending' ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">

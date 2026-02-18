@@ -25,7 +25,9 @@ import {
   MessageSquare,
   UserCircle,
   Briefcase,
-  Shield
+  Shield,
+  Heart,
+  DollarSign
 } from 'lucide-react'
 
 const navigation = [
@@ -44,13 +46,26 @@ const navigation = [
   },
   { name: 'Properties', href: '/admin/properties', icon: Package, module: 'properties' },
   { name: 'Leads', href: '/admin/leads', icon: Users, module: 'leads' },
+  // { name: 'Transactions', href: '/admin/transactions', icon: DollarSign, module: 'leads' },
   { name: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare, module: 'inquiries' },
   { name: 'Contact Messages', href: '/admin/contact-messages', icon: Mail, module: 'contact_messages' },
   { name: 'Reports', href: '/admin/reports', icon: TrendingUp, module: 'analytics' },
+  { name: 'Subscriptions', href: '/admin/billing/subscriptions', icon: FileText, module: 'subscriptions' },
+  { name: 'Plans', href: '/admin/billing/plans', icon: Package, module: 'subscriptions' },
   { name: 'Permissions', href: '/admin/permissions', icon: Shield, module: 'permissions' },
   { name: 'CMS', href: '/admin/cms', icon: FileText, module: 'cms' },
   { name: 'Settings', href: '/admin/settings', icon: Settings, module: 'settings' },
   { name: 'Profile', href: '/admin/profile', icon: UserCircle }
+]
+
+const customerNavigation = [
+  { name: 'Dashboard', href: '/customer/dashboard', icon: LayoutDashboard },
+  { name: 'My Properties', href: '/customer/properties', icon: Building },
+  { name: 'My Inquiries', href: '/customer/inquiries', icon: MessageSquare },
+  { name: 'Invoices', href: '/customer/invoices', icon: FileText },
+  { name: 'Wishlist', href: '/customer/wishlist', icon: Heart },
+  { name: 'Profile', href: '/customer/profile', icon: UserCircle },
+  { name: 'Contact Us', href: '/contact', icon: Mail },
 ]
 
 export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, onToggleCollapse }) {
@@ -59,7 +74,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
   const searchParams = useSearchParams()
   const [openDropdowns, setOpenDropdowns] = useState({})
 
-  const userNavigation = navigation.reduce((acc, item) => {
+  const userNavigation = user?.role === 'user' ? customerNavigation : navigation.reduce((acc, item) => {
     // Agent panel: hide entire Users menu
     if (user?.role === 'agent' && item.module === 'users') return acc
 

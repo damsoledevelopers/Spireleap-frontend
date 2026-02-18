@@ -1,16 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
-import { MapPin, Bed, Bath, Square, Car, Calendar, Phone, Mail, Share2, Heart, Loader2 } from 'lucide-react'
+import { MapPin, Bed, Bath, Square, Car, Calendar, Phone, Mail, Share2, Heart, Loader2, Clock, Tag, Building } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '../../../contexts/AuthContext'
 
 export default function PropertyDetailPage() {
   const params = useParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const from = searchParams.get('from')
+  const { user } = useAuth()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [inquiryForm, setInquiryForm] = useState({
@@ -21,6 +27,8 @@ export default function PropertyDetailPage() {
     message: ''
   })
   const [submitting, setSubmitting] = useState(false)
+  const [inWishlist, setInWishlist] = useState(false)
+  const [wishlistLoading, setWishlistLoading] = useState(false)
 
   useEffect(() => {
     fetchProperty()
@@ -79,6 +87,44 @@ export default function PropertyDetailPage() {
     }
   }
 
+  // Initialize wishlist state from property data
+  useEffect(() => {
+    if (property) {
+      setInWishlist(!!property.inWishlist)
+    }
+  }, [property])
+
+  const toggleWishlist = async () => {
+    if (!user) {
+      toast.error('Please login to add to wishlist')
+      router.push('/auth/login')
+      return
+    }
+
+    if (!property) return
+
+    const toastId = toast.loading(inWishlist ? 'Removing from wishlist...' : 'Adding to wishlist...')
+    setWishlistLoading(true)
+
+    try {
+      if (inWishlist) {
+        await api.delete(`/watchlist/property/${property._id}`)
+        setInWishlist(false)
+        toast.success('Removed from wishlist', { id: toastId })
+      } else {
+        await api.post('/watchlist', { property: property._id })
+        setInWishlist(true)
+        toast.success('Added to wishlist', { id: toastId })
+      }
+    } catch (error) {
+      console.error('Error updating watchlist:', error)
+      toast.error('Failed to update wishlist', { id: toastId })
+    } finally {
+      setWishlistLoading(false)
+    }
+  }
+
+
   const handleInquirySubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
@@ -101,7 +147,7 @@ export default function PropertyDetailPage() {
 
       const response = await api.post('/leads', leadData)
       console.log('Lead created successfully:', response.data)
-      
+
       toast.success('Inquiry submitted successfully! We will contact you soon.')
       setInquiryForm({
         firstName: '',
@@ -113,19 +159,42 @@ export default function PropertyDetailPage() {
     } catch (error) {
       console.error('Error submitting inquiry:', error)
       console.error('Error response:', error.response?.data)
-      
+
       // Better error handling
       let errorMessage = 'Failed to submit inquiry. Please try again.'
-      
+
       if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
         errorMessage = error.response.data.errors.map(err => err.msg || err.message).join(', ')
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message
       }
-      
+
       toast.error(errorMessage)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleBookProperty = async (e) => {
+    e.preventDefault()
+
+    if (!user) {
+      toast.error('Please login to book this property')
+      router.push('/auth/login')
+      return
+    }
+
+    const toastId = toast.loading('Processing booking...')
+
+    try {
+      await api.post(`/properties/${property._id}/book`)
+      toast.success('Property booked successfully!', { id: toastId })
+
+      // Update property status locally to reflect booking
+      setProperty(prev => ({ ...prev, hasBooked: true }))
+    } catch (error) {
+      console.error('Booking error:', error)
+      toast.error(error.response?.data?.message || 'Failed to book property', { id: toastId })
     }
   }
 
@@ -166,8 +235,21 @@ export default function PropertyDetailPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <Link href="/properties" className="text-primary-600 hover:underline mb-4 inline-block">
-          ← Back to Properties
+        <Link
+          href={
+            from === 'inquiries' ? "/customer/inquiries" :
+              from === 'my-properties' ? "/customer/properties" :
+                from === 'wishlist' ? "/customer/wishlist" :
+                  "/properties"
+          }
+          className="text-primary-600 hover:underline mb-4 inline-block font-medium"
+        >
+          ← Back to {
+            from === 'inquiries' ? 'My Inquiries' :
+              from === 'my-properties' ? 'My Properties' :
+                from === 'wishlist' ? 'My Wishlist' :
+                  'Properties'
+          }
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -214,8 +296,8 @@ export default function PropertyDetailPage() {
                     {property.listingType === 'sale' && property.price?.sale
                       ? formatPrice(property.price.sale)
                       : property.listingType === 'rent' && property.price?.rent?.amount
-                      ? `${formatPrice(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
-                      : 'Price on request'}
+                        ? `${formatPrice(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
+                        : 'Price on request'}
                   </p>
                   <span className="text-sm text-gray-500">
                     {property.listingType === 'sale' ? 'For Sale' : property.listingType === 'rent' ? 'For Rent' : 'Sale/Rent'}
@@ -229,7 +311,7 @@ export default function PropertyDetailPage() {
                   <div className="flex items-center gap-2">
                     <Bed className="h-5 w-5 text-gray-400" />
                     <div>
-                      <p className="text-sm text-gray-500">Bedrooms</p>
+                      <p className="text-sm text-gray-500">Bedrooms (BHK Type)</p>
                       <p className="font-semibold">{property.specifications.bedrooms}</p>
                     </div>
                   </div>
@@ -243,6 +325,52 @@ export default function PropertyDetailPage() {
                     </div>
                   </div>
                 )}
+                {property.specifications?.balconies > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Square className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Balconies</p>
+                      <p className="font-semibold">{property.specifications.balconies}</p>
+                    </div>
+                  </div>
+                )}
+                {property.specifications?.livingRoom > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Square className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Living Room</p>
+                      <p className="font-semibold">{property.specifications.livingRoom}</p>
+                    </div>
+                  </div>
+                )}
+                {property.specifications?.unfurnished > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Unfurnished</p>
+                      <p className="font-semibold">{property.specifications.unfurnished}</p>
+                    </div>
+                  </div>
+                )}
+                {property.specifications?.semiFurnished > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Semi-Furnished</p>
+                      <p className="font-semibold">{property.specifications.semiFurnished}</p>
+                    </div>
+                  </div>
+                )}
+                {property.specifications?.fullyFurnished > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Fully Furnished</p>
+                      <p className="font-semibold">{property.specifications.fullyFurnished}</p>
+                    </div>
+                  </div>
+                )}
+
                 {property.specifications?.area && (
                   <div className="flex items-center gap-2">
                     <Square className="h-5 w-5 text-gray-400" />
@@ -307,6 +435,77 @@ export default function PropertyDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+
+            {/* Wishlist Button - Placed prominently */}
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100 flex items-center justify-between">
+              <span className="font-medium text-gray-700">Save for later</span>
+              <button
+                onClick={toggleWishlist}
+                disabled={wishlistLoading}
+                className={`p-3 rounded-full transition-all duration-300 ${inWishlist ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500'}`}
+                title={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
+              >
+                <Heart className={`h-6 w-6 ${inWishlist ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {property.status === 'active' && !property.hasBooked && (
+              <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                <button
+                  onClick={handleBookProperty}
+                  className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group"
+                >
+                  <span>Book Now</span>
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                </button>
+                <p className="text-center text-xs text-gray-500 mt-2">
+                  Click to instantly reserve this property
+                </p>
+              </div>
+            )}
+
+            {(property.hasBooked) && (
+              <div className="bg-green-50 rounded-lg shadow-sm p-6 border-2 border-green-100">
+                <div className="flex items-center gap-3 text-green-700 mb-2">
+                  <Clock className="h-6 w-6" />
+                  <h2 className="text-xl font-bold">Booking Requested</h2>
+                </div>
+                <p className="text-green-600 text-sm">
+                  You have booked this property. Our team will contact you shortly for confirmation.
+                </p>
+              </div>
+            )}
+
+
+
+            {property.status === 'sold' && (
+              <div className="bg-red-50 rounded-lg shadow-sm p-6 border-2 border-red-100">
+                <div className="flex items-center gap-3 text-red-700 mb-2">
+                  <Tag className="h-6 w-6" />
+                  <h2 className="text-xl font-bold">Property Sold</h2>
+                </div>
+                <p className="text-red-600 text-sm">
+                  This property is no longer available as it has been sold.
+                </p>
+              </div>
+            )}
+
+            {property.status === 'rented' && (
+              <div className="bg-blue-50 rounded-lg shadow-sm p-6 border-2 border-blue-100">
+                <div className="flex items-center gap-3 text-blue-700 mb-2">
+                  <Building className="h-6 w-6" />
+                  <h2 className="text-xl font-bold">Property Rented</h2>
+                </div>
+                <p className="text-blue-600 text-sm">
+                  This property has been rented out.
+                </p>
+              </div>
+            )}
+
             {/* Inquiry Form */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">Request Information</h2>

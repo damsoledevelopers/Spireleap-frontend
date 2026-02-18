@@ -90,13 +90,13 @@ export default function AgentProfilePage() {
       }
 
       const imageUrl = response.data.file.url
-      
+
       // Update form data
       setFormData({
         ...formData,
         profileImage: imageUrl
       })
-      
+
       // Update user context immediately so navbar shows the new image
       if (user) {
         updateUser({
@@ -104,7 +104,7 @@ export default function AgentProfilePage() {
           profileImage: imageUrl
         })
       }
-      
+
       toast.success('Profile image uploaded successfully')
     } catch (error) {
       console.error('Error uploading image:', error)
@@ -122,7 +122,7 @@ export default function AgentProfilePage() {
     try {
       // Get user ID - handle both id and _id formats
       const userId = user?.id || user?._id
-      
+
       if (!userId) {
         toast.error('User ID not found. Please log in again.')
         setLoading(false)
@@ -130,17 +130,23 @@ export default function AgentProfilePage() {
       }
 
       const response = await api.put(`/users/${userId}`, formData)
-      
+
       // Update user in context
       if (response.data.user) {
         updateUser(response.data.user)
       }
-      
+
       toast.success('Profile updated successfully!')
     } catch (error) {
       console.error('Error updating profile:', error)
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update profile'
-      toast.error(errorMessage)
+      const errorData = error.response?.data
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        errorData.errors.forEach(err => {
+          toast.error(`${err.path}: ${err.msg}`)
+        })
+      } else {
+        toast.error(errorData?.message || error.message || 'Failed to update profile')
+      }
     } finally {
       setLoading(false)
     }

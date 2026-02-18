@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
 import Header from '../../components/Layout/Header'
 import Footer from '../../components/Layout/Footer'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   Search,
   MapPin,
@@ -20,7 +21,8 @@ import {
   ChevronDown,
   ChevronLeft,
   Calendar,
-  FileText
+  FileText,
+  Heart
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -35,6 +37,10 @@ export default function HomePage() {
   const [homePageContent, setHomePageContent] = useState(null)
   const [seoData, setSeoData] = useState(null)
   const [activeScripts, setActiveScripts] = useState([])
+  const [plans, setPlans] = useState([])
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('razorpay') // 'razorpay' or 'dummy'
   const [loading, setLoading] = useState(true)
   const [currentPropertyIndex, setCurrentPropertyIndex] = useState(0)
   const [currentStatsIndex, setCurrentStatsIndex] = useState(0)
@@ -56,8 +62,14 @@ export default function HomePage() {
     listingType: '',
     city: '',
     minPrice: '',
-    maxPrice: ''
+    maxPrice: '',
+    balconies: '',
+    livingRoom: '',
+    unfurnished: '',
+    semiFurnished: '',
+    fullyFurnished: ''
   })
+  const [watchlist, setWatchlist] = useState([])
 
   // Get stats from CMS or use defaults
   const getStats = () => {
@@ -158,6 +170,7 @@ export default function HomePage() {
     fetchCategories()
     fetchAmenities()
     fetchActiveScripts()
+    fetchPlans()
 
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth)
@@ -166,6 +179,191 @@ export default function HomePage() {
       return () => window.removeEventListener('resize', handleResize)
     }
   }, [])
+
+  const { user } = useAuth()
+
+  // Watchlist Logic
+  useEffect(() => {
+    if (user) {
+      fetchWatchlist()
+    }
+  }, [user])
+
+  const fetchWatchlist = async () => {
+    try {
+      const res = await api.get('/watchlist')
+      // Map to array of property IDs
+      const ids = res.data.watchlist.map(item => item.property?._id).filter(Boolean)
+      setWatchlist(ids)
+    } catch (error) {
+      console.error('Error fetching watchlist:', error)
+    }
+  }
+
+  const toggleWatchlist = async (e, propertyId) => {
+    e.preventDefault() // Prevent navigation
+    e.stopPropagation()
+
+    if (!user) {
+      toast.error('Please login to add to wishlist')
+      router.push('/auth/login')
+      return
+    }
+
+    try {
+      if (watchlist.includes(propertyId)) {
+        await api.delete(`/watchlist/property/${propertyId}`)
+        setWatchlist(prev => prev.filter(id => id !== propertyId))
+        toast.success('Removed from wishlist')
+      } else {
+        await api.post('/watchlist', { property: propertyId })
+        setWatchlist(prev => [...prev, propertyId])
+        toast.success('Added to wishlist')
+      }
+    } catch (error) {
+      console.error('Error updating watchlist:', error)
+      toast.error('Failed to update wishlist')
+    }
+  }
+
+  const handleBookProperty = async (e, propertyId) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!user) {
+      toast.error('Please login to book a property')
+      router.push('/auth/login')
+      return
+    }
+
+    const toastId = toast.loading('Processing booking...');
+
+    try {
+      await api.post(`/properties/${propertyId}/book`)
+      toast.success('Property booked successfully!', { id: toastId })
+
+      // Update local state to reflect the change immediately
+      setFeaturedProperties(prev => prev.map(p =>
+        p._id === propertyId ? { ...p, status: 'booked' } : p
+      ))
+    } catch (error) {
+      console.error('Booking error:', error)
+      toast.error(error.response?.data?.message || 'Failed to book property', { id: toastId })
+    }
+  }
+
+  const fetchPlans = async () => {
+    try {
+      const response = await api.get('/subscriptions/plans')
+      // Only include plans that are marked active/enabled
+      const allPlans = response.data.plans || []
+      const activePlans = Array.isArray(allPlans) ? allPlans.filter(p => p && p.isActive) : []
+      setPlans(activePlans)
+    } catch (error) {
+      console.error('Error fetching subscription plans:', error)
+    }
+  }
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve, reject) => {
+      if (document.getElementById('razorpay-script')) return resolve(true)
+      const script = document.createElement('script')
+      script.id = 'razorpay-script'
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => reject(new Error('Razorpay SDK failed to load'))
+      document.body.appendChild(script)
+    })
+  }
+
+  const handleSubscribeClick = (plan) => {
+    if (!user) {
+      toast.error('Please login to continue to payment')
+      router.push('/auth/login')
+      return
+    }
+    setSelectedPlan(plan)
+    setPaymentMethod('razorpay')
+    setShowPaymentModal(true)
+  }
+
+  const handleStartPayment = async () => {
+    if (!selectedPlan) return
+
+    try {
+      if (paymentMethod === 'razorpay') {
+        await loadRazorpayScript()
+        // Create order on server (new subscriptions order endpoint)
+        const orderRes = await api.post('/subscriptions/create-order', { planId: selectedPlan._id })
+        const { order, key } = orderRes.data
+
+        const options = {
+          key: key || process.env.NEXT_PUBLIC_RAZORPAY_KEY,
+          amount: order.amount,
+          currency: order.currency || 'INR',
+          name: order.notes?.name || 'Spireleap',
+          description: selectedPlan.name,
+          order_id: order.id,
+          prefill: {
+            email: user.email,
+            name: `${user.firstName || ''} ${user.lastName || ''}`
+          },
+          handler: async function (response) {
+            // Notify server to verify and create subscription, invoice and send email
+            try {
+              const confirmRes = await api.post('/subscriptions/confirm', {
+                planId: selectedPlan._1?._id || selectedPlan._id,
+                provider: 'razorpay',
+                providerResponse: response
+              })
+              const subscription = confirmRes.data.subscription
+              toast.success('Payment successful.')
+              setShowPaymentModal(false)
+              fetchPlans()
+              // Redirect to invoice page to show the invoice to the user
+              if (subscription && subscription._id) {
+                router.push(`/subscription/invoice?id=${subscription._id}`)
+              }
+            } catch (err) {
+              console.error('Subscription confirmation failed:', err)
+              toast.error('Payment succeeded but confirmation failed. Contact support.')
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              // User closed the modal
+            }
+          }
+        }
+
+        // eslint-disable-next-line no-undef
+        const rzp = new window.Razorpay(options)
+        rzp.open()
+      } else {
+        // Dummy payment flow - simulate immediate success without extra payment endpoint
+        try {
+          const confirmRes = await api.post('/subscriptions/confirm', {
+            planId: selectedPlan._id,
+            provider: 'dummy',
+            providerResponse: { status: 'success' }
+          })
+          const subscription = confirmRes.data.subscription
+          toast.success('Dummy payment completed.')
+          setShowPaymentModal(false)
+          fetchPlans()
+          if (subscription && subscription._id) {
+            router.push(`/subscription/invoice?id=${subscription._id}`)
+          }
+        } catch (err) {
+          console.error('Dummy subscription confirmation failed:', err)
+          toast.error('Payment succeeded but confirmation failed. Contact support.')
+        }
+      }
+    } catch (error) {
+      console.error('Payment error:', error)
+      toast.error('Payment failed. Please try again.')
+    }
+  }
 
   // Unified Auto-Scroll Logic
   useEffect(() => {
@@ -234,8 +432,18 @@ export default function HomePage() {
 
   const fetchFeaturedProperties = async () => {
     try {
-      const response = await api.get('/properties?status=active&featured=true')
-      setFeaturedProperties(response.data.properties || [])
+      const response = await api.get('/properties?status=active,booked&featured=true')
+      let properties = response.data.properties || []
+
+      // Filter properties where any of the new specifications are 0
+      properties = properties.filter(p => {
+        const specs = p.specifications || {};
+        return (specs.balconies > 0) &&
+          (specs.livingRoom > 0) &&
+          (specs.unfurnished > 0 || specs.semiFurnished > 0 || specs.fullyFurnished > 0);
+      });
+
+      setFeaturedProperties(properties)
     } catch (error) {
       console.error('Error fetching properties:', error)
     } finally {
@@ -663,6 +871,46 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {/* Additional Specs Dropdown (Simplified for Home Search) */}
+                <div className="md:col-span-5 grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Balconies</label>
+                    <select
+                      value={searchFilters.balconies}
+                      onChange={(e) => setSearchFilters(prev => ({ ...prev, balconies: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                    >
+                      <option value="">Any</option>
+                      {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Living Room</label>
+                    <select
+                      value={searchFilters.livingRoom}
+                      onChange={(e) => setSearchFilters(prev => ({ ...prev, livingRoom: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                    >
+                      <option value="">Any</option>
+                      {[1, 2].map(n => <option key={n} value={n}>{n}+</option>)}
+                    </select>
+                  </div>
+                  <div className="md:col-span-3 flex items-end gap-3">
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                      <input type="checkbox" checked={!!searchFilters.unfurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, unfurnished: e.target.checked ? '1' : '' }))} />
+                      Unfurnished
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                      <input type="checkbox" checked={!!searchFilters.semiFurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? '1' : '' }))} />
+                      Semi
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                      <input type="checkbox" checked={!!searchFilters.fullyFurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? '1' : '' }))} />
+                      Fully
+                    </label>
+                  </div>
+                </div>
+
                 {/* Enhanced Search Button */}
                 <div className="flex items-end">
                   <button
@@ -826,12 +1074,11 @@ export default function HomePage() {
               setIsPaused={setIsPaused}
               itemsPerView={windowWidth >= 1024 ? 3 : windowWidth >= 768 ? 2 : 1}
               renderItem={(property) => (
-                <Link
-                  href={`/properties/${property.slug || property._id}`}
-                  className="group relative bg-white rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 border border-gray-100 block h-full"
+                <div
+                  className="group relative bg-white rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 border border-gray-100 block h-full flex flex-col"
                 >
                   {/* Square Image Container */}
-                  <div className="relative aspect-square overflow-hidden bg-gray-100">
+                  <Link href={`/properties/${property.slug || property._id}`} className="relative aspect-square overflow-hidden bg-gray-100 block">
                     <img
                       src={getPrimaryImage(property.images)}
                       alt={property.title}
@@ -842,14 +1089,28 @@ export default function HomePage() {
                     {/* Gradient Overlays */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
 
-                    {/* Top Badges */}
+                    {/* Top Badges & Wishlist */}
                     <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
-                      <span className="bg-primary-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">
-                        Featured
-                      </span>
-                      <span className="bg-white/95 backdrop-blur-md text-gray-900 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">
-                        {property.listingType === 'sale' ? 'For Sale' : 'For Rent'}
-                      </span>
+                      <div className="flex flex-col gap-2">
+                        <span className="bg-primary-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg self-start">
+                          Featured
+                        </span>
+                        <span className="bg-white/95 backdrop-blur-md text-gray-900 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg self-start">
+                          {property.listingType === 'sale' ? 'For Sale' : 'For Rent'}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => toggleWatchlist(e, property._id)}
+                        className="p-2.5 bg-white/90 backdrop-blur-md rounded-full shadow-lg hover:bg-white hover:scale-110 active:scale-95 transition-all duration-300 group/heart"
+                      >
+                        <Heart
+                          className={`h-5 w-5 transition-colors duration-300 ${watchlist.includes(property._id)
+                            ? 'fill-red-500 text-red-500'
+                            : 'text-gray-400 group-hover/heart:text-red-500'
+                            }`}
+                        />
+                      </button>
                     </div>
 
                     {/* Bottom Info Overlay (On Image) */}
@@ -864,41 +1125,61 @@ export default function HomePage() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Pricing & Quick Specs Area */}
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="text-2xl font-black text-primary-700">
-                        {property.listingType === 'sale' && property.price?.sale
-                          ? formatPrice(property.price.sale)
-                          : property.listingType === 'rent' && property.price?.rent?.amount
-                            ? `${formatPrice(property.price.rent.amount)}`
-                            : 'On Request'}
-                        {property.listingType === 'rent' && (
-                          <span className="text-sm text-gray-400 font-medium ml-1">/mo</span>
-                        )}
+                  <div className="p-6 flex flex-col flex-grow">
+                    <Link href={`/properties/${property.slug || property._id}`} className="block flex-grow group-hover:text-primary-600 transition-colors">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-2xl font-black text-primary-700">
+                          {property.listingType === 'sale' && property.price?.sale
+                            ? formatPrice(property.price.sale)
+                            : property.listingType === 'rent' && property.price?.rent?.amount
+                              ? `${formatPrice(property.price.rent.amount)}`
+                              : 'On Request'}
+                          {property.listingType === 'rent' && (
+                            <span className="text-sm text-gray-400 font-medium ml-1">/mo</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
-                        <Bed className="h-4 w-4 text-primary-600 mb-1" />
-                        <span className="text-xs font-bold text-gray-700">{property.specifications?.bedrooms || 0} Bed</span>
+                      <div className="grid grid-cols-3 gap-3 mb-6">
+                        <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                          <Bed className="h-4 w-4 text-primary-600 mb-1" />
+                          <span className="text-xs font-bold text-gray-700">{property.specifications?.bedrooms || 0} BHK</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                          <Bath className="h-4 w-4 text-primary-600 mb-1" />
+                          <span className="text-xs font-bold text-gray-700">{property.specifications?.bathrooms || 0} Bath</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
+                          <Square className="h-4 w-4 text-primary-600 mb-1" />
+                          <span className="text-[10px] font-bold text-gray-700 truncate px-1">
+                            {property.specifications?.area?.value || 0} {property.specifications?.area?.unit || 'sqft'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
-                        <Bath className="h-4 w-4 text-primary-600 mb-1" />
-                        <span className="text-xs font-bold text-gray-700">{property.specifications?.bathrooms || 0} Bath</span>
-                      </div>
-                      <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
-                        <Square className="h-4 w-4 text-primary-600 mb-1" />
-                        <span className="text-[10px] font-bold text-gray-700 truncate px-1">
-                          {property.specifications?.area?.value || 0} {property.specifications?.area?.unit || 'sqft'}
-                        </span>
-                      </div>
-                    </div>
+                    </Link>
+
+                    {property.status === 'active' ? (
+                      <button
+                        onClick={(e) => handleBookProperty(e, property._id)}
+                        className="w-full mt-auto bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-primary-600/30"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Book Now
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="w-full mt-auto bg-gray-100 text-gray-400 font-bold py-3 px-4 rounded-xl cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        {property.status === 'booked' ? 'Booked' : 'Unavailable'}
+                      </button>
+                    )}
                   </div>
-                </Link>
+                </div>
               )}
             />
           )}
@@ -1176,60 +1457,59 @@ export default function HomePage() {
         const primaryText = ctaStyles.titleColor?.trim() || undefined
         const secondaryBorder = ctaStyles.descriptionColor?.trim() || undefined
         return (
-      <section className="relative py-32 bg-gradient-to-br from-primary-900 via-primary-800 via-primary-700 to-primary-600 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundSize: '60px 60px'
-          }}></div>
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-gold-500/10 via-transparent to-gold-500/10 animate-gradient"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-block px-6 py-3 mb-8 bg-white/20 backdrop-blur-md rounded-full text-sm font-bold border border-white/30 shadow-lg hover:bg-white/25 transition-all duration-300 transform hover:scale-105">
-            🚀 {homePageContent?.cta?.subtitle || 'Get Started Today'}
-          </div>
-          <h2 className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-8 leading-tight">
-            {homePageContent?.cta?.title ? (
-              <span dangerouslySetInnerHTML={{ __html: homePageContent.cta.title.replace(/\n/g, '<br />') }} />
-            ) : (
-              <>
-                Ready to Find Your<br />
-                <span className="bg-gradient-to-r from-gold-400 via-gold-300 to-gold-200 bg-clip-text text-transparent drop-shadow-2xl animate-gradient">
-                  Dream Property?
-                </span>
-              </>
-            )}
-          </h2>
-          <p className="text-2xl md:text-3xl mb-16 text-white/95 max-w-3xl mx-auto leading-relaxed font-light">
-            {homePageContent?.cta?.description || 'Get started today and let our experts help you find the perfect property that matches your lifestyle'}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <Link
-              href={homePageContent?.cta?.primaryButtonLink || '/properties'}
-              className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-110 active:scale-95 transition-all duration-300 border-2 overflow-hidden ${!primaryBg ? 'bg-gradient-to-br from-white via-gold-50 to-cream-50 text-primary-700 border-gold-200/50 hover:from-gold-50 hover:to-gold-100' : ''}`}
-              style={primaryBg || primaryText ? { ...(primaryBg && { backgroundColor: primaryBg }), ...(primaryText && { color: primaryText }) } : undefined}
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
-              <span className="relative z-10">{homePageContent?.cta?.primaryButtonText || 'Browse Properties'}</span>
-              <ArrowRight className="ml-3 h-6 w-6 relative z-10 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            {homePageContent?.cta?.secondaryButtonText && (
-              <Link
-                href={homePageContent?.cta?.secondaryButtonLink || '/contact'}
-                className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg backdrop-blur-sm transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-xl hover:shadow-2xl overflow-hidden border-2 ${!secondaryBorder ? 'bg-transparent border-gold-400/90 text-white hover:from-gold-500 hover:to-gold-400 hover:bg-gradient-to-r' : ''}`}
-                style={secondaryBorder ? { borderColor: secondaryBorder, color: secondaryBorder } : undefined}
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
-                <span className="relative z-10">{homePageContent.cta.secondaryButtonText}</span>
-                <ArrowRight className="ml-3 h-6 w-6 relative z-10 group-hover:translate-x-1 transition-transform" />
-              </Link>
-            )}
-          </div>
-        </div>
-      </section>
+          <section className="relative py-32 bg-gradient-to-br from-primary-900 via-primary-800 via-primary-700 to-primary-600 text-white overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute inset-0" style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                backgroundSize: '60px 60px'
+              }}></div>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-gold-500/10 via-transparent to-gold-500/10 animate-gradient"></div>
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <div className="inline-block px-6 py-3 mb-8 bg-white/20 backdrop-blur-md rounded-full text-sm font-bold border border-white/30 shadow-lg hover:bg-white/25 transition-all duration-300 transform hover:scale-105">
+                🚀 {homePageContent?.cta?.subtitle || 'Get Started Today'}
+              </div>
+              <h2 className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-8 leading-tight">
+                {homePageContent?.cta?.title ? (
+                  <span dangerouslySetInnerHTML={{ __html: homePageContent.cta.title.replace(/\n/g, '<br />') }} />
+                ) : (
+                  <>
+                    Ready to Find Your<br />
+                    <span className="bg-gradient-to-r from-gold-400 via-gold-300 to-gold-200 bg-clip-text text-transparent drop-shadow-2xl animate-gradient">
+                      Dream Property?
+                    </span>
+                  </>
+                )}
+              </h2>
+              <p className="text-2xl md:text-3xl mb-16 text-white/95 max-w-3xl mx-auto leading-relaxed font-light">
+                {homePageContent?.cta?.description || 'Get started today and let our experts help you find the perfect property that matches your lifestyle'}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-6 justify-center">
+                <Link
+                  href={homePageContent?.cta?.primaryButtonLink || '/properties'}
+                  className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-110 active:scale-95 transition-all duration-300 border-2 overflow-hidden ${!primaryBg ? 'bg-gradient-to-br from-white via-gold-50 to-cream-50 text-primary-700 border-gold-200/50 hover:from-gold-50 hover:to-gold-100' : ''}`}
+                  style={primaryBg || primaryText ? { ...(primaryBg && { backgroundColor: primaryBg }), ...(primaryText && { color: primaryText }) } : undefined}
+                >
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
+                  <span className="relative z-10">{homePageContent?.cta?.primaryButtonText || 'Browse Properties'}</span>
+                  <ArrowRight className="ml-3 h-6 w-6 relative z-10 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                {homePageContent?.cta?.secondaryButtonText && (
+                  <Link
+                    href={homePageContent?.cta?.secondaryButtonLink || '/contact'}
+                    className={`group relative inline-flex items-center px-10 py-5 rounded-2xl font-bold text-lg backdrop-blur-sm transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-xl hover:shadow-2xl overflow-hidden border-2 ${!secondaryBorder ? 'bg-transparent border-gold-400/90 text-white hover:from-gold-500 hover:to-gold-400 hover:bg-gradient-to-r' : ''}`}
+                    style={secondaryBorder ? { borderColor: secondaryBorder, color: secondaryBorder } : undefined}
+                  >
+                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
+                    <span className="relative z-10">{homePageContent.cta.secondaryButtonText}</span>
+                    <ArrowRight className="ml-3 h-6 w-6 relative z-10 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          </section>
         )
       })()}
-
       <Footer />
     </div>
   )

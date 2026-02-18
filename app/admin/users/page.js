@@ -201,13 +201,14 @@ export default function AdminUsers() {
   }
 
   const handleViewFullDetails = (inquiry) => {
-    if (inquiry.property?._id) {
+    const displayProperty = inquiry.property || inquiry.interestedProperties?.[0]?.property
+    if (displayProperty?._id) {
       // Close modal and redirect to property details page
       setShowInquiryModal(false)
       setSelectedUser(null)
       setSelectedUserInquiries([])
       setSelectedInquiry(null)
-      router.push(`/admin/properties/${inquiry.property._id}`)
+      router.push(`/admin/properties/${displayProperty._id}`)
     }
   }
 
@@ -632,7 +633,9 @@ export default function AdminUsers() {
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {admin.firstName} {admin.lastName}
+                              <span className="text-gray-900">
+                                {admin.firstName} {admin.lastName}
+                              </span>
                               {admin._id === user?.id && (
                                 <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                   You
@@ -715,6 +718,13 @@ export default function AdminUsers() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-3">
+                          <Link
+                            href={`/admin/users/${String(admin._id || admin.id)}`}
+                            className="text-gray-600 hover:text-primary-600 transition-colors"
+                            title="View details"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </Link>
                           {isSuperAdmin && (
                             <Link
                               href={`/admin/permissions?type=user&id=${String(admin._id || admin.id)}`}
@@ -724,13 +734,6 @@ export default function AdminUsers() {
                               <Shield className="h-5 w-5" />
                             </Link>
                           )}
-                          <Link
-                            href={`/admin/users/${String(admin._id || admin.id)}`}
-                            className="text-primary-600 hover:text-primary-900 transition-colors"
-                            title="View"
-                          >
-                            <Eye className="h-5 w-5" />
-                          </Link>
                           {canEditUser && (
                             <Link
                               href={`/admin/users/${String(admin._id || admin.id)}/edit`}
@@ -942,6 +945,7 @@ export default function AdminUsers() {
           </div>
         )}
 
+
         {/* Inquiry Details Modal */}
         {showInquiryModal && selectedUser && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1007,14 +1011,16 @@ export default function AdminUsers() {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {selectedUserInquiries.map((inquiry, index) => {
-                          const propertyPrice = inquiry.property?.price
-                            ? (typeof inquiry.property.price === 'object'
-                              ? (inquiry.property.price.sale
-                                ? `₹${Number(inquiry.property.price.sale).toLocaleString()}`
-                                : inquiry.property.price.rent?.amount
-                                  ? `₹${Number(inquiry.property.price.rent.amount).toLocaleString()}/${inquiry.property.price.rent.period || 'month'}`
+                          // Use main property or first interested property so name/location/price show when main property is missing
+                          const displayProperty = inquiry.property || inquiry.interestedProperties?.[0]?.property
+                          const propertyPrice = displayProperty?.price
+                            ? (typeof displayProperty.price === 'object'
+                              ? (displayProperty.price.sale
+                                ? `₹${Number(displayProperty.price.sale).toLocaleString()}`
+                                : displayProperty.price.rent?.amount
+                                  ? `₹${Number(displayProperty.price.rent.amount).toLocaleString()}/${displayProperty.price.rent.period || 'month'}`
                                   : 'Price on request')
-                              : `₹${Number(inquiry.property.price).toLocaleString()}`)
+                              : `₹${Number(displayProperty.price).toLocaleString()}`)
                             : 'Price on request'
 
                           return (
@@ -1024,12 +1030,12 @@ export default function AdminUsers() {
                               </td>
                               <td className="px-4 py-3 text-sm">
                                 <div className="flex items-center gap-2">
-                                  {inquiry.property?.images && inquiry.property.images.length > 0 && (
+                                  {displayProperty?.images && displayProperty.images.length > 0 && (
                                     <img
-                                      src={typeof inquiry.property.images[0] === 'string'
-                                        ? inquiry.property.images[0]
-                                        : inquiry.property.images[0]?.url || '/placeholder-property.jpg'}
-                                      alt={inquiry.property?.title || 'Property'}
+                                      src={typeof displayProperty.images[0] === 'string'
+                                        ? displayProperty.images[0]
+                                        : displayProperty.images[0]?.url || '/placeholder-property.jpg'}
+                                      alt={displayProperty?.title || 'Property'}
                                       className="h-10 w-10 rounded object-cover"
                                       onError={(e) => {
                                         e.target.src = '/placeholder-property.jpg'
@@ -1038,12 +1044,12 @@ export default function AdminUsers() {
                                   )}
                                   <div>
                                     <p className="font-medium text-gray-900">
-                                      {inquiry.property?.title || inquiry.property?.slug || 'Property Name'}
+                                      {displayProperty?.title || displayProperty?.slug || '—'}
                                     </p>
-                                    {inquiry.property?.location && (
+                                    {displayProperty?.location && (
                                       <p className="text-xs text-gray-500 flex items-center gap-1">
                                         <MapPin className="h-3 w-3" />
-                                        {inquiry.property.location.city || inquiry.property.location.address || 'Location'}
+                                        {displayProperty.location.city || displayProperty.location.address || 'Location'}
                                       </p>
                                     )}
                                   </div>

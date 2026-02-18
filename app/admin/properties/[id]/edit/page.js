@@ -84,6 +84,11 @@ export default function AdminEditPropertyPage() {
         specifications: {
           bedrooms: property.specifications?.bedrooms || '',
           bathrooms: property.specifications?.bathrooms || '',
+          balconies: property.specifications?.balconies || 0,
+          livingRoom: property.specifications?.livingRoom || 0,
+          unfurnished: property.specifications?.unfurnished || 0,
+          semiFurnished: property.specifications?.semiFurnished || 0,
+          fullyFurnished: property.specifications?.fullyFurnished || 0,
           area: {
             value: property.specifications?.area?.value || '',
             unit: property.specifications?.area?.unit || 'sqft'
@@ -265,6 +270,11 @@ export default function AdminEditPropertyPage() {
           ...formData.specifications,
           bedrooms: formData.specifications.bedrooms ? parseInt(formData.specifications.bedrooms) : undefined,
           bathrooms: formData.specifications.bathrooms ? parseInt(formData.specifications.bathrooms) : undefined,
+          balconies: parseInt(formData.specifications.balconies) || 0,
+          livingRoom: parseInt(formData.specifications.livingRoom) || 0,
+          unfurnished: parseInt(formData.specifications.unfurnished) || 0,
+          semiFurnished: parseInt(formData.specifications.semiFurnished) || 0,
+          fullyFurnished: parseInt(formData.specifications.fullyFurnished) || 0,
           area: {
             value: parseFloat(formData.specifications.area.value),
             unit: formData.specifications.area.unit
@@ -632,7 +642,7 @@ export default function AdminEditPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms (BHK Type)</label>
                 <input
                   type="number"
                   value={formData.specifications.bedrooms}
@@ -648,6 +658,57 @@ export default function AdminEditPropertyPage() {
                   onChange={(e) => handleInputChange('specifications.bathrooms', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
+                <input
+                  type="number"
+                  value={formData.specifications.balconies}
+                  onChange={(e) => handleInputChange('specifications.balconies', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
+                <input
+                  type="number"
+                  value={formData.specifications.livingRoom}
+                  onChange={(e) => handleInputChange('specifications.livingRoom', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div className="flex items-center h-full pt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.specifications.unfurnished > 0}
+                    onChange={(e) => handleInputChange('specifications.unfurnished', e.target.checked ? 1 : 0)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Unfurnished</span>
+                </label>
+              </div>
+              <div className="flex items-center h-full pt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.specifications.semiFurnished > 0}
+                    onChange={(e) => handleInputChange('specifications.semiFurnished', e.target.checked ? 1 : 0)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Semi-Furnished</span>
+                </label>
+              </div>
+              <div className="flex items-center h-full pt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.specifications.fullyFurnished > 0}
+                    onChange={(e) => handleInputChange('specifications.fullyFurnished', e.target.checked ? 1 : 0)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Fully Furnished</span>
+                </label>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>

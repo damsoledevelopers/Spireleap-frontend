@@ -34,6 +34,11 @@ export default function PropertiesPage() {
     maxPrice: searchParams.get('maxPrice') || '',
     bedrooms: searchParams.get('bedrooms') || '',
     bathrooms: searchParams.get('bathrooms') || '',
+    balconies: searchParams.get('balconies') || '',
+    livingRoom: searchParams.get('livingRoom') || '',
+    unfurnished: searchParams.get('unfurnished') || '',
+    semiFurnished: searchParams.get('semiFurnished') || '',
+    fullyFurnished: searchParams.get('fullyFurnished') || '',
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
     amenities: searchParams.get('amenities') || ''
@@ -82,6 +87,11 @@ export default function PropertiesPage() {
       maxPrice: searchParams.get('maxPrice') || '',
       bedrooms: searchParams.get('bedrooms') || '',
       bathrooms: searchParams.get('bathrooms') || '',
+      balconies: searchParams.get('balconies') || '',
+      livingRoom: searchParams.get('livingRoom') || '',
+      unfurnished: searchParams.get('unfurnished') || '',
+      semiFurnished: searchParams.get('semiFurnished') || '',
+      fullyFurnished: searchParams.get('fullyFurnished') || '',
       search: searchParams.get('search') || '',
       category: searchParams.get('category') || '',
       amenities: searchParams.get('amenities') || ''
@@ -150,6 +160,11 @@ export default function PropertiesPage() {
       maxPrice: '',
       bedrooms: '',
       bathrooms: '',
+      balconies: '',
+      livingRoom: '',
+      unfurnished: '',
+      semiFurnished: '',
+      fullyFurnished: '',
       search: '',
       category: '',
       amenities: ''
@@ -258,13 +273,21 @@ export default function PropertiesPage() {
             <div className="relative">
               <button
                 onClick={() => setOpenFilter(openFilter === 'spec' ? null : 'spec')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
               >
                 <Bed className="h-4 w-4" />
                 Specification
                 {(filters.bedrooms || filters.bathrooms) && (
                   <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                    {[filters.bedrooms && `${filters.bedrooms}BR`, filters.bathrooms && `${filters.bathrooms}BA`].filter(Boolean).join(', ')}
+                    {[
+                      filters.bedrooms && `${filters.bedrooms}BR`,
+                      filters.bathrooms && `${filters.bathrooms}BA`,
+                      filters.balconies && `${filters.balconies}Blc`,
+                      filters.livingRoom && `${filters.livingRoom}LR`,
+                      filters.unfurnished && 'Unf',
+                      filters.semiFurnished && 'Semi',
+                      filters.fullyFurnished && 'Full'
+                    ].filter(Boolean).join(', ')}
                   </span>
                 )}
                 <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'spec' ? 'rotate-180' : ''}`} />
@@ -273,7 +296,7 @@ export default function PropertiesPage() {
                 <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[250px]">
                   <div className="p-4 space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Bedrooms</label>
+                      <label className="block text-xs text-gray-500 mb-1">Bedrooms (BHK Type)</label>
                       <select
                         value={filters.bedrooms}
                         onChange={(e) => handleFilterChange('bedrooms', e.target.value)}
@@ -283,16 +306,57 @@ export default function PropertiesPage() {
                         {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}+</option>)}
                       </select>
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Bathrooms</label>
+                        <select
+                          value={filters.bathrooms}
+                          onChange={(e) => handleFilterChange('bathrooms', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        >
+                          <option value="">Any</option>
+                          {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}+</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Balconies</label>
+                        <select
+                          value={filters.balconies}
+                          onChange={(e) => handleFilterChange('balconies', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        >
+                          <option value="">Any</option>
+                          {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}+</option>)}
+                        </select>
+                      </div>
+                    </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Bathrooms</label>
+                      <label className="block text-xs text-gray-500 mb-1">Living Room</label>
                       <select
-                        value={filters.bathrooms}
-                        onChange={(e) => handleFilterChange('bathrooms', e.target.value)}
+                        value={filters.livingRoom}
+                        onChange={(e) => handleFilterChange('livingRoom', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
                         <option value="">Any</option>
-                        {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}+</option>)}
+                        {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Furnishing Status</label>
+                      <div className="flex flex-wrap gap-2">
+                        <label className="flex items-center gap-1 text-xs">
+                          <input type="checkbox" checked={!!filters.unfurnished} onChange={(e) => handleFilterChange('unfurnished', e.target.checked ? '1' : '')} />
+                          Unfurnished
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input type="checkbox" checked={!!filters.semiFurnished} onChange={(e) => handleFilterChange('semiFurnished', e.target.checked ? '1' : '')} />
+                          Semi
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input type="checkbox" checked={!!filters.fullyFurnished} onChange={(e) => handleFilterChange('fullyFurnished', e.target.checked ? '1' : '')} />
+                          Fully
+                        </label>
+                      </div>
                     </div>
                     <button onClick={() => setOpenFilter(null)} className="w-full btn btn-primary py-2 text-sm">Apply</button>
                   </div>

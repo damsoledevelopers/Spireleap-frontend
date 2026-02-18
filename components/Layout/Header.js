@@ -72,11 +72,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-20">
           <Link href="/home" className="flex items-center space-x-3 group">
             <div className="h-12 w-12 flex items-center justify-center transition-transform group-hover:scale-110">
-              <Image 
-                src="/NovaKeys.png" 
-                alt="NOVA KEYS Real Estate" 
-                width={48} 
-                height={48} 
+              <Image
+                src="/NovaKeys.png"
+                alt="NOVA KEYS Real Estate"
+                width={48}
+                height={48}
                 className="object-contain"
               />
             </div>
@@ -90,13 +90,12 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
-            <Link 
-              href="/home" 
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                pathname === '/home' 
-                  ? 'text-primary-600 bg-primary-50' 
+            <Link
+              href="/home"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/home'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               Home
             </Link>
@@ -109,11 +108,10 @@ export default function Header() {
                   setRentDropdownOpen(false)
                   setServicesDropdownOpen(false)
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                  buyDropdownOpen
-                    ? 'text-primary-600 bg-primary-50' 
+                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${buyDropdownOpen
+                    ? 'text-primary-600 bg-primary-50'
                     : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Buy
                 <ChevronDown className={`h-4 w-4 transition-transform ${buyDropdownOpen ? 'rotate-180' : ''}`} />
@@ -142,11 +140,10 @@ export default function Header() {
                   setBuyDropdownOpen(false)
                   setServicesDropdownOpen(false)
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                  rentDropdownOpen
-                    ? 'text-primary-600 bg-primary-50' 
+                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${rentDropdownOpen
+                    ? 'text-primary-600 bg-primary-50'
                     : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Rent
                 <ChevronDown className={`h-4 w-4 transition-transform ${rentDropdownOpen ? 'rotate-180' : ''}`} />
@@ -167,13 +164,12 @@ export default function Header() {
               )}
             </div>
 
-            <Link 
-              href="/properties" 
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                pathname === '/properties' 
-                  ? 'text-primary-600 bg-primary-50' 
+            <Link
+              href="/properties"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/properties'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               Properties
             </Link>
@@ -186,11 +182,10 @@ export default function Header() {
                   setBuyDropdownOpen(false)
                   setRentDropdownOpen(false)
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                  servicesDropdownOpen
-                    ? 'text-primary-600 bg-primary-50' 
+                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${servicesDropdownOpen
+                    ? 'text-primary-600 bg-primary-50'
                     : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Services
                 <ChevronDown className={`h-4 w-4 transition-transform ${servicesDropdownOpen ? 'rotate-180' : ''}`} />
@@ -211,37 +206,44 @@ export default function Header() {
               )}
             </div>
 
-            <Link 
-              href="/about" 
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                pathname === '/about' 
-                  ? 'text-primary-600 bg-primary-50' 
+            <Link
+              href="/about"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/about'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               About
             </Link>
-            <Link 
-              href="/blog" 
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                pathname === '/blog' 
-                  ? 'text-primary-600 bg-primary-50' 
+
+            <Link
+              href="/billing"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/billing'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-              }`}
+                }`}
+            >
+              Billing
+            </Link>
+            <Link
+              href="/blog"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/blog'
+                  ? 'text-primary-600 bg-primary-50'
+                  : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                }`}
             >
               Blog
             </Link>
-            <Link 
-              href="/contact" 
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                pathname === '/contact' 
-                  ? 'text-primary-600 bg-primary-50' 
+            <Link
+              href="/contact"
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/contact'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               Contact
             </Link>
-            
+
             {/* Login and Register Buttons */}
             {!user && (
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-gray-200">
@@ -259,15 +261,15 @@ export default function Header() {
                 </Link>
               </div>
             )}
-            
+
             {user && (
               <Link
                 href={
                   user.role === 'super_admin' ? '/admin/dashboard' :
-                  user.role === 'agency_admin' ? '/agency/dashboard' :
-                  user.role === 'agent' ? '/agent/dashboard' :
-                  user.role === 'staff' ? '/staff/dashboard' :
-                  '/properties'
+                    user.role === 'agency_admin' ? '/agency/dashboard' :
+                      user.role === 'agent' ? '/agent/dashboard' :
+                        user.role === 'staff' ? '/staff/dashboard' :
+                          '/customer/dashboard'
                 }
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-700 hover:text-primary-600 hover:bg-gray-50 transition-all ml-4"
               >
@@ -290,57 +292,64 @@ export default function Header() {
         {mobileMenuOpen && (
           <div className="lg:hidden pb-6 border-t border-gray-100">
             <div className="flex flex-col space-y-1 pt-4">
-              <Link 
-                href="/home" 
+              <Link
+                href="/home"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Home
               </Link>
-              <Link 
-                href="/properties?listingType=sale" 
+              <Link
+                href="/properties?listingType=sale"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Buy Properties
               </Link>
-              <Link 
-                href="/properties?listingType=rent" 
+              <Link
+                href="/properties?listingType=rent"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Rent Properties
               </Link>
-              <Link 
-                href="/properties" 
+              <Link
+                href="/properties"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 All Properties
               </Link>
-              <Link 
-                href="/services" 
+              <Link
+                href="/services"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Services
               </Link>
-              <Link 
-                href="/about" 
+              <Link
+                href="/about"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 About
               </Link>
-              <Link 
-                href="/blog" 
+              <Link
+                href="/billing"
+                className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Billing
+              </Link>
+              <Link
+                href="/blog"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Blog
               </Link>
-              <Link 
-                href="/contact" 
+              <Link
+                href="/contact"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -356,15 +365,15 @@ export default function Header() {
                 </Link>
               ) : (
                 <>
-                  <Link 
-                    href="/auth/login" 
+                  <Link
+                    href="/auth/login"
                     className="px-4 py-3 text-primary-600 font-medium"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Login
                   </Link>
-                  <Link 
-                    href="/auth/register" 
+                  <Link
+                    href="/auth/register"
                     className="mx-4 px-4 py-3 bg-gradient-to-r from-primary-600 to-primary-800 text-white rounded-lg font-medium text-center shadow-lg"
                     onClick={() => setMobileMenuOpen(false)}
                   >
