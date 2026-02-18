@@ -451,28 +451,53 @@ export default function PropertyDetailPage() {
 
             {property.status === 'active' && !property.hasBooked && (
               <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
-                <button
-                  onClick={handleBookProperty}
-                  className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group"
-                >
-                  <span>Book Now</span>
-                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                </button>
-                <p className="text-center text-xs text-gray-500 mt-2">
-                  Click to instantly reserve this property
-                </p>
+                {!user ? (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        toast.error('Please login to book this property')
+                        router.push('/auth/login')
+                      }}
+                      className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group"
+                    >
+                      <span>Login to Book</span>
+                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                    </button>
+                    <p className="text-center text-xs text-gray-500 mt-2">
+                      You must be logged in to book this property
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleBookProperty}
+                      className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group"
+                    >
+                      <span>Book Now</span>
+                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                    </button>
+                    <p className="text-center text-xs text-gray-500 mt-2">
+                      Click to instantly reserve this property
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
-            {(property.hasBooked) && (
+            {property.hasBooked && (
               <div className="bg-green-50 rounded-lg shadow-sm p-6 border-2 border-green-100">
                 <div className="flex items-center gap-3 text-green-700 mb-2">
                   <Clock className="h-6 w-6" />
-                  <h2 className="text-xl font-bold">Booking Requested</h2>
+                  <h2 className="text-xl font-bold">You have already booked the property</h2>
                 </div>
                 <p className="text-green-600 text-sm">
                   You have booked this property. Our team will contact you shortly for confirmation.

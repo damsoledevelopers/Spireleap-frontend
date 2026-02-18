@@ -27,7 +27,8 @@ import {
   Briefcase,
   Shield,
   Heart,
-  DollarSign
+  DollarSign,
+  Home
 } from 'lucide-react'
 
 const navigation = [
@@ -65,7 +66,7 @@ const customerNavigation = [
   { name: 'Invoices', href: '/customer/invoices', icon: FileText },
   { name: 'Wishlist', href: '/customer/wishlist', icon: Heart },
   { name: 'Profile', href: '/customer/profile', icon: UserCircle },
-  { name: 'Contact Us', href: '/contact', icon: Mail },
+  { name: 'Home', href: '/home', icon: Home },
 ]
 
 export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, onToggleCollapse }) {

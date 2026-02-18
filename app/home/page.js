@@ -432,7 +432,8 @@ export default function HomePage() {
 
   const fetchFeaturedProperties = async () => {
     try {
-      const response = await api.get('/properties?status=active,booked&featured=true')
+      // Include auth so backend can set hasBooked for logged-in user
+      const response = await api.get('/properties?status=active&featured=true')
       let properties = response.data.properties || []
 
       // Filter properties where any of the new specifications are 0
@@ -795,135 +796,146 @@ export default function HomePage() {
               {homePageContent?.heroDescription || 'Discover premium homes, luxury apartments, and prime commercial properties in the world\'s best locations'}
             </p>
 
-            {/* Enhanced Modern Search Bar */}
-            <div className="max-w-6xl mx-auto bg-gradient-to-br from-white via-gold-50/90 to-cream-50 rounded-3xl shadow-2xl p-6 md:p-8 lg:p-10 border-2 border-gold-200/60 transform hover:scale-[1.01] hover:shadow-2xl hover:shadow-gold-500/30 transition-all duration-500 animate-fade-in-up animation-delay-800 backdrop-blur-sm">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-5">
-                {/* Property Type */}
-                <div className="md:col-span-2">
-                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 mb-2.5 uppercase tracking-wider">
-                    <Building2 className="h-4 w-4 text-primary-600" />
-                    Property Type
-                  </label>
-                  <div className="relative custom-select-wrapper">
-                    <select
-                      value={searchFilters.propertyType}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
-                      className="w-full px-4 py-3.5 pl-11 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-gray-900 font-medium text-base transition-all duration-200 hover:border-primary-400 hover:shadow-md bg-white shadow-sm appearance-none cursor-pointer"
-                      style={{
-                        backgroundImage: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none'
-                      }}
-                    >
-                      <option value="" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>All Property Types</option>
-                      <option value="apartment" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>Apartment</option>
-                      <option value="house" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>House</option>
-                      <option value="villa" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>Villa</option>
-                      <option value="condo" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>Condo</option>
-                      <option value="commercial" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>Commercial</option>
-                    </select>
-                    <Building2 className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-                    <ChevronDown className="absolute right-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Listing Type */}
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 mb-2.5 uppercase tracking-wider">
-                    <DollarSign className="h-4 w-4 text-gold-500" />
-                    Listing Type
-                  </label>
-                  <div className="relative custom-select-wrapper">
-                    <select
-                      value={searchFilters.listingType}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, listingType: e.target.value }))}
-                      className="w-full px-4 py-3.5 pl-11 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-gray-900 font-medium text-base transition-all duration-200 hover:border-primary-400 hover:shadow-md bg-white shadow-sm appearance-none cursor-pointer"
-                      style={{
-                        backgroundImage: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none'
-                      }}
-                    >
-                      <option value="" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>Sale/Rent</option>
-                      <option value="sale" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>For Sale</option>
-                      <option value="rent" style={{ padding: '14px 20px', color: '#1f2937', backgroundColor: '#ffffff' }}>For Rent</option>
-                    </select>
-                    <DollarSign className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-                    <ChevronDown className="absolute right-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 mb-2.5 uppercase tracking-wider">
-                    <MapPin className="h-4 w-4 text-primary-600" />
-                    Location
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Enter city..."
-                      value={searchFilters.city}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-4 py-3.5 pl-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 font-medium text-base transition-all duration-200 hover:border-gray-400 placeholder-gray-400 bg-white shadow-sm"
-                    />
-                    <MapPin className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Additional Specs Dropdown (Simplified for Home Search) */}
-                <div className="md:col-span-5 grid grid-cols-2 md:grid-cols-5 gap-4">
+            {/* Hero Search Form - Clean two-row layout */}
+            <form
+              className="max-w-5xl mx-auto animate-fade-in-up animation-delay-800"
+              onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
+            >
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/80 p-6 md:p-8 transition-shadow hover:shadow-2xl">
+                {/* Row 1: Property Type | Listing Type | Location */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-5">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Balconies</label>
+                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                      <Building2 className="h-3.5 w-3.5 text-primary-600" />
+                      Property Type
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={searchFilters.propertyType}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
+                        className="w-full px-4 py-3.5 pl-10 pr-9 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 bg-white transition-all appearance-none cursor-pointer"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+                      >
+                        <option value="">All Property Types</option>
+                        <option value="apartment">Apartment</option>
+                        <option value="house">House</option>
+                        <option value="villa">Villa</option>
+                        <option value="condo">Condo</option>
+                        <option value="commercial">Commercial</option>
+                      </select>
+                      <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                      <DollarSign className="h-3.5 w-3.5 text-primary-600" />
+                      Listing Type
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={searchFilters.listingType}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, listingType: e.target.value }))}
+                        className="w-full px-4 py-3.5 pl-10 pr-9 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 bg-white transition-all appearance-none cursor-pointer"
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+                      >
+                        <option value="">Sale/Rent</option>
+                        <option value="sale">For Sale</option>
+                        <option value="rent">For Rent</option>
+                      </select>
+                      <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                      <MapPin className="h-3.5 w-3.5 text-primary-600" />
+                      Location
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Enter city..."
+                        value={searchFilters.city}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full px-4 py-3.5 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 placeholder-gray-400 bg-white transition-all"
+                      />
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Balconies | Living Room | Furnishing checkboxes | Search button */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
+                      Balconies
+                    </label>
                     <select
                       value={searchFilters.balconies}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, balconies: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base text-gray-900 bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                      style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
                       <option value="">Any</option>
                       {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Living Room</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
+                      Living Room
+                    </label>
                     <select
                       value={searchFilters.livingRoom}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, livingRoom: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base text-gray-900 bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                      style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
                       <option value="">Any</option>
                       {[1, 2].map(n => <option key={n} value={n}>{n}+</option>)}
                     </select>
                   </div>
-                  <div className="md:col-span-3 flex items-end gap-3">
-                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
-                      <input type="checkbox" checked={!!searchFilters.unfurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, unfurnished: e.target.checked ? '1' : '' }))} />
+                  <div className="flex flex-wrap items-end gap-5 md:gap-6 pb-1">
+                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!searchFilters.unfurnished}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, unfurnished: e.target.checked ? '1' : '' }))}
+                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
+                      />
                       Unfurnished
                     </label>
-                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
-                      <input type="checkbox" checked={!!searchFilters.semiFurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? '1' : '' }))} />
+                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!searchFilters.semiFurnished}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? '1' : '' }))}
+                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
+                      />
                       Semi
                     </label>
-                    <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
-                      <input type="checkbox" checked={!!searchFilters.fullyFurnished} onChange={(e) => setSearchFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? '1' : '' }))} />
+                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!searchFilters.fullyFurnished}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? '1' : '' }))}
+                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
+                      />
                       Fully
                     </label>
                   </div>
-                </div>
-
-                {/* Enhanced Search Button */}
-                <div className="flex items-end">
-                  <button
-                    onClick={handleSearch}
-                    className="w-full bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white px-6 py-3.5 rounded-xl hover:from-primary-700 hover:via-primary-800 hover:to-primary-900 font-bold flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl hover:shadow-primary-900/50 transform hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 relative overflow-hidden group"
-                  >
-                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
-                    <Search className="h-5 w-5 relative z-10" />
-                    <span className="relative z-10">Search</span>
-                  </button>
+                  <div className="flex justify-end md:justify-end">
+                    <button
+                      type="submit"
+                      className="w-full md:w-auto bg-primary-600 hover:bg-primary-700 text-white px-6 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-[0.98]"
+                    >
+                      <Search className="h-5 w-5" />
+                      Search
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         </div>
 
@@ -1162,13 +1174,36 @@ export default function HomePage() {
                     </Link>
 
                     {property.status === 'active' ? (
-                      <button
-                        onClick={(e) => handleBookProperty(e, property._id)}
-                        className="w-full mt-auto bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-primary-600/30"
-                      >
-                        <Calendar className="h-4 w-4" />
-                        Book Now
-                      </button>
+                      !user ? (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            toast.error('Please login to book a property')
+                            router.push('/auth/login')
+                          }}
+                          className="w-full mt-auto bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-primary-600/30"
+                        >
+                          <Calendar className="h-4 w-4" />
+                          Login to Book
+                        </button>
+                      ) : property.hasBooked ? (
+                        <button
+                          disabled
+                          className="w-full mt-auto bg-gray-100 text-gray-500 font-bold py-3 px-4 rounded-xl cursor-not-allowed flex items-center justify-center gap-2 border border-gray-200"
+                        >
+                          <Calendar className="h-4 w-4" />
+                          You have already booked the property
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleBookProperty(e, property._id)}
+                          className="w-full mt-auto bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-primary-600/30"
+                        >
+                          <Calendar className="h-4 w-4" />
+                          Book Now
+                        </button>
+                      )
                     ) : (
                       <button
                         disabled
