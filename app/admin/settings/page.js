@@ -124,25 +124,28 @@ export function SettingsPageContent() {
         }
       })
 
-      // Merge with defaults
-      setSettings(prev => ({
-        ...prev,
-        ...nestedSettings
-      }))
-
-      // Also try localStorage as fallback for any missing values
-      const savedSettings = localStorage.getItem('adminSettings')
-      if (savedSettings) {
-        const parsed = JSON.parse(savedSettings)
-        setSettings(prev => ({ ...prev, ...parsed }))
-      }
+      // Merge with defaults - API data takes priority
+      setSettings(prev => {
+        const merged = { ...prev }
+        Object.keys(nestedSettings).forEach(category => {
+          merged[category] = {
+            ...prev[category],
+            ...nestedSettings[category]  // API data overwrites defaults
+          }
+        })
+        return merged
+      })
     } catch (error) {
       console.error('Error fetching settings:', error)
-      // Fallback to localStorage if API fails
+      // Fallback to localStorage ONLY if API fails
       const savedSettings = localStorage.getItem('adminSettings')
       if (savedSettings) {
-        const parsed = JSON.parse(savedSettings)
-        setSettings(prev => ({ ...prev, ...parsed }))
+        try {
+          const parsed = JSON.parse(savedSettings)
+          setSettings(prev => ({ ...prev, ...parsed }))
+        } catch (parseError) {
+          console.error('Error parsing localStorage settings:', parseError)
+        }
       }
     } finally {
       setLoading(false)
@@ -166,8 +169,8 @@ export function SettingsPageContent() {
       // Save to API
       await api.put('/settings', { settings: flatSettings })
 
-      // Also save to localStorage as backup
-      localStorage.setItem('adminSettings', JSON.stringify(settings))
+      // Clear localStorage since we're using API as source of truth
+      localStorage.removeItem('adminSettings')
 
       toast.success(`${section === 'all' ? 'All' : section.charAt(0).toUpperCase() + section.slice(1)} settings saved successfully`)
 
@@ -175,7 +178,7 @@ export function SettingsPageContent() {
       await fetchSettings()
     } catch (error) {
       console.error('Error saving settings:', error)
-      // Fallback to localStorage if API fails
+      // Only save to localStorage if API fails
       localStorage.setItem('adminSettings', JSON.stringify(settings))
       toast.error(error.response?.data?.message || 'Failed to save settings. Saved to local storage as backup.')
     } finally {
@@ -470,4 +473,3 @@ export function SettingsPageContent() {
     </DashboardLayout>
   )
 }
-
