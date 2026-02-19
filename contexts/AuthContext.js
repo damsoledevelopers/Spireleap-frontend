@@ -149,7 +149,7 @@ export function AuthProvider({ children }) {
           redirectPath = '/staff/dashboard'
           break
         case 'user':
-          redirectPath = '/home'
+          redirectPath = '/customer/dashboard'
           break
         default:
           console.warn('Unknown role:', userData.role)
@@ -209,7 +209,7 @@ export function AuthProvider({ children }) {
             redirectPath = '/staff/dashboard'
             break
           case 'user':
-            redirectPath = '/home'
+            redirectPath = '/customer/dashboard'
             break
           default:
             redirectPath = '/home'
