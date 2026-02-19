@@ -26,6 +26,9 @@ export default function RootPage() {
           case 'staff':
             router.push('/staff/dashboard')
             break
+          case 'user':
+            router.push('/customer/dashboard')
+            break
           default:
             router.push('/home')
         }
