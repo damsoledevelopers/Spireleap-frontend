@@ -865,7 +865,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Row 2: Balconies | Living Room | Furnishing checkboxes | Search button */}
+                {/* Row 2: Balconies | Bedroom | Furnishing checkboxes | Search button */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end">
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
@@ -883,7 +883,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
-                      Living Room
+                      Bedroom
                     </label>
                     <select
                       value={searchFilters.livingRoom}
@@ -892,7 +892,7 @@ export default function HomePage() {
                       style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
                       <option value="">Any</option>
-                      {[1, 2].map(n => <option key={n} value={n}>{n}+</option>)}
+                      {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
                     </select>
                   </div>
                   <div className="flex flex-wrap items-end gap-5 md:gap-6 pb-1">
