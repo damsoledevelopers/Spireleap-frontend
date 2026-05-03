@@ -9,6 +9,7 @@ import { ArrowLeft, Save, Upload, X, MapPin, Building, User } from 'lucide-react
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import SearchableSelect from '@/components/Common/SearchableSelect'
 
 const GoogleMapPicker = dynamic(() => import('../../../../../components/GoogleMapPicker'), { ssr: false })
 
@@ -23,6 +24,23 @@ export default function AdminEditPropertyPage() {
   const [amenities, setAmenities] = useState([])
   const [agencies, setAgencies] = useState([])
   const [agents, setAgents] = useState([])
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const sanitizeDigits = (v, maxLen) => {
+    const s = String(v ?? '').replace(/\D/g, '')
+    return typeof maxLen === 'number' ? s.slice(0, maxLen) : s
+  }
+  const sanitizeDecimal = (v) => {
+    const s = String(v ?? '').replace(/[^\d.]/g, '')
+    const firstDot = s.indexOf('.')
+    if (firstDot === -1) return s
+    return s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
   const [formData, setFormData] = useState(null)
 
   useEffect(() => {
@@ -42,8 +60,8 @@ export default function AdminEditPropertyPage() {
       setLoading(true)
       const [propertyRes, categoriesRes, amenitiesRes, agenciesRes] = await Promise.all([
         api.get(`/properties/${params.id}`),
-        api.get('/cms/categories'),
-        api.get('/cms/amenities'),
+        api.get('/settings/categories'),
+        api.get('/settings/amenities'),
         api.get('/agencies')
       ])
 
@@ -256,6 +274,12 @@ export default function AdminEditPropertyPage() {
     setSaving(true)
 
     try {
+      if (!isValidZip(formData.location?.zipCode)) {
+        toast.error('ZIP Code must be 5 digits or 9 digits (ZIP+4)')
+        setSaving(false)
+        return
+      }
+
       const submitData = {
         ...formData,
         price: {
@@ -358,37 +382,33 @@ export default function AdminEditPropertyPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Agency *</label>
-                  <select
+                  <SearchableSelect
                     required
                     value={formData.agency}
                     onChange={(e) => handleInputChange('agency', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                     disabled={user?.role !== 'super_admin'}
-                  >
-                    <option value="">Select Agency</option>
-                    {agencies.map(agency => (
-                      <option key={agency._id} value={agency._id}>
-                        {agency.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      ...agencies.map(a => ({ value: a._id, label: a.name }))
+                    ]}
+                    placeholder="Select Agency"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                    searchPlaceholder="Search agency..."
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Agent *</label>
-                  <select
+                  <SearchableSelect
                     required
                     value={formData.agent}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
                     disabled={!formData.agency || user?.role === 'agent'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">{formData.agency ? 'Select Agent' : 'Select Agency First'}</option>
-                    {agents.map(agent => (
-                      <option key={agent._id} value={agent._id}>
-                        {agent.firstName} {agent.lastName}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      ...agents.map(a => ({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
+                    ]}
+                    placeholder={formData.agency ? 'Select Agent' : 'Select Agency First'}
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                    searchPlaceholder="Search agent..."
+                  />
                 </div>
               </div>
             </div>
@@ -410,55 +430,60 @@ export default function AdminEditPropertyPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Property Type *</label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="apartment">Apartment</option>
-                  <option value="house">House</option>
-                  <option value="villa">Villa</option>
-                  <option value="condo">Condo</option>
-                  <option value="townhouse">Townhouse</option>
-                  <option value="land">Land</option>
-                  <option value="commercial">Commercial</option>
-                </select>
+                  options={[
+                    { value: 'apartment', label: 'Apartment' },
+                    { value: 'house', label: 'House' },
+                    { value: 'villa', label: 'Villa' },
+                    { value: 'condo', label: 'Condo' },
+                    { value: 'townhouse', label: 'Townhouse' },
+                    { value: 'land', label: 'Land' },
+                    { value: 'commercial', label: 'Commercial' }
+                  ]}
+                  placeholder="Select property type"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search type..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Listing Type *</label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.listingType}
                   onChange={(e) => handleInputChange('listingType', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="sale">For Sale</option>
-                  <option value="rent">For Rent</option>
-                </select>
+                  options={[
+                    { value: 'sale', label: 'For Sale' },
+                    { value: 'rent', label: 'For Rent' }
+                  ]}
+                  placeholder="Select listing type"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
                   disabled={user?.role === 'agent'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {(user?.role === 'super_admin' || user?.role === 'agency_admin') ? (
-                    <>
-                      <option value="active">Available (Active)</option>
-                      <option value="pending">Pending Approval</option>
-                      <option value="sold">Sold</option>
-                      <option value="rented">Rented</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="draft">Draft</option>
-                    </>
-                  ) : (
-                    <option value="pending">Pending Agency Approval</option>
-                  )}
-                </select>
+                  options={(user?.role === 'super_admin' || user?.role === 'agency_admin')
+                    ? [
+                      { value: 'active', label: 'Available (Active)' },
+                      { value: 'pending', label: 'Pending Approval' },
+                      { value: 'sold', label: 'Sold' },
+                      { value: 'rented', label: 'Rented' },
+                      { value: 'inactive', label: 'Inactive' },
+                      { value: 'draft', label: 'Draft' }
+                    ]
+                    : [{ value: 'pending', label: 'Pending Agency Approval' }]}
+                  placeholder="Select status"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                  searchPlaceholder="Search status..."
+                />
                 {user?.role === 'agent' && (
                   <p className="mt-1 text-xs text-gray-500">Any edits will require re-approval from the agency.</p>
                 )}
@@ -508,31 +533,37 @@ export default function AdminEditPropertyPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Rent Period *</label>
-                    <select
+                    <SearchableSelect
                       required
                       value={formData.price.rent.period}
                       onChange={(e) => handleInputChange('price.rent.period', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="daily">Daily</option>
-                    </select>
+                      options={[
+                        { value: 'monthly', label: 'Monthly' },
+                        { value: 'yearly', label: 'Yearly' },
+                        { value: 'weekly', label: 'Weekly' },
+                        { value: 'daily', label: 'Daily' }
+                      ]}
+                      placeholder="Select period"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search period..."
+                    />
                   </div>
                 </>
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                <select
+                <SearchableSelect
                   value={formData.price.currency}
                   onChange={(e) => handleInputChange('price.currency', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                </select>
+                  options={[
+                    { value: 'USD', label: 'USD' },
+                    { value: 'EUR', label: 'EUR' },
+                    { value: 'GBP', label: 'GBP' }
+                  ]}
+                  placeholder="Currency"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search currency..."
+                />
               </div>
             </div>
           </div>
@@ -560,7 +591,7 @@ export default function AdminEditPropertyPage() {
                   type="text"
                   required
                   value={formData.location.city}
-                  onChange={(e) => handleInputChange('location.city', e.target.value)}
+                  onChange={(e) => handleInputChange('location.city', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -570,7 +601,17 @@ export default function AdminEditPropertyPage() {
                   type="text"
                   required
                   value={formData.location.state}
-                  onChange={(e) => handleInputChange('location.state', e.target.value)}
+                  onChange={(e) => handleInputChange('location.state', sanitizeAlphaText(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.location.country}
+                  onChange={(e) => handleInputChange('location.country', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -579,7 +620,7 @@ export default function AdminEditPropertyPage() {
                 <input
                   type="text"
                   value={formData.location.zipCode}
-                  onChange={(e) => handleInputChange('location.zipCode', e.target.value)}
+                  onChange={(e) => handleInputChange('location.zipCode', sanitizeZip(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -644,36 +685,48 @@ export default function AdminEditPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms (BHK Type)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.bedrooms}
-                  onChange={(e) => handleInputChange('specifications.bedrooms', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.bedrooms', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.bathrooms}
-                  onChange={(e) => handleInputChange('specifications.bathrooms', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.bathrooms', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.balconies}
-                  onChange={(e) => handleInputChange('specifications.balconies', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.balconies', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.livingRoom}
-                  onChange={(e) => handleInputChange('specifications.livingRoom', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.livingRoom', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -713,38 +766,46 @@ export default function AdminEditPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.specifications.area.value}
-                  onChange={(e) => handleInputChange('specifications.area.value', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.area.value', sanitizeDecimal(e.target.value))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                <select
+                <SearchableSelect
                   value={formData.specifications.area.unit}
                   onChange={(e) => handleInputChange('specifications.area.unit', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="sqft">sqft</option>
-                  <option value="sqm">sqm</option>
-                </select>
+                  options={[
+                    { value: 'sqft', label: 'sqft' },
+                    { value: 'sqm', label: 'sqm' }
+                  ]}
+                  placeholder="Unit"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search unit..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Parking</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.parking}
-                  onChange={(e) => handleInputChange('specifications.parking', e.target.value)}
+                  onChange={(e) => handleInputChange('specifications.parking', sanitizeDigits(e.target.value, 2))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.yearBuilt}
-                  onChange={(e) => handleInputChange('specifications.yearBuilt', e.target.value)}
+                  onChange={(e) => handleInputChange('specifications.yearBuilt', sanitizeDigits(e.target.value, 4))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -757,37 +818,48 @@ export default function AdminEditPropertyPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
+                <SearchableSelect
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map(cat => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    ...categories.map((c) => ({ value: c._id, label: c.name }))
+                  ]}
+                  placeholder="Select Category"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search category..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amenities</label>
-                <select
-                  multiple
-                  value={formData.amenities}
+                <SearchableSelect
+                  value={formData.amenities?.[0] || ''}
                   onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value)
-                    handleInputChange('amenities', selected)
+                    const v = e.target.value
+                    if (!v) return
+                    const next = Array.from(new Set([...(formData.amenities || []), v]))
+                    handleInputChange('amenities', next)
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  size={5}
-                >
-                  {amenities.map(amenity => (
-                    <option key={amenity._id} value={amenity._id}>
-                      {amenity.name}
-                    </option>
-                  ))}
-                </select>
+                  options={amenities.map((a) => ({ value: a._id, label: a.name }))}
+                  placeholder="Add amenity..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search amenity..."
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(formData.amenities || []).map((id) => {
+                    const label = amenities.find(a => a._id === id)?.name || id
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        onClick={() => handleInputChange('amenities', (formData.amenities || []).filter(x => x !== id))}
+                        title="Remove"
+                      >
+                        {label} ×
+                      </button>
+                    )
+                  })}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
               </div>
             </div>

@@ -5,10 +5,13 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { api } from '../../../lib/api'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
 
 export default function InvoicePage() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { selectedCurrency, ratesByCode } = useCurrency()
   const subscriptionId = searchParams.get('id')
   const [subscription, setSubscription] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -39,6 +42,8 @@ export default function InvoicePage() {
   const handlePrint = () => {
     window.print()
   }
+
+  const formatPrice = (price) => formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
 
   const invoiceRef = useRef(null)
 
@@ -116,7 +121,7 @@ export default function InvoicePage() {
       subtotal: itemAmount,
       taxes: 0,
       total: itemAmount,
-      currency: 'USD'
+      currency: selectedCurrency
     }
 
     const blob = new Blob([JSON.stringify(invoice, null, 2)], { type: 'application/json' })
@@ -163,7 +168,7 @@ export default function InvoicePage() {
                 <div className="text-sm text-gray-600">Provider: {subscription.provider}</div>
               </div>
               <div className="text-right">
-                <div className="font-semibold">{itemAmount ? `$${itemAmount}` : 'Contact'}</div>
+                <div className="font-semibold">{itemAmount ? formatPrice(itemAmount) : 'Contact'}</div>
                 <div className="text-sm text-gray-500">Billed on: {new Date(subscription.startedAt).toLocaleString()}</div>
               </div>
             </div>
@@ -195,7 +200,11 @@ export default function InvoicePage() {
                 <tbody>
                   <tr>
                     <td className="py-2">{subscription.plan?.plan_name || subscription.planName || 'Subscription'}</td>
-                    <td className="py-2">{subscription.price ? `$${subscription.price}` : (subscription.plan?.price ? `$${subscription.plan.price}` : 'Contact')}</td>
+                    <td className="py-2">
+                      {subscription.price
+                        ? formatPrice(subscription.price)
+                        : (subscription.plan?.price ? formatPrice(subscription.plan.price) : 'Contact')}
+                    </td>
                   </tr>
                 </tbody>
               </table>

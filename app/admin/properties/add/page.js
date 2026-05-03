@@ -9,6 +9,7 @@ import { ArrowLeft, Save, Upload, X, MapPin, Building, User } from 'lucide-react
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import SearchableSelect from '../../../../components/Common/SearchableSelect'
 
 // Dynamically import Google Maps to avoid SSR issues
 const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
@@ -18,10 +19,29 @@ export default function AdminAddPropertyPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingQr, setUploadingQr] = useState(false)
   const [categories, setCategories] = useState([])
   const [amenities, setAmenities] = useState([])
   const [agencies, setAgencies] = useState([])
   const [agents, setAgents] = useState([])
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const sanitizeDigits = (v, maxLen) => {
+    const s = String(v ?? '').replace(/\D/g, '')
+    return typeof maxLen === 'number' ? s.slice(0, maxLen) : s
+  }
+  const sanitizeDecimal = (v) => {
+    // allow digits and one dot, e.g. "123.45"
+    const s = String(v ?? '').replace(/[^\d.]/g, '')
+    const firstDot = s.indexOf('.')
+    if (firstDot === -1) return s
+    return s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -57,6 +77,17 @@ export default function AdminAddPropertyPage() {
       floors: 1,
       yearBuilt: '',
       lotSize: { value: '', unit: 'sqft' }
+    },
+    regulatoryInformation: {
+      reference: '',
+      listedAt: '',
+      brokerLicense: '',
+      agencyName: '',
+      zoneName: '',
+      agentLicense: '',
+      dldPermitNumber: '',
+      qrImage: '',
+      qrValue: ''
     },
     category: '',
     amenities: [],
@@ -107,8 +138,8 @@ export default function AdminAddPropertyPage() {
 
     try {
       const [categoriesRes, amenitiesRes, agenciesRes] = await Promise.all([
-        api.get('/cms/categories'),
-        api.get('/cms/amenities'),
+        api.get('/settings/categories'),
+        api.get('/settings/amenities'),
         api.get('/agencies')
       ])
       setCategories(categoriesRes.data.categories || [])
@@ -190,6 +221,30 @@ export default function AdminAddPropertyPage() {
     }
   }
 
+  const handleQrImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploadingQr(true)
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append('images', file)
+      const response = await api.post('/upload/property-images', uploadFormData)
+      const url = response.data?.files?.[0]?.url
+      if (!url) throw new Error('Invalid response from server')
+      setFormData((prev) => ({
+        ...prev,
+        regulatoryInformation: { ...prev.regulatoryInformation, qrImage: url }
+      }))
+      toast.success('QR image uploaded')
+    } catch (error) {
+      console.error('Error uploading QR image:', error)
+      toast.error(error.response?.data?.message || error.message || 'Failed to upload QR image')
+    } finally {
+      setUploadingQr(false)
+    }
+  }
+
   const removeImage = (index) => {
     setFormData({
       ...formData,
@@ -223,15 +278,15 @@ export default function AdminAddPropertyPage() {
     setLoading(true)
 
     try {
-      // Validation
-      if (!formData.agency) {
+      // Agency required only when tied to an agency workflow (not super_admin global listings)
+      if (user?.role === 'agency_admin' && !formData.agency) {
         toast.error('Please select an agency')
         setLoading(false)
         return
       }
 
-      if (!formData.agent) {
-        toast.error('Please select an agent')
+      if (!isValidZip(formData.location?.zipCode)) {
+        toast.error('ZIP Code must be 5 digits or 9 digits (ZIP+4)')
         setLoading(false)
         return
       }
@@ -239,8 +294,8 @@ export default function AdminAddPropertyPage() {
       // Clean up form data
       const submitData = {
         ...formData,
-        agency: formData.agency,
-        agent: formData.agent,
+        agency: formData.agency || undefined,
+        agent: formData.agent || undefined,
         price: {
           sale: formData.price.sale ? parseFloat(formData.price.sale) : undefined,
           rent: formData.price.rent.amount ? {
@@ -249,27 +304,32 @@ export default function AdminAddPropertyPage() {
           } : undefined,
           currency: formData.price.currency
         },
+        regulatoryInformation: {
+          ...formData.regulatoryInformation,
+          listedAt: formData.regulatoryInformation?.listedAt
+            ? new Date(formData.regulatoryInformation.listedAt).toISOString()
+            : undefined
+        },
         specifications: {
           ...formData.specifications,
-          bedrooms: formData.specifications.bedrooms ? parseInt(formData.specifications.bedrooms) : undefined,
-          bathrooms: formData.specifications.bathrooms ? parseInt(formData.specifications.bathrooms) : undefined,
-          balconies: parseInt(formData.specifications.balconies) || 0,
-          livingRoom: parseInt(formData.specifications.livingRoom) || 0,
-          unfurnished: parseInt(formData.specifications.unfurnished) || 0,
-          semiFurnished: parseInt(formData.specifications.semiFurnished) || 0,
-          fullyFurnished: parseInt(formData.specifications.fullyFurnished) || 0,
-          balconies: parseInt(formData.specifications.balconies) || 0,
-          livingRoom: parseInt(formData.specifications.livingRoom) || 0,
-          unfurnished: parseInt(formData.specifications.unfurnished) || 0,
-          semiFurnished: parseInt(formData.specifications.semiFurnished) || 0,
-          fullyFurnished: parseInt(formData.specifications.fullyFurnished) || 0,
-          area: {
-            value: parseFloat(formData.specifications.area.value),
-            unit: formData.specifications.area.unit
-          },
-          parking: parseInt(formData.specifications.parking) || 0,
-          floors: parseInt(formData.specifications.floors) || 1,
-          yearBuilt: formData.specifications.yearBuilt ? parseInt(formData.specifications.yearBuilt) : undefined,
+          bedrooms: formData.specifications.bedrooms ? parseInt(formData.specifications.bedrooms, 10) : undefined,
+          bathrooms: formData.specifications.bathrooms ? parseInt(formData.specifications.bathrooms, 10) : undefined,
+          balconies: parseInt(formData.specifications.balconies, 10) || 0,
+          livingRoom: parseInt(formData.specifications.livingRoom, 10) || 0,
+          unfurnished: parseInt(formData.specifications.unfurnished, 10) || 0,
+          semiFurnished: parseInt(formData.specifications.semiFurnished, 10) || 0,
+          fullyFurnished: parseInt(formData.specifications.fullyFurnished, 10) || 0,
+          ...(formData.specifications.area.value !== '' && formData.specifications.area.value != null
+            ? {
+                area: {
+                  value: parseFloat(formData.specifications.area.value),
+                  unit: formData.specifications.area.unit
+                }
+              }
+            : {}),
+          parking: parseInt(formData.specifications.parking, 10) || 0,
+          floors: parseInt(formData.specifications.floors, 10) || 1,
+          yearBuilt: formData.specifications.yearBuilt ? parseInt(formData.specifications.yearBuilt, 10) : undefined,
           lotSize: formData.specifications.lotSize.value ? {
             value: parseFloat(formData.specifications.lotSize.value),
             unit: formData.specifications.lotSize.unit
@@ -282,11 +342,21 @@ export default function AdminAddPropertyPage() {
         videos: formData.videos.filter(v => v.url),
         location: {
           ...formData.location,
-          ...(formData.location.coordinates.lat !== 0 && formData.location.coordinates.lng !== 0
-            ? { coordinates: formData.location.coordinates }
-            : {})
+          coordinates: formData.location.coordinates
         },
         status: formData.status || 'active'
+      }
+
+      if (!submitData.agency) delete submitData.agency
+      if (!submitData.agent) delete submitData.agent
+
+      if (
+        submitData.specifications?.area &&
+        (submitData.specifications.area.value === undefined ||
+          submitData.specifications.area.value === null ||
+          Number.isNaN(submitData.specifications.area.value))
+      ) {
+        delete submitData.specifications.area
       }
 
       // Remove empty price fields
@@ -295,6 +365,18 @@ export default function AdminAddPropertyPage() {
           delete submitData.price[key]
         }
       })
+
+      // Remove empty regulatory fields
+      if (submitData.regulatoryInformation) {
+        Object.keys(submitData.regulatoryInformation).forEach((key) => {
+          if (submitData.regulatoryInformation[key] === undefined || submitData.regulatoryInformation[key] === '') {
+            delete submitData.regulatoryInformation[key]
+          }
+        })
+        if (Object.keys(submitData.regulatoryInformation).length === 0) {
+          delete submitData.regulatoryInformation
+        }
+      }
 
       await api.post('/properties', submitData)
       toast.success('Property created successfully!')
@@ -362,49 +444,48 @@ export default function AdminAddPropertyPage() {
                 <Building className="h-5 w-5 text-primary-600" />
                 Agency & Agent Assignment
               </h2>
+              <p className="text-sm text-gray-500 mb-4">
+                {user?.role === 'super_admin'
+                  ? 'Optional: assign an agency and agent when this listing belongs to a partner. You can save without them.'
+                  : 'Assign an agent for this listing when applicable.'}
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agency *</label>
-                  <select
-                    required
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Agency{user?.role === 'super_admin' ? ' (optional)' : ''}
+                  </label>
+                  <SearchableSelect
                     value={formData.agency}
                     onChange={(e) => handleInputChange('agency', e.target.value)}
                     disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Select Agency</option>
-                    {user?.role === 'super_admin' ? (
-                      agencies.map(agency => (
-                        <option key={agency._id} value={agency._id}>
-                          {agency.name}
-                        </option>
-                      ))
-                    ) : (
-                      // For non-super admins, show their own agency
-                      user?.agency && (
-                        <option value={typeof user.agency === 'object' ? user.agency._id : user.agency}>
-                          {user.agencyName || (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')}
-                        </option>
-                      )
-                    )}
-                  </select>
+                    options={[
+                      ...(user?.role === 'super_admin'
+                        ? agencies.map(a => ({ value: a._id, label: a.name }))
+                        : (user?.agency
+                          ? [{
+                            value: typeof user.agency === 'object' ? user.agency._id : user.agency,
+                            label: user.agencyName || (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')
+                          }]
+                          : []))
+                    ]}
+                    placeholder="Select Agency"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                    searchPlaceholder="Search agency..."
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agent *</label>
-                  <select
-                    required
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agent (optional)</label>
+                  <SearchableSelect
                     value={formData.agent}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
                     disabled={!formData.agency || user?.role === 'agent'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">{formData.agency ? 'Select Agent' : 'Select Agency First'}</option>
-                    {agents.map(agent => (
-                      <option key={agent._id} value={agent._id}>
-                        {agent.firstName} {agent.lastName}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      ...agents.map(a => ({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
+                    ]}
+                    placeholder={formData.agency ? 'Select Agent' : 'Select Agency First'}
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                    searchPlaceholder="Search agent..."
+                  />
                 </div>
               </div>
             </div>
@@ -415,10 +496,9 @@ export default function AdminAddPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <input
                   type="text"
-                  required
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -426,69 +506,70 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Property Type *</label>
-                <select
-                  required
+                <label className="block text-sm font-medium text-gray-700 mb-1">Property Type</label>
+                <SearchableSelect
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="apartment">Apartment</option>
-                  <option value="house">House</option>
-                  <option value="villa">Villa</option>
-                  <option value="condo">Condo</option>
-                  <option value="townhouse">Townhouse</option>
-                  <option value="land">Land</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="office">Office</option>
-                  <option value="retail">Retail</option>
-                  <option value="warehouse">Warehouse</option>
-                  <option value="other">Other</option>
-                </select>
+                  options={[
+                    { value: 'apartment', label: 'Apartment' },
+                    { value: 'house', label: 'House' },
+                    { value: 'villa', label: 'Villa' },
+                    { value: 'condo', label: 'Condo' },
+                    { value: 'townhouse', label: 'Townhouse' },
+                    { value: 'land', label: 'Land' },
+                    { value: 'commercial', label: 'Commercial' },
+                    { value: 'office', label: 'Office' },
+                    { value: 'retail', label: 'Retail' },
+                    { value: 'warehouse', label: 'Warehouse' },
+                    { value: 'other', label: 'Other' }
+                  ]}
+                  placeholder="Select property type"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search type..."
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Type *</label>
-                <select
-                  required
+                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Type</label>
+                <SearchableSelect
                   value={formData.listingType}
                   onChange={(e) => handleInputChange('listingType', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="sale">For Sale</option>
-                  <option value="rent">For Rent</option>
-                  <option value="both">Both</option>
-                </select>
+                  options={[
+                    { value: 'sale', label: 'For Sale' },
+                    { value: 'rent', label: 'For Rent' },
+                    { value: 'both', label: 'Both' }
+                  ]}
+                  placeholder="Select listing type"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search..."
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                <select
-                  required
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <SearchableSelect
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
                   disabled={user?.role !== 'super_admin' && user?.role !== 'agency_admin'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {(user?.role === 'super_admin' || user?.role === 'agency_admin') ? (
-                    <>
-                      <option value="active">Available (Active)</option>
-                      <option value="pending">Pending Approval</option>
-                      <option value="sold">Sold</option>
-                      <option value="rented">Rented</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="draft">Draft</option>
-                    </>
-                  ) : (
-                    <option value="pending">Pending Agency Approval</option>
-                  )}
-                </select>
+                  options={(user?.role === 'super_admin' || user?.role === 'agency_admin')
+                    ? [
+                      { value: 'active', label: 'Available (Active)' },
+                      { value: 'pending', label: 'Pending Approval' },
+                      { value: 'sold', label: 'Sold' },
+                      { value: 'rented', label: 'Rented' },
+                      { value: 'inactive', label: 'Inactive' },
+                      { value: 'draft', label: 'Draft' }
+                    ]
+                    : [{ value: 'pending', label: 'Pending Agency Approval' }]}
+                  placeholder="Select status"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
+                  searchPlaceholder="Search status..."
+                />
                 {user?.role === 'agent' && (
                   <p className="mt-1 text-xs text-gray-500">Your listing will be visible after agency approval.</p>
                 )}
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
-                  required
                   rows={4}
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
@@ -531,31 +612,37 @@ export default function AdminAddPropertyPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Rent Period</label>
-                    <select
+                    <SearchableSelect
                       value={formData.price.rent.period}
                       onChange={(e) => handleInputChange('price.rent.period', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="daily">Daily</option>
-                    </select>
+                      options={[
+                        { value: 'monthly', label: 'Monthly' },
+                        { value: 'yearly', label: 'Yearly' },
+                        { value: 'weekly', label: 'Weekly' },
+                        { value: 'daily', label: 'Daily' }
+                      ]}
+                      placeholder="Select period"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search period..."
+                    />
                   </div>
                 </>
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                <select
+                <SearchableSelect
                   value={formData.price.currency}
                   onChange={(e) => handleInputChange('price.currency', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="INR">INR</option>
-                </select>
+                  options={[
+                    { value: 'USD', label: 'USD' },
+                    { value: 'EUR', label: 'EUR' },
+                    { value: 'GBP', label: 'GBP' },
+                    { value: 'INR', label: 'INR' }
+                  ]}
+                  placeholder="Currency"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search currency..."
+                />
               </div>
             </div>
           </div>
@@ -568,10 +655,9 @@ export default function AdminAddPropertyPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <input
                   type="text"
-                  required
                   value={formData.location.address}
                   onChange={(e) => handleInputChange('location.address', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -579,34 +665,31 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                 <input
                   type="text"
-                  required
                   value={formData.location.city}
-                  onChange={(e) => handleInputChange('location.city', e.target.value)}
+                  onChange={(e) => handleInputChange('location.city', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="City"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                 <input
                   type="text"
-                  required
                   value={formData.location.state}
-                  onChange={(e) => handleInputChange('location.state', e.target.value)}
+                  onChange={(e) => handleInputChange('location.state', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="State"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
                 <input
                   type="text"
-                  required
                   value={formData.location.country}
-                  onChange={(e) => handleInputChange('location.country', e.target.value)}
+                  onChange={(e) => handleInputChange('location.country', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="Country"
                 />
@@ -616,7 +699,7 @@ export default function AdminAddPropertyPage() {
                 <input
                   type="text"
                   value={formData.location.zipCode}
-                  onChange={(e) => handleInputChange('location.zipCode', e.target.value)}
+                  onChange={(e) => handleInputChange('location.zipCode', sanitizeZip(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="ZIP Code"
                 />
@@ -641,6 +724,135 @@ export default function AdminAddPropertyPage() {
             </div>
           </div>
 
+          {/* Regulatory Information */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Regulatory Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reference</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.reference}
+                  onChange={(e) => handleInputChange('regulatoryInformation.reference', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="DPF-S-47165"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Listed At</label>
+                <input
+                  type="date"
+                  value={formData.regulatoryInformation.listedAt}
+                  onChange={(e) => handleInputChange('regulatoryInformation.listedAt', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Broker License</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.brokerLicense}
+                  onChange={(e) => handleInputChange('regulatoryInformation.brokerLicense', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="11917"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Agency Name</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.agencyName}
+                  onChange={(e) => handleInputChange('regulatoryInformation.agencyName', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="DRIVEN PROPERTIES LLC"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zone Name</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.zoneName}
+                  onChange={(e) => handleInputChange('regulatoryInformation.zoneName', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Jumeirah First"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Agent License</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.agentLicense}
+                  onChange={(e) => handleInputChange('regulatoryInformation.agentLicense', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="46127"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DLD Permit Number</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.dldPermitNumber}
+                  onChange={(e) => handleInputChange('regulatoryInformation.dldPermitNumber', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="65171959460"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">QR code image (optional)</label>
+                <p className="text-xs text-gray-500 mb-2">Upload a PNG/JPEG of the listing QR, or paste a URL below.</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:bg-gray-50 text-sm font-medium text-gray-700">
+                    <Upload className="h-4 w-4" />
+                    {uploadingQr ? 'Uploading…' : 'Upload QR image'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      disabled={uploadingQr}
+                      onChange={handleQrImageUpload}
+                    />
+                  </label>
+                  {formData.regulatoryInformation.qrImage && (
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('regulatoryInformation.qrImage', '')}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Remove QR image
+                    </button>
+                  )}
+                </div>
+                {formData.regulatoryInformation.qrImage && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img
+                      src={formData.regulatoryInformation.qrImage}
+                      alt="QR preview"
+                      className="h-24 w-24 object-contain border border-gray-200 rounded bg-white p-1"
+                    />
+                  </div>
+                )}
+                {/* <label className="block text-sm font-medium text-gray-700 mt-3 mb-1">Or paste image URL</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.qrImage}
+                  onChange={(e) => handleInputChange('regulatoryInformation.qrImage', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="https://… (optional)"
+                /> */}
+              </div>
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">QR Value</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation.qrValue}
+                  onChange={(e) => handleInputChange('regulatoryInformation.qrValue', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="https://your-frontend.com/property/123"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Specifications */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
@@ -648,10 +860,12 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms (BHK Type)</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.bedrooms}
-                  onChange={(e) => handleInputChange('specifications.bedrooms', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.bedrooms', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="0"
                 />
@@ -659,10 +873,12 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.bathrooms}
-                  onChange={(e) => handleInputChange('specifications.bathrooms', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.bathrooms', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="0"
                 />
@@ -670,10 +886,12 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.balconies}
-                  onChange={(e) => handleInputChange('specifications.balconies', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.balconies', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="0"
                 />
@@ -681,77 +899,82 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.livingRoom}
-                  onChange={(e) => handleInputChange('specifications.livingRoom', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('specifications.livingRoom', sanitizeDigits(e.target.value, 2))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="0"
                 />
               </div>
-              <div className="flex items-center h-full pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="md:col-span-2 flex flex-row flex-nowrap items-end gap-4 sm:gap-6 md:gap-8 pb-2 min-h-[3.25rem] overflow-x-auto">
+                <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={formData.specifications.unfurnished > 0}
                     onChange={(e) => handleInputChange('specifications.unfurnished', e.target.checked ? 1 : 0)}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
                   <span className="text-sm font-medium text-gray-700">Unfurnished</span>
                 </label>
-              </div>
-              <div className="flex items-center h-full pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={formData.specifications.semiFurnished > 0}
                     onChange={(e) => handleInputChange('specifications.semiFurnished', e.target.checked ? 1 : 0)}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
                   <span className="text-sm font-medium text-gray-700">Semi-Furnished</span>
                 </label>
-              </div>
-              <div className="flex items-center h-full pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={formData.specifications.fullyFurnished > 0}
                     onChange={(e) => handleInputChange('specifications.fullyFurnished', e.target.checked ? 1 : 0)}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
                   <span className="text-sm font-medium text-gray-700">Fully Furnished</span>
                 </label>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Area *</label>
-                <div className="flex gap-2">
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Area (optional)</label>
+                <div className="flex flex-col sm:flex-row sm:items-stretch gap-2 sm:gap-3 max-w-xl">
                   <input
-                    type="number"
-                    min="0"
-                    required
+                    type="text"
+                    inputMode="decimal"
                     value={formData.specifications.area.value}
-                    onChange={(e) => handleInputChange('specifications.area.value', e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    onChange={(e) =>
+                      handleInputChange('specifications.area.value', sanitizeDecimal(e.target.value))
+                    }
+                    className="w-full min-w-0 sm:flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 h-[42px]"
                     placeholder="0"
                   />
-                  <select
-                    value={formData.specifications.area.unit}
-                    onChange={(e) => handleInputChange('specifications.area.unit', e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="sqft">sqft</option>
-                    <option value="sqm">sqm</option>
-                    <option value="acre">acre</option>
-                  </select>
+                  <div className="w-full sm:w-36 shrink-0 self-stretch">
+                    <SearchableSelect
+                      value={formData.specifications.area.unit}
+                      onChange={(e) => handleInputChange('specifications.area.unit', e.target.value)}
+                      options={[
+                        { value: 'sqft', label: 'sqft' },
+                        { value: 'sqm', label: 'sqm' },
+                        { value: 'acre', label: 'acre' }
+                      ]}
+                      placeholder="Unit"
+                      className="h-full"
+                      buttonClassName="w-full h-[42px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white flex items-center justify-between gap-2"
+                      searchPlaceholder="Unit…"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Parking Spaces</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.parking}
-                  onChange={(e) => handleInputChange('specifications.parking', e.target.value)}
+                  onChange={(e) => handleInputChange('specifications.parking', sanitizeDigits(e.target.value, 2))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="0"
                 />
@@ -759,10 +982,10 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Floors</label>
                 <input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.floors}
-                  onChange={(e) => handleInputChange('specifications.floors', e.target.value)}
+                  onChange={(e) => handleInputChange('specifications.floors', sanitizeDigits(e.target.value, 2))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="1"
                 />
@@ -770,11 +993,10 @@ export default function AdminAddPropertyPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
                 <input
-                  type="number"
-                  min="1800"
-                  max={new Date().getFullYear()}
+                  type="text"
+                  inputMode="numeric"
                   value={formData.specifications.yearBuilt}
-                  onChange={(e) => handleInputChange('specifications.yearBuilt', e.target.value)}
+                  onChange={(e) => handleInputChange('specifications.yearBuilt', sanitizeDigits(e.target.value, 4))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="Year"
                 />
@@ -848,24 +1070,18 @@ export default function AdminAddPropertyPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                <select
+                <SearchableSelect
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                >
-                  <option value="">Select Category</option>
-                  {categories.length > 0 ? (
-                    categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="" disabled>No categories available</option>
-                  )}
-                </select>
+                  options={[
+                    ...(categories || []).map((c) => ({ value: c._id, label: c.name }))
+                  ]}
+                  placeholder="Select Category"
+                  buttonClassName="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all bg-white"
+                  searchPlaceholder="Search category..."
+                />
                 {categories.length === 0 && (
-                  <p className="mt-2 text-xs text-gray-500">Create categories in CMS section first</p>
+                  <p className="mt-2 text-xs text-gray-500">Create categories in Settings first</p>
                 )}
               </div>
               <div>
@@ -906,7 +1122,7 @@ export default function AdminAddPropertyPage() {
                   ) : (
                     <div className="text-center py-8">
                       <p className="text-sm text-gray-500">No amenities available</p>
-                      <p className="text-xs text-gray-400 mt-1">Create amenities in CMS section first</p>
+                      <p className="text-xs text-gray-400 mt-1">Create amenities in Settings first</p>
                     </div>
                   )}
                 </div>

@@ -18,6 +18,8 @@ import {
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
 
 export default function MyProperties() {
     const [activeTab, setActiveTab] = useState('inquired')
@@ -54,6 +56,21 @@ export default function MyProperties() {
     ]
 
     const properties = data[activeTab] || []
+    const { selectedCurrency, ratesByCode } = useCurrency()
+
+    const formatPrice = (property) => {
+        if (!property?.price) return 'Contact'
+        if (property.listingType === 'sale' && property.price?.sale) {
+            return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        }
+        if (property.listingType === 'rent' && property.price?.rent?.amount) {
+            const amt = formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+            return `${amt}/${property.price.rent.period || 'month'}`
+        }
+        if (property.price?.sale) return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        if (property.price?.rent?.amount) return formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        return 'Contact'
+    }
 
     return (
         <DashboardLayout>
@@ -159,9 +176,7 @@ export default function MyProperties() {
                                         <div>
                                             <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Price</p>
                                             <p className="text-xl font-extrabold text-primary-600">
-                                                ${property.listingType === 'sale'
-                                                    ? property.price?.sale?.toLocaleString()
-                                                    : `${property.price?.rent?.amount?.toLocaleString()}/${property.price?.rent?.period}`}
+                                                {formatPrice(property)}
                                             </p>
                                         </div>
                                         <Link

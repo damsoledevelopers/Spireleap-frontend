@@ -14,15 +14,20 @@ import { useRouter } from 'next/navigation'
 
 export default function BillingPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const [plans, setPlans] = useState([])
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('razorpay')
 
   useEffect(() => {
+    if (loading) return
+    if (!user) {
+      router.replace('/auth/login?next=/billing')
+      return
+    }
     fetchPlans()
-  }, [])
+  }, [loading, user])
 
   const fetchPlans = async () => {
     try {

@@ -8,20 +8,30 @@ import { Search, Filter, MapPin, Bed, Bath, Square, SlidersHorizontal, X, Chevro
 import toast from 'react-hot-toast'
 import Header from '../../components/Layout/Header'
 import Footer from '../../components/Layout/Footer'
+import { useCurrency } from '../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../lib/money'
 
 export default function PropertiesPage() {
   const router = useRouter()
+  const { selectedCurrency, ratesByCode } = useCurrency()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState([])
   const [amenities, setAmenities] = useState([])
-  const [uniqueLocations, setUniqueLocations] = useState({
-    cities: [],
-    states: [],
-    countries: [],
-    areas: []
+  const [filterOptions, setFilterOptions] = useState({
+    propertyTypes: [],
+    listingTypes: [],
+    locations: { cities: [], states: [], countries: [], areas: [] },
+    specifications: { bedrooms: [], bathrooms: [] },
+    leadFieldOptions: {
+      preferredRooms: [],
+      preferredSize: [],
+      buyerType: [],
+      paymentMethod: [],
+      spokenLanguages: []
+    }
   })
   const [filters, setFilters] = useState({
     propertyType: searchParams.get('propertyType') || '',
@@ -34,6 +44,8 @@ export default function PropertiesPage() {
     maxPrice: searchParams.get('maxPrice') || '',
     bedrooms: searchParams.get('bedrooms') || '',
     bathrooms: searchParams.get('bathrooms') || '',
+    minArea: searchParams.get('minArea') || '',
+    maxArea: searchParams.get('maxArea') || '',
     balconies: searchParams.get('balconies') || '',
     livingRoom: searchParams.get('livingRoom') || '',
     unfurnished: searchParams.get('unfurnished') || '',
@@ -41,31 +53,36 @@ export default function PropertiesPage() {
     fullyFurnished: searchParams.get('fullyFurnished') || '',
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
-    amenities: searchParams.get('amenities') || ''
+    amenities: searchParams.get('amenities') || '',
+    preferredRooms: searchParams.get('preferredRooms') || '',
+    preferredSize: searchParams.get('preferredSize') || '',
+    buyerType: searchParams.get('buyerType') || '',
+    paymentMethod: searchParams.get('paymentMethod') || '',
+    nationality: searchParams.get('nationality') || '',
+    dob: searchParams.get('dob') || '',
+    spokenLanguages: searchParams.get('spokenLanguages') || ''
   })
   const [showFilters, setShowFilters] = useState(true)
   const [openFilter, setOpenFilter] = useState(null)
   const [pagination, setPagination] = useState({ page: parseInt(searchParams.get('page')) || 1, limit: 12, total: 0, pages: 0 })
 
   useEffect(() => {
-    // Load filter options (categories & amenities) once
+    // Load filter options once (from backend)
     const fetchFilterOptions = async () => {
       try {
-        const [categoriesRes, amenitiesRes, propertiesRes] = await Promise.all([
-          api.get('/cms/categories'),
-          api.get('/cms/amenities?limit=100'),
-          api.get('/properties?limit=500')
+        const [categoriesRes, amenitiesRes, filterOptionsRes] = await Promise.all([
+          api.get('/settings/categories'),
+          api.get('/settings/amenities?limit=100'),
+          api.get('/properties/filter-options')
         ])
         setCategories(categoriesRes.data.categories || [])
         setAmenities(amenitiesRes.data.amenities || [])
-
-        const allProperties = propertiesRes.data?.properties || []
-        const cities = [...new Set(allProperties.map(p => p.location?.city).filter(Boolean))].sort()
-        const states = [...new Set(allProperties.map(p => p.location?.state).filter(Boolean))].sort()
-        const countries = [...new Set(allProperties.map(p => p.location?.country).filter(Boolean))].sort()
-        const areas = [...new Set(allProperties.map(p => p.location?.area || p.area).filter(Boolean))].sort()
-
-        setUniqueLocations({ cities, states, countries, areas })
+        setFilterOptions(filterOptionsRes.data || {
+          propertyTypes: [],
+          listingTypes: [],
+          locations: { cities: [], states: [], countries: [], areas: [] },
+          specifications: { bedrooms: [], bathrooms: [] }
+        })
       } catch (error) {
         console.error('Error fetching filter options:', error)
       }
@@ -87,6 +104,8 @@ export default function PropertiesPage() {
       maxPrice: searchParams.get('maxPrice') || '',
       bedrooms: searchParams.get('bedrooms') || '',
       bathrooms: searchParams.get('bathrooms') || '',
+      minArea: searchParams.get('minArea') || '',
+      maxArea: searchParams.get('maxArea') || '',
       balconies: searchParams.get('balconies') || '',
       livingRoom: searchParams.get('livingRoom') || '',
       unfurnished: searchParams.get('unfurnished') || '',
@@ -94,7 +113,14 @@ export default function PropertiesPage() {
       fullyFurnished: searchParams.get('fullyFurnished') || '',
       search: searchParams.get('search') || '',
       category: searchParams.get('category') || '',
-      amenities: searchParams.get('amenities') || ''
+      amenities: searchParams.get('amenities') || '',
+      preferredRooms: searchParams.get('preferredRooms') || '',
+      preferredSize: searchParams.get('preferredSize') || '',
+      buyerType: searchParams.get('buyerType') || '',
+      paymentMethod: searchParams.get('paymentMethod') || '',
+      nationality: searchParams.get('nationality') || '',
+      dob: searchParams.get('dob') || '',
+      spokenLanguages: searchParams.get('spokenLanguages') || ''
     })
     setPagination(prev => ({
       ...prev,
@@ -156,10 +182,14 @@ export default function PropertiesPage() {
       listingType: '',
       city: '',
       state: '',
+      country: '',
+      area: '',
       minPrice: '',
       maxPrice: '',
       bedrooms: '',
       bathrooms: '',
+      minArea: '',
+      maxArea: '',
       balconies: '',
       livingRoom: '',
       unfurnished: '',
@@ -167,18 +197,18 @@ export default function PropertiesPage() {
       fullyFurnished: '',
       search: '',
       category: '',
-      amenities: ''
+      amenities: '',
+      preferredRooms: '',
+      preferredSize: '',
+      buyerType: '',
+      paymentMethod: '',
+      nationality: '',
+      dob: '',
+      spokenLanguages: ''
     })
   }
 
-  const formatPrice = (price) => {
-    if (!price) return 'Price on request'
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0
-    }).format(price)
-  }
+  const formatPrice = (price) => formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
 
   const getPrimaryImage = (images) => {
     const primary = images?.find(img => img.isPrimary)
@@ -220,12 +250,107 @@ export default function PropertiesPage() {
               className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
             >
               <option value="">All Types</option>
-              <option value="apartment">Apartment</option>
-              <option value="house">House</option>
-              <option value="villa">Villa</option>
-              <option value="condo">Condo</option>
-              <option value="townhouse">Townhouse</option>
-              <option value="commercial">Commercial</option>
+              {(filterOptions.propertyTypes || []).map((t) => (
+                <option key={t} value={t}>
+                  {String(t).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                </option>
+              ))}
+            </select>
+
+            {/* Listing Type Filter */}
+            <select
+              value={filters.listingType}
+              onChange={(e) => handleFilterChange('listingType', e.target.value)}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.listingType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">All Listings</option>
+              {(filterOptions.listingTypes || []).map((t) => (
+                <option key={t} value={t}>
+                  {t === 'sale' ? 'For Sale' : t === 'rent' ? 'For Rent' : 'Sale / Rent'}
+                </option>
+              ))}
+            </select>
+
+            {/* New Lead-related dropdowns (used while searching properties) */}
+            <select
+              value={filters.preferredRooms}
+              onChange={(e) => {
+                const v = e.target.value
+                handleFilterChange('preferredRooms', v)
+                // Map to actual property filter
+                if (v === 'studio') handleFilterChange('bedrooms', '0')
+                else if (v === '') handleFilterChange('bedrooms', '')
+                else if (!Number.isNaN(Number(v))) handleFilterChange('bedrooms', String(Number(v)))
+              }}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.preferredRooms ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">Preferred Rooms</option>
+              {(filterOptions.leadFieldOptions?.preferredRooms || []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+              
+            <select
+              value={filters.preferredSize}
+              onChange={(e) => {
+                const v = e.target.value
+                handleFilterChange('preferredSize', v)
+                // Map to actual property filter via minArea/maxArea
+                if (!v) {
+                  handleFilterChange('minArea', '')
+                  handleFilterChange('maxArea', '')
+                  return
+                }
+                const map = {
+                  '0_500': { min: '', max: '500' },
+                  '500_1000': { min: '500', max: '1000' },
+                  '1000_1500': { min: '1000', max: '1500' },
+                  '1500_2000': { min: '1500', max: '2000' },
+                  '2000_plus': { min: '2000', max: '' }
+                }
+                const r = map[v]
+                handleFilterChange('minArea', r?.min ?? '')
+                handleFilterChange('maxArea', r?.max ?? '')
+              }}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.preferredSize ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">Preferred Size</option>
+              {(filterOptions.leadFieldOptions?.preferredSize || []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={filters.buyerType}
+              onChange={(e) => handleFilterChange('buyerType', e.target.value)}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.buyerType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">Buyer Type</option>
+              {(filterOptions.leadFieldOptions?.buyerType || []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={filters.paymentMethod}
+              onChange={(e) => handleFilterChange('paymentMethod', e.target.value)}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.paymentMethod ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">Payment Method</option>
+              {(filterOptions.leadFieldOptions?.paymentMethod || []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={filters.spokenLanguages}
+              onChange={(e) => handleFilterChange('spokenLanguages', e.target.value)}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.spokenLanguages ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">Spoken Languages</option>
+              {(filterOptions.leadFieldOptions?.spokenLanguages || []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
 
             {/* Price Filter */}
@@ -244,7 +369,7 @@ export default function PropertiesPage() {
                 <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'price' ? 'rotate-180' : ''}`} />
               </button>
               {openFilter === 'price' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
+                <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 w-72 max-w-[calc(100vw-2rem)]">
                   <div className="p-4 space-y-3">
                     <h3 className="font-semibold text-gray-900">Price Range</h3>
                     <div className="grid grid-cols-2 gap-2">
@@ -303,7 +428,8 @@ export default function PropertiesPage() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
                         <option value="">Any</option>
-                        {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}+</option>)}
+                        {(filterOptions.specifications?.bedrooms?.length ? filterOptions.specifications.bedrooms : [1, 2, 3, 4, 5])
+                          .map((n) => <option key={n} value={n}>{n}+</option>)}
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -315,7 +441,8 @@ export default function PropertiesPage() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                         >
                           <option value="">Any</option>
-                          {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}+</option>)}
+                          {(filterOptions.specifications?.bathrooms?.length ? filterOptions.specifications.bathrooms : [1, 2, 3, 4])
+                            .map((n) => <option key={n} value={n}>{n}+</option>)}
                         </select>
                       </div>
                       <div>
@@ -384,7 +511,7 @@ export default function PropertiesPage() {
                     >
                       All States
                     </button>
-                    {uniqueLocations.states.map((state) => (
+                    {filterOptions.locations.states.map((state) => (
                       <button
                         key={state}
                         onClick={() => { handleFilterChange('state', state); setOpenFilter(null); }}
@@ -418,7 +545,7 @@ export default function PropertiesPage() {
                     >
                       All Countries
                     </button>
-                    {uniqueLocations.countries.map((country) => (
+                    {filterOptions.locations.countries.map((country) => (
                       <button
                         key={country}
                         onClick={() => { handleFilterChange('country', country); setOpenFilter(null); }}
@@ -452,7 +579,7 @@ export default function PropertiesPage() {
                     >
                       All Areas
                     </button>
-                    {uniqueLocations.areas.map((area) => (
+                    {filterOptions.locations.areas.map((area) => (
                       <button
                         key={area}
                         onClick={() => { handleFilterChange('area', area); setOpenFilter(null); }}
@@ -499,7 +626,7 @@ export default function PropertiesPage() {
                     >
                       All Cities
                     </button>
-                    {uniqueLocations.cities.map((city) => (
+                    {filterOptions.locations.cities.map((city) => (
                       <button
                         key={city}
                         onClick={() => { handleFilterChange('city', city); setOpenFilter(null); }}

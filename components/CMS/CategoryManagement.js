@@ -29,7 +29,7 @@ export default function CategoryManagement() {
   const fetchCategories = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/cms/categories')
+      const response = await api.get('/settings/categories')
       setCategories(response.data.categories || [])
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -43,10 +43,10 @@ export default function CategoryManagement() {
     e.preventDefault()
     try {
       if (editingCategory) {
-        await api.put(`/cms/categories/${editingCategory._id}`, formData)
+        await api.put(`/settings/categories/${editingCategory._id}`, formData)
         toast.success('Category updated successfully')
       } else {
-        await api.post('/cms/categories', formData)
+        await api.post('/settings/categories', formData)
         toast.success('Category created successfully')
       }
       setShowModal(false)
@@ -74,7 +74,7 @@ export default function CategoryManagement() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this category?')) return
     try {
-      await api.delete(`/cms/categories/${id}`)
+      await api.delete(`/settings/categories/${id}`)
       toast.success('Category deleted successfully')
       fetchCategories()
     } catch (error) {
@@ -116,7 +116,7 @@ export default function CategoryManagement() {
             />
           </div>
         </div>
-        {checkPermission('cms', 'create') && (
+        {checkPermission('settings', 'create') && (
           <button
             onClick={() => {
               resetForm()
@@ -137,7 +137,8 @@ export default function CategoryManagement() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <div className="max-h-[340px] overflow-y-auto scrollbar-hide">
+            <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
@@ -176,12 +177,12 @@ export default function CategoryManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        {checkPermission('cms', 'edit') && (
+                        {checkPermission('settings', 'edit') && (
                           <button onClick={() => handleEdit(category)} className="text-primary-600 hover:text-primary-900">
                             <Edit className="h-5 w-5" />
                           </button>
                         )}
-                        {checkPermission('cms', 'delete') && (
+                        {checkPermission('settings', 'delete') && (
                           <button onClick={() => handleDelete(category._id)} className="text-red-600 hover:text-red-900">
                             <Trash2 className="h-5 w-5" />
                           </button>
@@ -193,6 +194,7 @@ export default function CategoryManagement() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -39,9 +39,15 @@ import {
   TrendingDown,
   Filter,
   Download,
-  Shield
+  Shield,
+  EyeOff
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { validateConfirmPassword, validateEmail, validateName, validatePassword } from '../../../lib/validation'
+import { scrollToFirstErrorField } from '../../../lib/scrollToError'
 
 export default function AdminUsers() {
   const { user, checkPermission } = useAuth()
@@ -103,15 +109,21 @@ export default function AdminUsers() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showAddUserPassword, setShowAddUserPassword] = useState(false)
+  const [showAddUserConfirmPassword, setShowAddUserConfirmPassword] = useState(false)
+  const [addUserErrors, setAddUserErrors] = useState({})
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
     password: '',
+    confirmPassword: '',
     role: 'user'
   })
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [submitting, setSubmitting] = useState(false)
+  const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
 
   useEffect(() => {
     fetchAdminUsers()
@@ -253,7 +265,31 @@ export default function AdminUsers() {
     setSubmitting(true)
 
     try {
-      await api.post('/users', formData)
+      const nextErrors = {}
+      nextErrors.firstName = validateName(formData.firstName, 'First name')
+      nextErrors.lastName = validateName(formData.lastName, 'Last name')
+      nextErrors.email = validateEmail(formData.email, 'Email')
+      nextErrors.password = validatePassword(formData.password)
+      nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
+      const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+      if (formData.phone && !e164Phone) {
+        nextErrors.phone = 'Enter a valid phone number for the selected country'
+      }
+      Object.keys(nextErrors).forEach((k) => {
+        if (!nextErrors[k]) delete nextErrors[k]
+      })
+      setAddUserErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        scrollToFirstErrorField(Object.keys(nextErrors))
+        return
+      }
+
+      const payload = {
+        ...formData,
+        phone: e164Phone || formData.phone
+      }
+      delete payload.confirmPassword
+      await api.post('/users', payload)
       toast.success('User added successfully!')
       setShowAddModal(false)
       setFormData({
@@ -262,8 +298,13 @@ export default function AdminUsers() {
         email: '',
         phone: '',
         password: '',
+        confirmPassword: '',
         role: 'user'
       })
+      setPhoneCountryCode(DEFAULT_COUNTRY_CODE)
+      setAddUserErrors({})
+      setShowAddUserPassword(false)
+      setShowAddUserConfirmPassword(false)
       fetchAdminUsers()
     } catch (error) {
       console.error('Add user error:', error)
@@ -539,17 +580,18 @@ export default function AdminUsers() {
               )}
             </div>
             {/* All Users Dropdown */}
-            <select
+            <SearchableSelect
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Users</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Users' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              placeholder="All Users"
+              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
+              searchPlaceholder="Search..."
+            />
             {/* Search Bar - Right End */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -567,7 +609,7 @@ export default function AdminUsers() {
             {canCreateUser && (
               <button
                 onClick={() => setShowAddModal(true)}
-                className="btn-primary flex items-center gap-2 bg-red-600 hover:bg-red-700"
+                className="btn-primary flex items-center gap-2 bg-primary-600 hover:bg-primary-700"
               >
                 <Plus className="h-4 w-4" />
                 Add User
@@ -866,51 +908,167 @@ export default function AdminUsers() {
                     <label className="form-label">First Name</label>
                     <input
                       type="text"
-                      className="form-input"
+                      className={`form-input ${addUserErrors.firstName ? 'border-red-500' : ''}`}
                       required
                       value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, firstName: sanitizeName(e.target.value) })
+                        if (addUserErrors.firstName) {
+                          setAddUserErrors((prev) => {
+                            const next = { ...prev }
+                            delete next.firstName
+                            return next
+                          })
+                        }
+                      }}
                     />
+                    {addUserErrors.firstName && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.firstName}</p>
+                    )}
                   </div>
                   <div>
                     <label className="form-label">Last Name</label>
                     <input
                       type="text"
-                      className="form-input"
+                      className={`form-input ${addUserErrors.lastName ? 'border-red-500' : ''}`}
                       required
                       value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, lastName: sanitizeName(e.target.value) })
+                        if (addUserErrors.lastName) {
+                          setAddUserErrors((prev) => {
+                            const next = { ...prev }
+                            delete next.lastName
+                            return next
+                          })
+                        }
+                      }}
                     />
+                    {addUserErrors.lastName && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.lastName}</p>
+                    )}
                   </div>
                   <div>
                     <label className="form-label">Email</label>
                     <input
                       type="email"
-                      className="form-input"
+                      className={`form-input ${addUserErrors.email ? 'border-red-500' : ''}`}
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value })
+                        if (addUserErrors.email) {
+                          setAddUserErrors((prev) => {
+                            const next = { ...prev }
+                            delete next.email
+                            return next
+                          })
+                        }
+                      }}
                     />
+                    {addUserErrors.email && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.email}</p>
+                    )}
                   </div>
                   <div>
                     <label className="form-label">Phone</label>
-                    <input
-                      type="tel"
-                      className="form-input"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    <PhoneField
+                      label=""
+                      countryCodeName="phoneCountryCode"
+                      phoneName="phone"
+                      countryCodeValue={phoneCountryCode}
+                      phoneValue={formData.phone}
+                      onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                      onPhoneChange={(value) => {
+                        setFormData((prev) => ({ ...prev, phone: value }))
+                        if (addUserErrors.phone) {
+                          setAddUserErrors((prev) => {
+                            const next = { ...prev }
+                            delete next.phone
+                            return next
+                          })
+                        }
+                      }}
+                      showInlineError={Boolean(formData.phone)}
                     />
+                    {addUserErrors.phone && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.phone}</p>
+                    )}
                   </div>
                   <div>
                     <label className="form-label">Password</label>
-                    <input
-                      type="password"
-                      className="form-input"
-                      required
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showAddUserPassword ? 'text' : 'password'}
+                        className={`form-input pr-10 ${addUserErrors.password ? 'border-red-500' : ''}`}
+                        required
+                        value={formData.password}
+                        onChange={(e) => {
+                          setFormData({ ...formData, password: e.target.value })
+                          if (addUserErrors.password || addUserErrors.confirmPassword) {
+                            setAddUserErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.password
+                              delete next.confirmPassword
+                              return next
+                            })
+                          }
+                        }}
+                        minLength={6}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        onClick={() => setShowAddUserPassword((p) => !p)}
+                        aria-label={showAddUserPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showAddUserPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {addUserErrors.password && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.password}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="form-label">Confirm Password</label>
+                    <div className="relative">
+                      <input
+                        type={showAddUserConfirmPassword ? 'text' : 'password'}
+                        className={`form-input pr-10 ${addUserErrors.confirmPassword ? 'border-red-500' : ''}`}
+                        required
+                        value={formData.confirmPassword}
+                        onChange={(e) => {
+                          setFormData({ ...formData, confirmPassword: e.target.value })
+                          if (addUserErrors.confirmPassword) {
+                            setAddUserErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.confirmPassword
+                              return next
+                            })
+                          }
+                        }}
+                        minLength={6}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        onClick={() => setShowAddUserConfirmPassword((p) => !p)}
+                        aria-label={showAddUserConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showAddUserConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {addUserErrors.confirmPassword && (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.confirmPassword}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end space-x-3 mt-6">
@@ -918,14 +1076,19 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => {
                       setShowAddModal(false)
+                      setPhoneCountryCode(DEFAULT_COUNTRY_CODE)
                       setFormData({
                         firstName: '',
                         lastName: '',
                         email: '',
                         phone: '',
                         password: '',
+                        confirmPassword: '',
                         role: 'user'
                       })
+                      setAddUserErrors({})
+                      setShowAddUserPassword(false)
+                      setShowAddUserConfirmPassword(false)
                     }}
                     className="btn-secondary"
                     disabled={submitting}

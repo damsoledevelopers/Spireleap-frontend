@@ -28,9 +28,12 @@ import {
 import toast from 'react-hot-toast'
 
 import { useRouter } from 'next/navigation'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
 
 export default function MyInvoices() {
     const router = useRouter()
+    const { selectedCurrency, ratesByCode } = useCurrency()
     const [invoices, setInvoices] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
@@ -211,9 +214,8 @@ export default function MyInvoices() {
         }
     }
 
-    const formatCurrency = (amount, currency = 'INR') => {
-        const n = Number(amount || 0)
-        return currency === 'INR' ? `₹${n.toLocaleString('en-IN')}` : `${currency} ${n.toLocaleString()}`
+    const formatCurrency = (amount) => {
+        return formatMoneyFromAed(amount || 0, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
     }
 
     return (
@@ -306,7 +308,7 @@ export default function MyInvoices() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="text-sm font-extrabold text-gray-900">
-                                                    ₹{invoice.amount?.toLocaleString()}
+                                                    {formatCurrency(invoice.amount)}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -389,7 +391,7 @@ export default function MyInvoices() {
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="font-bold text-gray-900">₹{inv.payment.amount?.toLocaleString()}</p>
+                                                    <p className="font-bold text-gray-900">{formatCurrency(inv.payment.amount)}</p>
                                                     <p className="text-[10px] text-green-600 font-medium bg-green-50 px-1.5 py-0.5 rounded-full inline-block mt-1">
                                                         {inv.payment.status?.toUpperCase()}
                                                     </p>
@@ -474,7 +476,7 @@ export default function MyInvoices() {
                                         </div>
                                         <div className="pt-2 border-t border-gray-200/50">
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Amount</p>
-                                            <p className="text-lg font-extrabold text-gray-900">{formatCurrency(selectedInvoice.amount, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}</p>
+                                            <p className="text-lg font-extrabold text-gray-900">{formatCurrency(selectedInvoice.amount)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -490,14 +492,14 @@ export default function MyInvoices() {
                                             <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Amount Paid</p>
                                                 <p className="text-xl font-extrabold text-emerald-700">
-                                                    {formatCurrency(selectedInvoice.paymentDetails.amountPaid, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                    {formatCurrency(selectedInvoice.paymentDetails.amountPaid)}
                                                 </p>
                                                 <p className="text-xs text-gray-500 mt-1">Amount received from customer</p>
                                             </div>
                                             <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Due Amount</p>
                                                 <p className="text-xl font-extrabold text-amber-700">
-                                                    {formatCurrency(selectedInvoice.paymentDetails.dueAmount ?? 0, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                    {formatCurrency(selectedInvoice.paymentDetails.dueAmount ?? 0)}
                                                 </p>
                                                 <p className="text-xs text-gray-500 mt-1">Remaining amount to be paid</p>
                                             </div>
@@ -550,7 +552,7 @@ export default function MyInvoices() {
                                             <div>
                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Payment Amount</p>
                                                 <p className="text-lg font-extrabold text-gray-900">
-                                                    {formatCurrency(selectedInvoice.payment.amount, selectedInvoice.payment.currency || 'INR')}
+                                                    {formatCurrency(selectedInvoice.payment.amount)}
                                                 </p>
                                             </div>
                                             <div>
@@ -707,7 +709,7 @@ export default function MyInvoices() {
                                                                 </div>
                                                             </td>
                                                             <td className="px-4 py-3 text-right text-sm font-bold text-gray-900 whitespace-nowrap">
-                                                                {formatCurrency(selectedInvoice.amount, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                                {formatCurrency(selectedInvoice.amount)}
                                                             </td>
                                                         </tr>
                                                         {selectedInvoice.paymentDetails && (
@@ -720,7 +722,7 @@ export default function MyInvoices() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-4 py-3 text-right text-sm font-bold text-emerald-700 whitespace-nowrap">
-                                                                        {formatCurrency(selectedInvoice.paymentDetails.amountPaid, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                                        {formatCurrency(selectedInvoice.paymentDetails.amountPaid)}
                                                                     </td>
                                                                 </tr>
                                                                 <tr className="bg-amber-50/60">
@@ -731,7 +733,7 @@ export default function MyInvoices() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-4 py-3 text-right text-sm font-bold text-amber-800 whitespace-nowrap">
-                                                                        {formatCurrency(selectedInvoice.paymentDetails.dueAmount ?? 0, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                                        {formatCurrency(selectedInvoice.paymentDetails.dueAmount ?? 0)}
                                                                     </td>
                                                                 </tr>
                                                             </>
@@ -741,7 +743,7 @@ export default function MyInvoices() {
                                                         <tr>
                                                             <td className="px-4 py-4 text-sm font-extrabold text-gray-900 uppercase">Total Amount</td>
                                                             <td className="px-4 py-4 text-right text-lg font-extrabold text-[#700E08] whitespace-nowrap">
-                                                                {formatCurrency(selectedInvoice.amount, selectedInvoice.payment?.currency || selectedInvoice.currency || 'INR')}
+                                                                {formatCurrency(selectedInvoice.amount)}
                                                             </td>
                                                         </tr>
                                                     </tfoot>

@@ -15,15 +15,36 @@ import {
     Briefcase,
     FileText,
     Globe,
-    Award
+    Award,
+    Trash2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+
+const CLOUDINARY_PROFILE_MAX_BYTES = 5 * 1024 * 1024 // must match backend Cloudinary route
+const DISK_PROFILE_MAX_BYTES = 10 * 1024 * 1024 // matches multer disk limit for /upload/profile-image
+const PROFILE_IMAGE_ACCEPT_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+
+/** Full HTTPS URL (e.g. Cloudinary) or legacy relative upload path → absolute browser URL */
+function resolveProfileImageUrl(url) {
+    const u = typeof url === 'string' ? url.trim() : ''
+    if (!u) return ''
+    if (/^https?:\/\//i.test(u)) return u
+    const rawBase =
+        (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) ||
+        'http://localhost:5000/api'
+    const origin = String(rawBase).replace(/\/api\/?$/i, '')
+    return `${origin}${u.startsWith('/') ? u : `/${u}`}`
+}
 
 export default function ProfilePage() {
-    const { user, fetchUser } = useAuth()
+    const { user, refreshUser } = useAuth()
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
     const [uploading, setUploading] = useState(false)
+    const [removingImage, setRemovingImage] = useState(false)
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -47,47 +68,85 @@ export default function ProfilePage() {
     })
 
     useEffect(() => {
-        if (user) {
+        if (!user) {
+            setLoading(false)
+            return
+        }
+
+        const userId = user._id || user.id
+        if (!userId) {
+            setLoading(false)
+            return
+        }
+
+        let cancelled = false
+
+        const applyServerUser = (data) => {
+            const parsedPhone = splitE164Phone(data.phone || '')
+            setPhoneCountryCode(parsedPhone.countryCode || DEFAULT_COUNTRY_CODE)
+            const img = typeof data.profileImage === 'string' ? data.profileImage.trim() : ''
             setFormData({
-                firstName: user.firstName || '',
-                lastName: user.lastName || '',
-                email: user.email || '',
-                phone: user.phone || '',
+                firstName: data.firstName || '',
+                lastName: data.lastName || '',
+                email: data.email || '',
+                phone: parsedPhone.phone || '',
                 address: {
-                    street: user.address?.street || '',
-                    city: user.address?.city || '',
-                    state: user.address?.state || '',
-                    country: user.address?.country || '',
-                    zipCode: user.address?.zipCode || ''
+                    street: data.address?.street || '',
+                    city: data.address?.city || '',
+                    state: data.address?.state || '',
+                    country: data.address?.country || '',
+                    zipCode: data.address?.zipCode || ''
                 },
-                profileImage: user.profileImage || '',
+                profileImage: img,
                 agentInfo: {
-                    bio: user.agentInfo?.bio || '',
-                    licenseNumber: user.agentInfo?.licenseNumber || '',
-                    specialties: user.agentInfo?.specialties || [],
-                    languages: user.agentInfo?.languages || [],
-                    yearsOfExperience: user.agentInfo?.yearsOfExperience || 0
+                    bio: data.agentInfo?.bio || '',
+                    licenseNumber: data.agentInfo?.licenseNumber || '',
+                    specialties: data.agentInfo?.specialties || [],
+                    languages: data.agentInfo?.languages || [],
+                    yearsOfExperience: data.agentInfo?.yearsOfExperience || 0
                 }
             })
-            setLoading(false)
+        }
+
+        const load = async () => {
+            setLoading(true)
+            try {
+                const { data } = await api.get(`/users/${userId}`)
+                if (cancelled) return
+                applyServerUser(data)
+            } catch (err) {
+                console.error('Profile: failed to load user from API, using session data', err)
+                if (cancelled) return
+                applyServerUser(user)
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
+        }
+
+        load()
+        return () => {
+            cancelled = true
         }
     }, [user])
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target
+        const { name, value } = e.target || {}
+        if (!name) return
+        const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+        const nextValue = (name === 'firstName' || name === 'lastName') ? sanitizeName(value) : value
         if (name.includes('.')) {
             const [parent, child] = name.split('.')
             setFormData(prev => ({
                 ...prev,
                 [parent]: {
                     ...prev[parent],
-                    [child]: value
+                    [child]: nextValue
                 }
             }))
         } else {
             setFormData(prev => ({
                 ...prev,
-                [name]: value
+                [name]: nextValue
             }))
         }
     }
@@ -104,31 +163,100 @@ export default function ProfilePage() {
     }
 
     const handleImageUpload = async (e) => {
-        const file = e.target.files?.[0]
+        const input = e.target
+        const file = input.files?.[0]
         if (!file) return
+
+        if (!PROFILE_IMAGE_ACCEPT_MIMES.includes(file.type)) {
+            toast.error('Please choose a JPEG, PNG, GIF, or WebP image.')
+            input.value = ''
+            return
+        }
+
+        const isSuperAdmin = user?.role === 'super_admin'
+        const maxBytes = isSuperAdmin ? CLOUDINARY_PROFILE_MAX_BYTES : DISK_PROFILE_MAX_BYTES
+        if (file.size > maxBytes) {
+            toast.error(`Image must be ${maxBytes / (1024 * 1024)}MB or smaller.`)
+            input.value = ''
+            return
+        }
 
         const formDataUpload = new FormData()
         formDataUpload.append('image', file)
+        const uploadUrl = isSuperAdmin
+            ? '/upload/cloudinary/profile-image'
+            : '/upload/profile-image'
 
         try {
             setUploading(true)
-            const response = await api.post('/upload/profile-image', formDataUpload, {
+            const response = await api.post(uploadUrl, formDataUpload, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
             })
 
-            const imageUrl = response.data.file.url
+            const imageUrl =
+                response.data?.secure_url ||
+                response.data?.file?.url ||
+                response.data?.url
+            if (!imageUrl) {
+                toast.error('Upload succeeded but no image URL was returned.')
+                return
+            }
+
             setFormData(prev => ({
                 ...prev,
                 profileImage: imageUrl
             }))
-            toast.success('Profile image uploaded successfully')
+
+            const userId = user?._id || user?.id
+            if (userId) {
+                try {
+                    await api.put(`/users/${userId}`, { profileImage: imageUrl })
+                    await refreshUser()
+                    toast.success('Profile image saved')
+                } catch (persistErr) {
+                    console.error('Failed to save profile image URL:', persistErr)
+                    toast.error(
+                        persistErr.response?.data?.message ||
+                            'Image uploaded but could not save to your profile. Click Save Profile.'
+                    )
+                }
+            } else {
+                toast.success('Profile image uploaded — click Save Profile to keep it')
+            }
         } catch (error) {
             console.error('Error uploading image:', error)
-            toast.error('Failed to upload image')
+            const msg =
+                error.response?.data?.message ||
+                error.message ||
+                'Failed to upload image'
+            toast.error(msg)
         } finally {
             setUploading(false)
+            input.value = ''
+        }
+    }
+
+    const handleRemoveProfileImage = async () => {
+        if (user?.role !== 'super_admin' || !formData.profileImage) return
+        if (!window.confirm('Remove this photo from your profile and delete it from Cloudinary?')) return
+
+        try {
+            setRemovingImage(true)
+            await api.delete('/upload/cloudinary/profile-image')
+            setFormData(prev => ({ ...prev, profileImage: '' }))
+            await refreshUser()
+            toast.success('Profile photo removed')
+        } catch (error) {
+            console.error('Remove profile image:', error)
+            toast.error(
+                error.response?.data?.message ||
+                    error.message ||
+                    'Failed to remove profile photo'
+            )
+        } finally {
+            setRemovingImage(false)
         }
     }
 
@@ -144,9 +272,34 @@ export default function ProfilePage() {
                 return
             }
 
-            await api.put(`/users/${userId}`, formData)
+            if (!formData.firstName || formData.firstName !== String(formData.firstName).replace(/[^a-zA-Z\s.'-]/g, '')) {
+                toast.error('First name must contain only alphabets')
+                setSaving(false)
+                return
+            }
+            if (!formData.lastName || formData.lastName !== String(formData.lastName).replace(/[^a-zA-Z\s.'-]/g, '')) {
+                toast.error('Last name must contain only alphabets')
+                setSaving(false)
+                return
+            }
+            const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+            if (formData.phone && !e164Phone) {
+                toast.error('Enter a valid phone number for the selected country')
+                setSaving(false)
+                return
+            }
+            if (formData.address?.zipCode && ![5, 9].includes(String(formData.address.zipCode).length)) {
+                toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+                setSaving(false)
+                return
+            }
+            const payload = {
+                ...formData,
+                phone: e164Phone || formData.phone
+            }
+            await api.put(`/users/${userId}`, payload)
+            await refreshUser()
             toast.success('Profile updated successfully')
-            await fetchUser() // Refresh user context
         } catch (error) {
             console.error('Error updating profile:', error)
             const errorData = error.response?.data
@@ -158,6 +311,7 @@ export default function ProfilePage() {
             } else {
                 toast.error(errorData?.message || 'Failed to update profile')
             }
+        } finally {
             setSaving(false)
         }
     }
@@ -190,44 +344,91 @@ export default function ProfilePage() {
                     {/* Profile Header Card */}
                     <div className="bg-white shadow rounded-lg overflow-hidden">
                         <div className="px-4 py-5 sm:p-6">
-                            <div className="md:flex md:items-center md:space-x-5">
-                                <div className="relative flex-shrink-0">
-                                    <div className="h-32 w-32 rounded-full border-4 border-white shadow-lg overflow-hidden bg-gray-100">
-                                        {formData.profileImage ? (
-                                            <img
-                                                src={formData.profileImage}
-                                                alt="Profile"
-                                                className="h-full w-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="h-full w-full flex items-center justify-center">
-                                                <User className="h-16 w-16 text-gray-400" />
-                                            </div>
-                                        )}
-                                        {uploading && (
-                                            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                                                <Loader2 className="h-8 w-8 animate-spin text-white" />
-                                            </div>
-                                        )}
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 md:gap-8">
+                                {/* Photo + actions — one cluster so height matches name block */}
+                                <div className="flex flex-row items-center justify-center md:justify-start gap-5 md:gap-6 shrink-0">
+                                    <div className="relative flex-shrink-0">
+                                        <div className="h-32 w-32 sm:h-36 sm:w-36 rounded-full ring-4 ring-gray-100 shadow-md overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+                                            {formData.profileImage ? (
+                                                <img
+                                                    key={formData.profileImage}
+                                                    src={resolveProfileImageUrl(formData.profileImage)}
+                                                    alt="Profile"
+                                                    className="h-full w-full object-cover"
+                                                    referrerPolicy="no-referrer"
+                                                />
+                                            ) : (
+                                                <div className="h-full w-full flex items-center justify-center">
+                                                    <User className="h-16 w-16 sm:h-20 sm:w-20 text-gray-300" />
+                                                </div>
+                                            )}
+                                            {(uploading || removingImage) && (
+                                                <div className="absolute inset-0 bg-gray-900/55 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <Loader2 className="h-8 w-8 sm:h-9 sm:w-9 animate-spin text-white" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <label className="absolute bottom-0 right-0 bg-primary-600 rounded-full p-2 cursor-pointer shadow-md hover:bg-primary-700 transition-colors">
-                                        <Camera className="h-5 w-5 text-white" />
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            accept="image/*"
-                                            onChange={handleImageUpload}
-                                            disabled={uploading}
-                                        />
-                                    </label>
+                                    <div className="flex flex-col gap-2 min-w-0 w-[9.5rem] sm:w-auto">
+                                        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide text-center md:text-left">
+                                            Profile Photo
+                                        </span>
+                                        <div className="flex flex-col gap-2">
+                                            <label
+                                                htmlFor="profile-avatar-upload"
+                                                className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-white shadow-sm transition-all cursor-pointer
+                                                    ${uploading || removingImage ? 'bg-primary-400 cursor-not-allowed opacity-80' : 'bg-primary-600 hover:bg-primary-700 hover:shadow active:scale-[0.98]'}`}
+                                            >
+                                                {uploading ? (
+                                                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                                                ) : (
+                                                    <Camera className="h-4 w-4 shrink-0" />
+                                                )}
+                                                <span>{uploading ? 'Uploading…' : 'Upload'}</span>
+                                                <input
+                                                    id="profile-avatar-upload"
+                                                    type="file"
+                                                    className="sr-only"
+                                                    accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
+                                                    onChange={handleImageUpload}
+                                                    disabled={uploading || removingImage}
+                                                />
+                                            </label>
+                                            {user?.role === 'super_admin' && formData.profileImage ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleRemoveProfileImage}
+                                                    disabled={uploading || removingImage}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-red-700 shadow-sm transition-all hover:bg-red-50 hover:border-red-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {removingImage ? (
+                                                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-600" />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4 shrink-0" />
+                                                    )}
+                                                    <span>{removingImage ? 'Removing…' : 'Remove'}</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="mt-4 md:mt-0 text-center md:text-left">
-                                    <h3 className="text-xl font-bold text-gray-900">
+
+                                {/* Name + meta — same row on md+, vertically centered with photo cluster */}
+                                <div className="flex-1 min-w-0 flex flex-col justify-center text-center md:text-left border-t border-gray-100 pt-5 md:border-t-0 md:pt-0 md:border-l md:pl-8 md:ml-2">
+                                    <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
                                         {formData.firstName} {formData.lastName}
                                     </h3>
-                                    <p className="text-sm font-medium text-gray-500 capitalize">{user?.role?.replace('_', ' ')}</p>
+                                    <p className="mt-1 text-sm font-medium text-gray-500 capitalize">
+                                        {user?.role?.replace('_', ' ')}
+                                    </p>
                                     <p className="mt-1 text-sm text-gray-500">
-                                        Member since {new Date(user?.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                                        Member since{' '}
+                                        {user?.createdAt
+                                            ? new Date(user.createdAt).toLocaleDateString(undefined, {
+                                                  month: 'long',
+                                                  year: 'numeric'
+                                              })
+                                            : '—'}
                                     </p>
                                 </div>
                             </div>
@@ -281,20 +482,22 @@ export default function ProfilePage() {
                                     <p className="mt-1 text-xs text-gray-400">Email cannot be changed contact admin.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                                    <div className="mt-1 flex rounded-md shadow-sm">
-                                        <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                                            <Phone className="h-4 w-4" />
-                                        </span>
-                                        <input
-                                            type="text"
-                                            name="phone"
-                                            value={formData.phone}
-                                            onChange={handleInputChange}
-                                            className="flex-1 min-w-0 block w-full border border-gray-300 rounded-none rounded-r-md p-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                                            placeholder="+1 (555) 000-0000"
-                                        />
-                                    </div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                                        <Phone className="h-4 w-4" />
+                                        Phone Number
+                                    </label>
+                                    <PhoneField
+                                        label=""
+                                        countryCodeName="phoneCountryCode"
+                                        phoneName="phone"
+                                        countryCodeValue={phoneCountryCode}
+                                        phoneValue={formData.phone}
+                                        onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                                        onPhoneChange={(value) =>
+                                            setFormData((prev) => ({ ...prev, phone: value }))
+                                        }
+                                        showInlineError={Boolean(formData.phone)}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -323,7 +526,13 @@ export default function ProfilePage() {
                                             type="text"
                                             name="city"
                                             value={formData.address.city}
-                                            onChange={handleAddressChange}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, city: v }
+                                                }))
+                                            }}
                                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
                                         />
                                     </div>
@@ -333,7 +542,13 @@ export default function ProfilePage() {
                                             type="text"
                                             name="state"
                                             value={formData.address.state}
-                                            onChange={handleAddressChange}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, state: v }
+                                                }))
+                                            }}
                                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
                                         />
                                     </div>
@@ -345,9 +560,20 @@ export default function ProfilePage() {
                                             type="text"
                                             name="zipCode"
                                             value={formData.address.zipCode}
-                                            onChange={handleAddressChange}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/\D/g, '').slice(0, 9)
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, zipCode: v }
+                                                }))
+                                            }}
                                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
                                         />
+                                        {formData.address.zipCode && ![5, 9].includes(String(formData.address.zipCode).length) && (
+                                            <p className="mt-1 text-xs font-semibold text-red-600">
+                                                Zip code must be 5 digits or 9 digits (ZIP+4)
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Country</label>
@@ -355,7 +581,13 @@ export default function ProfilePage() {
                                             type="text"
                                             name="country"
                                             value={formData.address.country}
-                                            onChange={handleAddressChange}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, country: v }
+                                                }))
+                                            }}
                                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
                                         />
                                     </div>

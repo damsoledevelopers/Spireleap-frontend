@@ -6,11 +6,14 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
 import { User, Save, Upload, Mail, Phone, MapPin, Award, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 
 export default function AgentProfilePage() {
   const { user, updateUser } = useAuth()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -36,11 +39,13 @@ export default function AgentProfilePage() {
 
   useEffect(() => {
     if (user) {
+      const parsed = splitE164Phone(user.phone || '')
+      setPhoneCountryCode(parsed.countryCode || DEFAULT_COUNTRY_CODE)
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        phone: user.phone || '',
+        phone: parsed.phone || '',
         address: user.address || {
           street: '',
           city: '',
@@ -115,11 +120,35 @@ export default function AgentProfilePage() {
     }
   }
 
+  const sanitizeAlpha = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      if (!formData.firstName || formData.firstName !== sanitizeName(formData.firstName)) {
+        toast.error('First name must contain only alphabets')
+        setLoading(false)
+        return
+      }
+      if (!formData.lastName || formData.lastName !== sanitizeName(formData.lastName)) {
+        toast.error('Last name must contain only alphabets')
+        setLoading(false)
+        return
+      }
+      if (formData.address?.zipCode && ![5, 9].includes(String(formData.address.zipCode).length)) {
+        toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+        setLoading(false)
+        return
+      }
+      if (formData.phone && String(formData.phone).length !== 10) {
+        toast.error('Phone number must be exactly 10 digits')
+        setLoading(false)
+        return
+      }
       // Get user ID - handle both id and _id formats
       const userId = user?.id || user?._id
 
@@ -129,7 +158,11 @@ export default function AgentProfilePage() {
         return
       }
 
-      const response = await api.put(`/users/${userId}`, formData)
+      const submitData = {
+        ...formData,
+        phone: formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+      }
+      const response = await api.put(`/users/${userId}`, submitData)
 
       // Update user in context
       if (response.data.user) {
@@ -202,7 +235,7 @@ export default function AgentProfilePage() {
                   type="text"
                   required
                   value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
+                  onChange={(e) => handleInputChange('firstName', sanitizeName(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -212,7 +245,7 @@ export default function AgentProfilePage() {
                   type="text"
                   required
                   value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
+                  onChange={(e) => handleInputChange('lastName', sanitizeName(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -228,12 +261,24 @@ export default function AgentProfilePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                <PhoneField
+                  label=""
+                  countryCodeName="phoneCountryCode"
+                  phoneName="phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => {
+                    const digits = String(value || '').replace(/\D/g, '').slice(0, 10)
+                    handleInputChange('phone', digits)
+                  }}
+                  showInlineError={Boolean(formData.phone)}
                 />
+                {formData.phone && String(formData.phone).length !== 10 && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">
+                    Phone number must be exactly 10 digits
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -303,7 +348,7 @@ export default function AgentProfilePage() {
                 <input
                   type="text"
                   value={formData.address.city}
-                  onChange={(e) => handleInputChange('address.city', e.target.value)}
+                  onChange={(e) => handleInputChange('address.city', sanitizeAlpha(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -312,7 +357,7 @@ export default function AgentProfilePage() {
                 <input
                   type="text"
                   value={formData.address.state}
-                  onChange={(e) => handleInputChange('address.state', e.target.value)}
+                  onChange={(e) => handleInputChange('address.state', sanitizeAlpha(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -321,7 +366,7 @@ export default function AgentProfilePage() {
                 <input
                   type="text"
                   value={formData.address.country}
-                  onChange={(e) => handleInputChange('address.country', e.target.value)}
+                  onChange={(e) => handleInputChange('address.country', sanitizeAlpha(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -330,9 +375,14 @@ export default function AgentProfilePage() {
                 <input
                   type="text"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', e.target.value)}
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
+                {formData.address.zipCode && ![5, 9].includes(String(formData.address.zipCode).length) && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">
+                    Zip code must be 5 digits or 9 digits (ZIP+4)
+                  </p>
+                )}
               </div>
             </div>
           </div>

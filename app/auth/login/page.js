@@ -15,6 +15,7 @@ export default function LoginPage() {
     email: '',
     password: '',
   })
+  const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -28,7 +29,7 @@ export default function LoginPage() {
       // Trim email and password to remove any accidental spaces
       const email = formData.email.trim()
       const password = formData.password.trim()
-      const userData = await login(email, password)
+      const userData = await login(email, password, { rememberMe })
       toast.success('Login successful!')
       // Navigation happens in AuthContext, but we can add a small delay for toast
       setTimeout(() => {
@@ -124,6 +125,8 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">

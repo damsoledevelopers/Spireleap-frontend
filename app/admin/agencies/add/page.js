@@ -5,16 +5,24 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
-import { ArrowLeft, Save, Building, Mail, Phone, MapPin, Upload, X } from 'lucide-react'
+import { ArrowLeft, Save, Building, Mail, Phone, MapPin, Upload, X, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import PhoneField from '../../../../components/Common/PhoneField'
+import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
+import { validateConfirmPassword, validateEmail, validatePassword, validateRequired, validateUrlOptional } from '../../../../lib/validation'
+import { scrollToFirstErrorField } from '../../../../lib/scrollToError'
 
 export default function AddAgencyPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [logoPreview, setLogoPreview] = useState(null)
   const fileInputRef = useRef(null)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+  const [errors, setErrors] = useState({})
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -36,6 +44,14 @@ export default function AddAgencyPage() {
     password: '',
     confirmPassword: ''
   })
+
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
 
   if (authLoading) {
     return (
@@ -67,13 +83,20 @@ export default function AddAgencyPage() {
     
     if (name.includes('.')) {
       const [parent, child, grandchild] = name.split('.')
+      const isAddressField = parent === 'contact' && child === 'address' && grandchild
+      const nextValue =
+        isAddressField && ['city', 'state', 'country'].includes(grandchild)
+          ? sanitizeAlphaText(value)
+          : isAddressField && grandchild === 'zipCode'
+            ? sanitizeZip(value)
+            : (type === 'checkbox' ? checked : value)
       setFormData(prev => ({
         ...prev,
         [parent]: {
           ...prev[parent],
           [child]: grandchild ? {
             ...prev[parent][child],
-            [grandchild]: type === 'checkbox' ? checked : value
+            [grandchild]: nextValue
           } : (type === 'checkbox' ? checked : value)
         }
       }))
@@ -82,6 +105,14 @@ export default function AddAgencyPage() {
         ...prev,
         [name]: type === 'checkbox' ? checked : value
       }))
+    }
+
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
     }
   }
 
@@ -99,6 +130,14 @@ export default function AddAgencyPage() {
       name,
       slug: prev.slug || generateSlug(name)
     }))
+    if (errors.name || errors.slug) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.name
+        delete next.slug
+        return next
+      })
+    }
   }
 
   const handleLogoUpload = async (e) => {
@@ -156,15 +195,31 @@ export default function AddAgencyPage() {
     setLoading(true)
 
     try {
-      // Validate passwords match
-      if (formData.password !== formData.confirmPassword) {
-        toast.error('Passwords do not match')
-        setLoading(false)
-        return
+      const nextErrors = {}
+      nextErrors.name = validateRequired(formData.name, 'Agency name')
+      nextErrors.slug = validateRequired(formData.slug, 'URL slug')
+      if (formData.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(formData.slug).trim())) {
+        nextErrors.slug = 'Slug can contain lowercase letters, numbers, and hyphens only'
+      }
+      nextErrors['contact.email'] = validateEmail(formData.contact?.email, 'Email')
+      nextErrors.password = validatePassword(formData.password)
+      nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
+      nextErrors['contact.website'] = validateUrlOptional(formData.contact?.website, 'Website')
+      if (!isValidZip(formData.contact?.address?.zipCode)) {
+        nextErrors['contact.address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
       }
 
-      if (formData.password.length < 6) {
-        toast.error('Password must be at least 6 characters')
+      const e164Phone = buildE164Phone(phoneCountryCode, formData.contact?.phone)
+      if (!e164Phone) {
+        nextErrors['contact.phone'] = 'Enter a valid phone number for the selected country'
+      }
+
+      Object.keys(nextErrors).forEach((k) => {
+        if (!nextErrors[k]) delete nextErrors[k]
+      })
+      setErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        scrollToFirstErrorField(Object.keys(nextErrors))
         setLoading(false)
         return
       }
@@ -179,6 +234,10 @@ export default function AddAgencyPage() {
 
       // Remove confirmPassword from data sent to backend
       delete cleanedData.confirmPassword
+      cleanedData.contact = {
+        ...cleanedData.contact,
+        phone: e164Phone
+      }
 
       await api.post('/agencies', cleanedData)
       toast.success('Agency created successfully! Agency admin account has been created with the provided email and password.')
@@ -226,11 +285,14 @@ export default function AddAgencyPage() {
                 name="name"
                 type="text"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter agency name"
                 value={formData.name}
                 onChange={handleNameChange}
               />
+              {errors.name && (
+                <p className="mt-1 text-xs font-semibold text-red-600">{errors.name}</p>
+              )}
             </div>
 
             <div>
@@ -242,12 +304,15 @@ export default function AddAgencyPage() {
                 name="slug"
                 type="text"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.slug ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="agency-slug"
                 value={formData.slug}
                 onChange={handleChange}
               />
               <p className="mt-1 text-xs text-gray-500">Used in URLs (e.g., /agencies/agency-slug)</p>
+              {errors.slug && (
+                <p className="mt-1 text-xs font-semibold text-red-600">{errors.slug}</p>
+              )}
             </div>
 
             <div>
@@ -331,12 +396,15 @@ export default function AddAgencyPage() {
                   name="contact.email"
                   type="email"
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.email'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="info@agency.com"
                   value={formData.contact.email}
                   onChange={handleChange}
                 />
                 <p className="mt-1 text-xs text-gray-500">This email will be used for agency admin login</p>
+                {errors['contact.email'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.email']}</p>
+                )}
               </div>
 
               <div>
@@ -344,51 +412,97 @@ export default function AddAgencyPage() {
                   <Phone className="h-4 w-4 inline mr-1" />
                   Phone *
                 </label>
-                <input
-                  id="contact.phone"
-                  name="contact.phone"
-                  type="tel"
+                <PhoneField
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="+1-555-0100"
-                  value={formData.contact.phone}
-                  onChange={handleChange}
+                  label=""
+                  countryCodeName="contact.phoneCountryCode"
+                  phoneName="contact.phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.contact.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => {
+                    setFormData((prev) => ({ ...prev, contact: { ...prev.contact, phone: value } }))
+                    if (errors['contact.phone']) {
+                      setErrors((prev) => {
+                        const next = { ...prev }
+                        delete next['contact.phone']
+                        return next
+                      })
+                    }
+                  }}
                 />
+                {errors['contact.phone'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.phone']}</p>
+                )}
               </div>
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password *
                 </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Enter password for agency admin"
-                  value={formData.password}
-                  onChange={handleChange}
-                />
-                <p className="mt-1 text-xs text-gray-500">Minimum 6 characters. Used for agency admin login.</p>
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Enter password for agency admin"
+                    value={formData.password}
+                    onChange={handleChange}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowPassword((p) => !p)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    )}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Used for agency admin login.</p>
+                {errors.password && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.password}</p>
+                )}
               </div>
 
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                   Confirm Password *
                 </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Confirm password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                />
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Confirm password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowConfirmPassword((p) => !p)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    )}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.confirmPassword}</p>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -399,11 +513,14 @@ export default function AddAgencyPage() {
                   id="contact.website"
                   name="contact.website"
                   type="url"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.website'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="https://www.agency.com"
                   value={formData.contact.website}
                   onChange={handleChange}
                 />
+                {errors['contact.website'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.website']}</p>
+                )}
               </div>
             </div>
 
@@ -483,11 +600,16 @@ export default function AddAgencyPage() {
                     id="contact.address.zipCode"
                     name="contact.address.zipCode"
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="33101"
                     value={formData.contact.address.zipCode}
                     onChange={handleChange}
                   />
+                  {formData.contact.address.zipCode && !isValidZip(formData.contact.address.zipCode) && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">
+                      ZIP Code must be 5 digits or 9 digits (ZIP+4)
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

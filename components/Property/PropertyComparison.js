@@ -1,16 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Trash2, Compare } from 'lucide-react'
+import { X, Plus, Trash2, GitCompare } from 'lucide-react'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { useCurrency } from '../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../lib/money'
 
 export default function PropertyComparison({ propertyIds = [], onClose }) {
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
+  const { selectedCurrency, ratesByCode } = useCurrency()
 
   useEffect(() => {
     if (propertyIds.length > 0) {
@@ -76,7 +79,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
 
     // Sale price
     if (property.listingType === 'sale' && typeof property.price.sale === 'number') {
-      return property.price.sale.toLocaleString()
+      return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
     }
 
     // Rent price
@@ -85,15 +88,16 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
       property.price.rent &&
       typeof property.price.rent.amount === 'number'
     ) {
-      return `${property.price.rent.amount.toLocaleString()}/${property.price.rent.period || 'month'}`
+      const amt = formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+      return `${amt}/${property.price.rent.period || 'month'}`
     }
 
     // Fallback: try sale amount, then rent amount
     if (typeof property.price.sale === 'number') {
-      return property.price.sale.toLocaleString()
+      return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
     }
     if (property.price.rent && typeof property.price.rent.amount === 'number') {
-      return property.price.rent.amount.toLocaleString()
+      return formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
     }
 
     return 'N/A'
@@ -115,7 +119,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <Compare className="h-6 w-6 text-primary-600" />
+            <GitCompare className="h-6 w-6 text-primary-600" />
             <h2 className="text-xl font-bold text-gray-900">Compare Properties</h2>
             <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
               {properties.length} / 5
@@ -159,7 +163,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <p className="text-sm font-medium text-gray-900">{property.title}</p>
                     <p className="text-xs text-gray-500">
                       {property.location?.city}
-                      {formatPrice(property) !== 'N/A' && ` • $${formatPrice(property)}`}
+                      {formatPrice(property) !== 'N/A' && ` • ${formatPrice(property)}`}
                     </p>
                   </div>
                   <Plus className="h-4 w-4 text-primary-600" />
@@ -173,7 +177,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
         <div className="flex-1 overflow-auto p-6">
           {properties.length === 0 ? (
             <div className="text-center py-12">
-              <Compare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <GitCompare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No properties selected for comparison</p>
               <p className="text-sm text-gray-400 mt-2">Search and add properties above</p>
             </div>
@@ -224,7 +228,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">Price</td>
                     {properties.map(property => (
                       <td key={property._id} className="px-4 py-3 text-sm text-gray-900">
-                        {formatPrice(property) !== 'N/A' ? `$${formatPrice(property)}` : 'N/A'}
+                        {formatPrice(property) !== 'N/A' ? formatPrice(property) : 'N/A'}
                       </td>
                     ))}
                   </tr>

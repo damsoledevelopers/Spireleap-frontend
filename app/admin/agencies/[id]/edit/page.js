@@ -5,9 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { ArrowLeft, Save, Building, Mail, Phone, MapPin, Upload, X } from 'lucide-react'
+import { ArrowLeft, Save, Building, Mail, Phone, MapPin, Upload, X, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import PhoneField from '@/components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '@/lib/phone'
+import { scrollToFirstErrorField } from '@/lib/scrollToError'
+import { validateConfirmPassword, validateEmail, validatePassword, validateRequired, validateUrlOptional } from '@/lib/validation'
 
 export default function EditAgencyPage() {
   const { user, loading: authLoading } = useAuth()
@@ -15,8 +19,12 @@ export default function EditAgencyPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [logoPreview, setLogoPreview] = useState(null)
   const fileInputRef = useRef(null)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+  const [errors, setErrors] = useState({})
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -39,6 +47,14 @@ export default function EditAgencyPage() {
     confirmPassword: ''
   })
 
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
+
   useEffect(() => {
     if (!authLoading && user) {
       fetchAgencyData()
@@ -50,6 +66,7 @@ export default function EditAgencyPage() {
       setFetching(true)
       const response = await api.get(`/agencies/${params.id}`)
       const agency = response.data.agency
+      const parsedPhone = splitE164Phone(agency.contact?.phone || '')
 
       setFormData({
         name: agency.name || '',
@@ -57,7 +74,7 @@ export default function EditAgencyPage() {
         description: agency.description || '',
         contact: {
           email: agency.contact?.email || '',
-          phone: agency.contact?.phone || '',
+          phone: parsedPhone.phone || '',
           website: agency.contact?.website || '',
           address: {
             street: agency.contact?.address?.street || '',
@@ -76,6 +93,7 @@ export default function EditAgencyPage() {
       if (agency.logo) {
         setLogoPreview(agency.logo)
       }
+      setPhoneCountryCode(parsedPhone.countryCode || DEFAULT_COUNTRY_CODE)
     } catch (error) {
       console.error('Error fetching agency:', error)
       toast.error('Failed to load agency data')
@@ -115,13 +133,20 @@ export default function EditAgencyPage() {
     
     if (name.includes('.')) {
       const [parent, child, grandchild] = name.split('.')
+      const isAddressField = parent === 'contact' && child === 'address' && grandchild
+      const nextValue =
+        isAddressField && ['city', 'state', 'country'].includes(grandchild)
+          ? sanitizeAlphaText(value)
+          : isAddressField && grandchild === 'zipCode'
+            ? sanitizeZip(value)
+            : (type === 'checkbox' ? checked : value)
       setFormData(prev => ({
         ...prev,
         [parent]: {
           ...prev[parent],
           [child]: grandchild ? {
             ...prev[parent][child],
-            [grandchild]: type === 'checkbox' ? checked : value
+            [grandchild]: nextValue
           } : (type === 'checkbox' ? checked : value)
         }
       }))
@@ -130,6 +155,14 @@ export default function EditAgencyPage() {
         ...prev,
         [name]: type === 'checkbox' ? checked : value
       }))
+    }
+
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
     }
   }
 
@@ -147,6 +180,14 @@ export default function EditAgencyPage() {
       name,
       slug: prev.slug || generateSlug(name)
     }))
+    if (errors.name || errors.slug) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.name
+        delete next.slug
+        return next
+      })
+    }
   }
 
   const handleLogoUpload = async (e) => {
@@ -204,26 +245,42 @@ export default function EditAgencyPage() {
     setLoading(true)
 
     try {
+      const nextErrors = {}
+      nextErrors.name = validateRequired(formData.name, 'Agency name')
+      nextErrors.slug = validateRequired(formData.slug, 'URL slug')
+      if (formData.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(formData.slug).trim())) {
+        nextErrors.slug = 'Slug can contain lowercase letters, numbers, and hyphens only'
+      }
+      nextErrors['contact.email'] = validateEmail(formData.contact?.email, 'Email')
+      nextErrors['contact.website'] = validateUrlOptional(formData.contact?.website, 'Website')
+      if (!isValidZip(formData.contact?.address?.zipCode)) {
+        nextErrors['contact.address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      }
+
+      const e164Phone = buildE164Phone(phoneCountryCode, formData.contact?.phone)
+      if (!e164Phone) {
+        nextErrors['contact.phone'] = 'Enter a valid phone number for the selected country'
+      }
+
       // Validate passwords if provided
       if (formData.password || formData.confirmPassword) {
-        // If one password field is filled, both must be filled
         if (!formData.password || !formData.confirmPassword) {
-          toast.error('Please fill both password fields to reset the password')
-          setLoading(false)
-          return
+          nextErrors.password = nextErrors.password || 'Please fill both password fields to reset the password'
+          nextErrors.confirmPassword = nextErrors.confirmPassword || 'Please fill both password fields to reset the password'
+        } else {
+          nextErrors.password = validatePassword(formData.password)
+          nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
         }
+      }
 
-        if (formData.password !== formData.confirmPassword) {
-          toast.error('Passwords do not match')
-          setLoading(false)
-          return
-        }
-
-        if (formData.password.length < 6) {
-          toast.error('Password must be at least 6 characters')
-          setLoading(false)
-          return
-        }
+      Object.keys(nextErrors).forEach((k) => {
+        if (!nextErrors[k]) delete nextErrors[k]
+      })
+      setErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        scrollToFirstErrorField(Object.keys(nextErrors))
+        setLoading(false)
+        return
       }
 
       // Clean up form data - remove empty address fields and password confirmation
@@ -240,6 +297,10 @@ export default function EditAgencyPage() {
       // If password is empty, remove it from the request
       if (!cleanedData.password) {
         delete cleanedData.password
+      }
+      cleanedData.contact = {
+        ...cleanedData.contact,
+        phone: e164Phone
       }
 
       await api.put(`/agencies/${params.id}`, cleanedData)
@@ -288,11 +349,14 @@ export default function EditAgencyPage() {
                 name="name"
                 type="text"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter agency name"
                 value={formData.name}
                 onChange={handleNameChange}
               />
+              {errors.name && (
+                <p className="mt-1 text-xs font-semibold text-red-600">{errors.name}</p>
+              )}
             </div>
 
             <div>
@@ -304,12 +368,15 @@ export default function EditAgencyPage() {
                 name="slug"
                 type="text"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.slug ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="agency-slug"
                 value={formData.slug}
                 onChange={handleChange}
               />
               <p className="mt-1 text-xs text-gray-500">Used in URLs (e.g., /agencies/agency-slug)</p>
+              {errors.slug && (
+                <p className="mt-1 text-xs font-semibold text-red-600">{errors.slug}</p>
+              )}
             </div>
 
             <div>
@@ -393,11 +460,14 @@ export default function EditAgencyPage() {
                   name="contact.email"
                   type="email"
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.email'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="info@agency.com"
                   value={formData.contact.email}
                   onChange={handleChange}
                 />
+                {errors['contact.email'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.email']}</p>
+                )}
               </div>
 
               <div>
@@ -405,16 +475,28 @@ export default function EditAgencyPage() {
                   <Phone className="h-4 w-4 inline mr-1" />
                   Phone *
                 </label>
-                <input
-                  id="contact.phone"
-                  name="contact.phone"
-                  type="tel"
+                <PhoneField
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="+1-555-0100"
-                  value={formData.contact.phone}
-                  onChange={handleChange}
+                  label=""
+                  countryCodeName="contact.phoneCountryCode"
+                  phoneName="contact.phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.contact.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => {
+                    setFormData((prev) => ({ ...prev, contact: { ...prev.contact, phone: value } }))
+                    if (errors['contact.phone']) {
+                      setErrors((prev) => {
+                        const next = { ...prev }
+                        delete next['contact.phone']
+                        return next
+                      })
+                    }
+                  }}
                 />
+                {errors['contact.phone'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.phone']}</p>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -425,11 +507,14 @@ export default function EditAgencyPage() {
                   id="contact.website"
                   name="contact.website"
                   type="url"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.website'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="https://www.agency.com"
                   value={formData.contact.website}
                   onChange={handleChange}
                 />
+                {errors['contact.website'] && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors['contact.website']}</p>
+                )}
               </div>
             </div>
 
@@ -449,34 +534,70 @@ export default function EditAgencyPage() {
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                       New Password
                     </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      minLength={6}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="Enter new password (min 6 characters)"
-                      value={formData.password}
-                      onChange={handleChange}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Minimum 6 characters. This password will be used for agency admin login.</p>
+                    <div className="relative">
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        minLength={6}
+                        className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
+                        placeholder="Enter new password (min 6 characters)"
+                        value={formData.password}
+                        onChange={handleChange}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        onClick={() => setShowPassword((p) => !p)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password ? (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{errors.password}</p>
+                    ) : (
+                      <p className="mt-1 text-xs text-gray-500">This password will be used for agency admin login.</p>
+                    )}
                   </div>
 
                   <div>
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                       Confirm Password
                     </label>
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type="password"
-                      minLength={6}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="Confirm new password"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Re-enter the password to confirm.</p>
+                    <div className="relative">
+                      <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        minLength={6}
+                        className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                        placeholder="Confirm new password"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        onClick={() => setShowConfirmPassword((p) => !p)}
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.confirmPassword ? (
+                      <p className="mt-1 text-xs font-semibold text-red-600">{errors.confirmPassword}</p>
+                    ) : (
+                      <p className="mt-1 text-xs text-gray-500">Re-enter the password to confirm.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -558,11 +679,16 @@ export default function EditAgencyPage() {
                     id="contact.address.zipCode"
                     name="contact.address.zipCode"
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="33101"
                     value={formData.contact.address.zipCode}
                     onChange={handleChange}
                   />
+                  {formData.contact.address.zipCode && !isValidZip(formData.contact.address.zipCode) && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">
+                      ZIP Code must be 5 digits or 9 digits (ZIP+4)
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

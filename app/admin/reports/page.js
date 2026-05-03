@@ -77,6 +77,11 @@ export function AdminReportsContent() {
     fetchReportData()
   }, [selectedPeriod])
 
+  const sumStatsObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return 0
+    return Object.values(obj).reduce((sum, v) => sum + (Number(v) || 0), 0)
+  }
+
   const getDateFilter = () => {
     const now = new Date()
     const filters = {
@@ -97,8 +102,8 @@ export function AdminReportsContent() {
 
       // Use optimized stats endpoint with date filtering
       const [statsResponse, agenciesResponse] = await Promise.all([
-        api.get(`/stats/reports?startDate=${startDate}&endDate=${endDate}`).catch(() => ({ data: {} })),
-        api.get('/agencies').catch(() => ({ data: { agencies: [] } }))
+        api.get(`/stats/reports?startDate=${startDate}&endDate=${endDate}`),
+        api.get('/agencies')
       ])
 
       const stats = statsResponse.data || {}
@@ -108,17 +113,26 @@ export function AdminReportsContent() {
       // For now, let's just use what we have in stats for the view
       setAllData({ users: [], properties: [], leads: [], agencies })
 
-      setReportData({
-        totalUsers: stats.totalUsers || 0,
-        totalProperties: stats.totalProperties || 0,
-        totalLeads: stats.totalLeads || 0,
+      const nextUsersByRole = stats.usersByRole || {}
+      const nextPropertiesByStatus = stats.propertiesByStatus || {}
+      const nextLeadsByStatus = stats.leadsByStatus || {}
+
+      const computedTotals = {
+        totalUsers: stats.totalUsers ?? sumStatsObject(nextUsersByRole),
+        totalProperties: stats.totalProperties ?? sumStatsObject(nextPropertiesByStatus),
+        totalLeads: stats.totalLeads ?? sumStatsObject(nextLeadsByStatus)
+      }
+
+      setReportData(prev => ({
+        ...prev,
+        ...computedTotals,
         totalAgencies: agencies.length,
         totalPropertyValue: stats.totalPropertyValue || 0,
-        usersByRole: stats.usersByRole || {},
-        propertiesByStatus: stats.propertiesByStatus || {},
+        usersByRole: nextUsersByRole,
+        propertiesByStatus: nextPropertiesByStatus,
         propertiesByType: stats.propertiesByType || {},
         propertiesByListingType: stats.propertiesByListingType || {},
-        leadsByStatus: stats.leadsByStatus || {},
+        leadsByStatus: nextLeadsByStatus,
         leadsBySource: stats.leadsBySource || {},
         leadsByPriority: stats.leadsByPriority || {},
         propertiesByLocation: stats.propertiesByLocation || {},
@@ -126,14 +140,16 @@ export function AdminReportsContent() {
         agencyAnalysis: stats.agencyAnalysis || [],
         recentActivity: stats.recentActivity || [],
         systemStats: {
-          activeProperties: stats.propertiesByStatus?.active || 0,
-          pendingProperties: stats.propertiesByStatus?.pending || 0,
-          soldProperties: stats.propertiesByStatus?.sold || 0,
-          rentedProperties: stats.propertiesByStatus?.rented || 0,
-          newLeads: stats.leadsByStatus?.new || 0,
-          convertedLeads: stats.leadsByStatus?.converted || 0
+          activeUsers: stats.userStats?.activeUsers ?? 0,
+          inactiveUsers: stats.userStats?.inactiveUsers ?? 0,
+          activeProperties: nextPropertiesByStatus?.active || 0,
+          pendingProperties: nextPropertiesByStatus?.pending || 0,
+          soldProperties: nextPropertiesByStatus?.sold || 0,
+          rentedProperties: nextPropertiesByStatus?.rented || 0,
+          newLeads: nextLeadsByStatus?.new || 0,
+          convertedLeads: nextLeadsByStatus?.converted || 0
         }
-      })
+      }))
     } catch (error) {
       console.error('Failed to fetch report data:', error)
       toast.error('Failed to load reports')
@@ -142,29 +158,52 @@ export function AdminReportsContent() {
     }
   }
 
-  const handleExportReport = (reportType) => {
+  const ensureExportDataLoaded = async (reportType) => {
+    if (reportType === 'leads' && exportData.leads.length > 0) return exportData.leads
+    if (reportType === 'properties' && exportData.properties.length > 0) return exportData.properties
+    if (reportType === 'agents' && exportData.agents.length > 0) return exportData.agents
+
+    const fetchers = {
+      leads: () => api.get('/leads?limit=500').then(r => r.data?.leads || []),
+      properties: () => api.get('/properties?limit=500').then(r => r.data?.properties || []),
+      agents: () => api.get('/users?role=agent').then(r => r.data?.users || [])
+    }
+
+    const fetchFn = fetchers[reportType]
+    if (!fetchFn) return []
+
+    const rows = await fetchFn()
+    setExportData(prev => ({
+      ...prev,
+      [reportType]: rows
+    }))
+    return rows
+  }
+
+  const handleExportReport = async (reportType) => {
     try {
+      const rows = await ensureExportDataLoaded(reportType)
       switch (reportType) {
         case 'leads':
-          if (exportData.leads.length === 0) {
+          if (rows.length === 0) {
             toast.error('No leads data to export')
             return
           }
-          exportToCSV(formatLeadsForExport(exportData.leads), `leads-export-${new Date().toISOString().split('T')[0]}.csv`)
+          exportToCSV(formatLeadsForExport(rows), `leads-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         case 'properties':
-          if (exportData.properties.length === 0) {
+          if (rows.length === 0) {
             toast.error('No properties data to export')
             return
           }
-          exportToCSV(formatPropertiesForExport(exportData.properties), `properties-export-${new Date().toISOString().split('T')[0]}.csv`)
+          exportToCSV(formatPropertiesForExport(rows), `properties-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         case 'agents':
-          if (exportData.agents.length === 0) {
+          if (rows.length === 0) {
             toast.error('No agents data to export')
             return
           }
-          exportToCSV(formatAgentsForExport(exportData.agents), `agents-export-${new Date().toISOString().split('T')[0]}.csv`)
+          exportToCSV(formatAgentsForExport(rows), `agents-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         default:
           toast.error('Invalid report type')

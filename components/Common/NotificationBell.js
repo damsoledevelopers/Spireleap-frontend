@@ -6,6 +6,7 @@ import NotificationCenter from './NotificationCenter'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { io } from 'socket.io-client'
+import { getToken } from '../../lib/tokenStorage'
 
 export default function NotificationBell() {
   const { user } = useAuth()
@@ -18,7 +19,7 @@ export default function NotificationBell() {
     if (!user) return
 
     // Initialize Socket.IO connection
-    const token = localStorage.getItem('token')
+    const token = getToken()
     if (!token) return
 
     const newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {

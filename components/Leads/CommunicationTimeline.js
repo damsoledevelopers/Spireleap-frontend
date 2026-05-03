@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Phone, Mail, MessageSquare, Calendar, Clock, Filter, Search, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import SearchableSelect from '../Common/SearchableSelect'
 
 const formatTimeAgo = (date) => {
   const now = new Date()
@@ -96,18 +97,21 @@ export default function CommunicationTimeline({ communications = [], onExport })
             <Filter className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700">Filters:</span>
           </div>
-          <select
+          <SearchableSelect
             value={filter.type}
             onChange={(e) => setFilter({ ...filter, type: e.target.value })}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">All Types</option>
-            <option value="call">Call</option>
-            <option value="email">Email</option>
-            <option value="sms">SMS</option>
-            <option value="meeting">Meeting</option>
-            <option value="note">Note</option>
-          </select>
+            options={[
+              { value: '', label: 'All Types' },
+              { value: 'call', label: 'Call' },
+              { value: 'email', label: 'Email' },
+              { value: 'sms', label: 'SMS' },
+              { value: 'meeting', label: 'Meeting' },
+              { value: 'note', label: 'Note' }
+            ]}
+            placeholder="All Types"
+            buttonClassName="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+            searchPlaceholder="Search type..."
+          />
           <input
             type="date"
             value={filter.date}

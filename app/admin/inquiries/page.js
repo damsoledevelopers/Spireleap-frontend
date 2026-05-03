@@ -45,6 +45,8 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
+import { getDropdownOptions } from '../../../lib/dropdownsApi'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 
 export default function AdminInquiriesPage() {
   const { user, loading: authLoading, checkPermission } = useAuth()
@@ -86,6 +88,13 @@ export default function AdminInquiriesPage() {
     maxPrice: ''
   })
   const [showPricePicker, setShowPricePicker] = useState(false)
+  const [dropdowns, setDropdowns] = useState({ leadPriorities: [], leadStatuses: [] })
+
+  useEffect(() => {
+    getDropdownOptions()
+      .then((dd) => setDropdowns({ leadPriorities: dd.leadPriorities || [], leadStatuses: dd.leadStatuses || [] }))
+      .catch(() => setDropdowns({ leadPriorities: [], leadStatuses: [] }))
+  }, [])
 
   // Per-entry Permission State
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
@@ -812,7 +821,7 @@ export default function AdminInquiriesPage() {
 
             {/* Agency Filter - hidden for agent (they only see their own inquiries) */}
             {!isAgent && (
-              <select
+              <SearchableSelect
                 value={filters.agency}
                 onChange={(e) => {
                   const newAgency = e.target.value
@@ -842,102 +851,87 @@ export default function AdminInquiriesPage() {
                   })
                   setCurrentPage(1)
                 }}
-                className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
-              >
-                <option value="">All Agencies</option>
-                <option value="unassigned">Unassigned</option>
-                {agencies && agencies.length > 0 && agencies.map((agency) => (
-                  <option key={agency._id} value={agency._id}>
-                    {agency.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Agencies' },
+                  { value: 'unassigned', label: 'Unassigned' },
+                  ...(agencies || []).map((a) => ({ value: a._id, label: a.name }))
+                ]}
+                placeholder="All Agencies"
+                buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
+                searchPlaceholder="Search agency..."
+              />
             )}
 
             {/* Agent Filter - hidden for agent */}
             {!isAgent && (
-              <select
+              <SearchableSelect
                 value={filters.assignedAgent}
                 onChange={(e) => {
                   setFilters(prev => ({ ...prev, assignedAgent: e.target.value }))
                   setCurrentPage(1)
                 }}
-                className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
-              >
-                <option value="">All Agents</option>
-                {agents && agents.length > 0 && agents
-                  .filter(agent => {
-                    // If agency filter is selected, show only agents from that agency
-                    if (!filters.agency) {
-                      return true // Show all agents if no agency filter
-                    }
-                    const agentAgencyId = agent.agency?._id || agent.agency
-                    const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
-                    return agencyIdStr === filters.agency || agencyIdStr === filters.agency.toString()
-                  })
-                  .map((agent) => (
-                    <option key={agent._id} value={agent._id}>
-                      {agent.firstName} {agent.lastName}
-                    </option>
-                  ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Agents' },
+                  ...(agents || [])
+                    .filter(agent => {
+                      // If agency filter is selected, show only agents from that agency
+                      if (!filters.agency) return true
+                      const agentAgencyId = agent.agency?._id || agent.agency
+                      const agencyIdStr = typeof agentAgencyId === 'object' ? agentAgencyId?.toString() : agentAgencyId
+                      return agencyIdStr === filters.agency || agencyIdStr === filters.agency.toString()
+                    })
+                    .map((a) => ({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
+                ]}
+                placeholder="All Agents"
+                buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
+                searchPlaceholder="Search agent..."
+              />
             )}
 
             {/* Property Filter */}
-            <select
+            <SearchableSelect
               value={filters.property}
               onChange={(e) => {
                 setFilters(prev => ({ ...prev, property: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Properties</option>
-              {properties && properties.length > 0 ? properties.map((property) => (
-                <option key={property._id} value={property._id}>
-                  {property.title || property.name || `Property ${property._id?.slice(-6) || ''}`}
-                </option>
-              )) : (
-                <option value="" disabled>No properties available</option>
-              )}
-            </select>
+              options={[
+                { value: '', label: 'All Properties' },
+                ...(properties || []).map((p) => ({
+                  value: p._id,
+                  label: p.title || p.name || `Property ${p._id?.slice(-6) || ''}`
+                }))
+              ]}
+              placeholder="All Properties"
+              buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[220px]"
+              searchPlaceholder="Search property..."
+            />
 
             {/* Status Filter */}
-            <select
+            <SearchableSelect
               value={filters.status}
               onChange={(e) => {
                 setFilters(prev => ({ ...prev, status: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Status</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="qualified">Qualified</option>
-              <option value="site_visit_scheduled">Site Visit Scheduled</option>
-              <option value="site_visit_completed">Site Visit Completed</option>
-              <option value="negotiation">Negotiation</option>
-              <option value="booked">Booked</option>
-              <option value="lost">Lost</option>
-              <option value="closed">Closed</option>
-            </select>
+              options={[{ value: '', label: 'All Status' }, ...(dropdowns.leadStatuses || [])]}
+              placeholder="All Status"
+              buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
+              searchPlaceholder="Search status..."
+            />
 
             {/* Priority Filter */}
-            <select
+            <SearchableSelect
               value={filters.priority}
               onChange={(e) => {
                 setFilters(prev => ({ ...prev, priority: e.target.value }))
                 setCurrentPage(1)
               }}
-              className="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white"
-            >
-              <option value="">All Priority</option>
-              <option value="Hot">Hot</option>
-              <option value="Warm">Warm</option>
-              <option value="Cold">Cold</option>
-              <option value="Not_interested">Not Interested</option>
-            </select>
+              options={[{ value: '', label: 'All Priority' }, ...(dropdowns.leadPriorities || [])]}
+              placeholder="All Priority"
+              buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
+              searchPlaceholder="Search priority..."
+            />
           </div>
         </div>
 
@@ -1031,7 +1025,7 @@ export default function AdminInquiriesPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {(user?.role === 'super_admin' || user?.role === 'agency_admin') && inquiry.agency ? (
                           <div className="relative">
-                            <select
+                            <SearchableSelect
                               value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
                               onChange={async (e) => {
                                 const selectedAgentId = e.target.value
@@ -1040,7 +1034,7 @@ export default function AdminInquiriesPage() {
                                 }
                               }}
                               disabled={assigningAgent === inquiry._id}
-                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              buttonClassName="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
                               onFocus={async () => {
                                 // Fetch agents when dropdown is opened
                                 const agencyId = inquiry.agency?._id || inquiry.agency
@@ -1048,34 +1042,28 @@ export default function AdminInquiriesPage() {
                                   await fetchAgentsByAgency(agencyId)
                                 }
                               }}
-                            >
-                              <option value="">Assign Agent...</option>
-                              {inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent) && (
-                                <option value={inquiry.assignedAgent._id || inquiry.assignedAgent}>
-                                  {inquiry.assignedAgent.firstName
-                                    ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName}`
-                                    : 'Assigned Agent'}
-                                </option>
-                              )}
-                              {(() => {
+                              options={(() => {
+                                const opts = [{ value: '', label: 'Assign Agent...' }]
+                                if (inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent)) {
+                                  opts.push({
+                                    value: inquiry.assignedAgent._id || inquiry.assignedAgent,
+                                    label: inquiry.assignedAgent.firstName
+                                      ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName}`.trim()
+                                      : 'Assigned Agent'
+                                  })
+                                }
                                 const agencyId = inquiry.agency?._id || inquiry.agency
                                 const availableAgents = agencyAgents[agencyId]
-
-                                if (availableAgents === undefined) {
-                                  return null // Just show the assigned agent or "Assign Agent..."
-                                }
-
-                                // Filter out the current agent to avoid duplicates
+                                if (!availableAgents) return opts
                                 const currentAgentId = inquiry.assignedAgent?._id || inquiry.assignedAgent
-                                return availableAgents
+                                availableAgents
                                   .filter(agent => agent._id !== currentAgentId)
-                                  .map((agent) => (
-                                    <option key={agent._id} value={agent._id}>
-                                      {agent.firstName} {agent.lastName}
-                                    </option>
-                                  ))
+                                  .forEach((a) => opts.push({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
+                                return opts
                               })()}
-                            </select>
+                              placeholder="Assign Agent..."
+                              searchPlaceholder="Search agent..."
+                            />
                             {assigningAgent === inquiry._id && (
                               <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
@@ -1107,28 +1095,20 @@ export default function AdminInquiriesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {canEditInquiry ? (
-                          <select
+                          <SearchableSelect
                             value={inquiry.status || 'new'}
                             onChange={(e) => handleUpdateStatus(inquiry._id, e.target.value)}
-                            className={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
+                            buttonClassName={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
                               ${inquiry.status === 'new' ? 'text-blue-800 bg-blue-50' :
                                 inquiry.status === 'contacted' ? 'text-yellow-800 bg-yellow-50' :
                                   inquiry.status === 'qualified' ? 'text-purple-800 bg-purple-50' :
                                     inquiry.status === 'booked' ? 'text-green-800 bg-green-50' :
                                       inquiry.status === 'lost' ? 'text-red-800 bg-red-50' :
                                         'text-gray-800 bg-gray-50'}`}
-                          >
-                            <option value="new">New</option>
-                            <option value="contacted">Contacted</option>
-                            <option value="qualified">Qualified</option>
-                            <option value="site_visit_scheduled">Site Visit Scheduled</option>
-                            <option value="site_visit_completed">Site Visit Completed</option>
-                            <option value="negotiation">Negotiation</option>
-                            <option value="booked">Booked</option>
-                            <option value="lost">Lost</option>
-                            <option value="closed">Closed</option>
-                            <option value="junk">Junk</option>
-                          </select>
+                            options={dropdowns.leadStatuses || []}
+                            placeholder="Status"
+                            searchPlaceholder="Search status..."
+                          />
                         ) : (
                           getStatusBadge(inquiry.status)
                         )}

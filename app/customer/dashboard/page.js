@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
 
 export default function CustomerDashboard() {
     const { user, loading: authLoading } = useAuth()
@@ -25,6 +27,9 @@ export default function CustomerDashboard() {
         watchlistCount: 0,
         recentActivity: []
     })
+    const { selectedCurrency, ratesByCode } = useCurrency()
+
+    const formatAmount = (amount) => formatMoneyFromAed(amount || 0, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -156,7 +161,7 @@ export default function CustomerDashboard() {
                                         </div>
                                         {activity.amount && (
                                             <div className="text-right text-sm font-bold text-gray-900">
-                                                ${activity.amount.toLocaleString()}
+                                                {formatAmount(activity.amount)}
                                             </div>
                                         )}
                                     </div>

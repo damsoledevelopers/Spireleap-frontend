@@ -11,12 +11,9 @@ import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
-
-// Helper to get token from localStorage (persists across sessions)
-const getToken = () => {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('token')
-}
+import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { getDropdownOptions } from '../../../lib/dropdownsApi'
+import { getToken } from '../../../lib/tokenStorage'
 
 /**
  * Helper: resolve entry-level permission with safe fallback to module-level permission.
@@ -73,6 +70,7 @@ export default function AdminLeadsPage() {
   const canCreateLead = checkPermission('leads', 'create')
   const canEditLead = checkPermission('leads', 'edit')
   const canDeleteLead = checkPermission('leads', 'delete')
+  const canCreateUser = checkPermission('users', 'create')
 
   const canUploadLeads = canCreateLead
   const canBulkActions = canEditLead || canDeleteLead
@@ -109,6 +107,13 @@ export default function AdminLeadsPage() {
   const [allAgents, setAllAgents] = useState([]) // Store all agents for per-lead filtering
   const [sources, setSources] = useState([])
   const [agencies, setAgencies] = useState([])
+  const [dropdowns, setDropdowns] = useState({
+    autoAssignMethods: [],
+    leadPriorities: [],
+    leadSources: [],
+    leadStatuses: [],
+    paginationLimits: []
+  })
   const [properties, setProperties] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const isUploadingRef = useRef(false)
@@ -196,6 +201,15 @@ export default function AdminLeadsPage() {
         // Batch metadata fetches using Promise.all (fetch once)
         if (!metadataFetchedRef.current) {
           Promise.all([
+            getDropdownOptions().then((dd) => {
+              setDropdowns({
+                autoAssignMethods: dd.autoAssignMethods || [],
+                leadPriorities: dd.leadPriorities || [],
+                leadSources: dd.leadSources || [],
+                leadStatuses: dd.leadStatuses || [],
+                paginationLimits: dd.paginationLimits || []
+              })
+            }),
             owners.length === 0 ? fetchOwners() : Promise.resolve(),
             agencies.length === 0 ? fetchAgencies() : Promise.resolve(),
             properties.length === 0 ? fetchProperties() : Promise.resolve(),
@@ -1309,6 +1323,25 @@ export default function AdminLeadsPage() {
     }
   }
 
+  const handleConvertToClient = async (leadId) => {
+    try {
+      const password = window.prompt('Set a password for this client (min 6 characters):')
+      if (!password) return
+      if (String(password).trim().length < 6) {
+        toast.error('Password must be at least 6 characters')
+        return
+      }
+
+      await api.post(`/leads/${leadId}/convert-to-client`, { password: String(password).trim() })
+      toast.success('Lead converted to client. They can now log in with that email/password.')
+      fetchLeads()
+      fetchDashboardMetrics()
+    } catch (error) {
+      console.error('Convert to client error:', error)
+      toast.error(error?.response?.data?.message || 'Failed to convert lead to client')
+    }
+  }
+
   const handleSelectLead = (leadId) => {
     setSelectedLeads(prev =>
       prev.includes(leadId)
@@ -2014,7 +2047,7 @@ export default function AdminLeadsPage() {
           {/* Filters and Controls */}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3 flex-wrap">
-              <select
+              <SearchableSelect
                 value={pagination.limit}
                 onChange={(e) => {
                   const newLimit = parseInt(e.target.value)
@@ -2026,147 +2059,109 @@ export default function AdminLeadsPage() {
                     pages: Math.ceil(prev.total / newLimit)
                   }))
                 }}
-                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer"
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
+                options={(dropdowns.paginationLimits || []).map((l) => ({ value: l, label: String(l) }))}
+                placeholder="Per page"
+                buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white cursor-pointer min-w-[110px]"
+                searchPlaceholder="Search..."
+              />
 
               <Filter className="h-5 w-5 text-gray-400" />
 
               {/* Owner/Agent Filter - Only for Super Admin and Agency Admin */}
               {(isSuperAdmin || isAgencyAdmin) && (
-                <select
+                <SearchableSelect
                   value={filters.owner}
                   onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
-                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
-                >
-                  <option value="">- Agent -</option>
-                  {owners.map((owner) => (
-                    <option key={owner._id} value={owner._id}>
-                      {owner.firstName} {owner.lastName}
-                    </option>
-                  ))}
-                </select>
+                  options={owners.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))}
+                  placeholder="- Agent -"
+                  buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+                  searchPlaceholder="Search agent..."
+                />
               )}
 
-              <select
+              <SearchableSelect
                 value={filters.source}
                 onChange={(e) => {
                   setFilters(prev => ({ ...prev, source: e.target.value }))
                   setPagination(prev => ({ ...prev, page: 1 }))
                 }}
-                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
-              >
-                <option value="">- Source -</option>
-                <option value="website">Website</option>
-                <option value="phone">Phone</option>
-                <option value="email">Email</option>
-                <option value="walk_in">Walk In</option>
-                <option value="referral">Referral</option>
-                <option value="social_media">Social Media</option>
-                <option value="other">Other</option>
-                {/* Also show custom sources from leads */}
-                {sources.filter(source => !['website', 'phone', 'email', 'walk_in', 'referral', 'social_media', 'other'].includes(source)).map((source) => (
-                  <option key={source} value={source}>
-                    {source}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  ...(dropdowns.leadSources || []),
+                  ...sources
+                    .filter(source => !(dropdowns.leadSources || []).some(s => s.value === source))
+                    .map((source) => ({ value: source, label: source }))
+                ]}
+                placeholder="- Source -"
+                buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+                searchPlaceholder="Search source..."
+              />
 
 
 
-              <select
+              <SearchableSelect
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white"
-              >
-                <option value="">- Priority -</option>
-                <option value="Hot">Hot</option>
-                <option value="Warm">Warm</option>
-                <option value="Cold">Cold</option>
-                <option value="Not_interested">Not Interested</option>
-              </select>
+                options={dropdowns.leadPriorities || []}
+                placeholder="- Priority -"
+                buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+                searchPlaceholder="Search priority..."
+              />
 
               {/* Team Filter - Only for Super Admin and Agency Admin */}
               {(isSuperAdmin || isAgencyAdmin) && (
-                <select
+                <SearchableSelect
                   value={filters.team}
                   onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
-                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">- Team -</option>
-                  {teams.map((team) => (
-                    <option key={team} value={team}>
-                      {team}
-                    </option>
-                  ))}
-                </select>
+                  options={teams.map((t) => ({ value: t, label: t }))}
+                  placeholder="- Team -"
+                  buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+                  searchPlaceholder="Search team..."
+                />
               )}
 
               {/* Campaign Filter - Only for Super Admin and Agency Admin */}
               {(isSuperAdmin || isAgencyAdmin) && (
-                <select
+                <SearchableSelect
                   value={filters.campaign}
                   onChange={(e) => {
                     setFilters(prev => ({ ...prev, campaign: e.target.value }))
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
-                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">- Campaign -</option>
-                  {campaigns.map((campaign) => (
-                    <option key={campaign} value={campaign}>
-                      {campaign}
-                    </option>
-                  ))}
-                </select>
+                  options={campaigns.map((c) => ({ value: c, label: c }))}
+                  placeholder="- Campaign -"
+                  buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
+                  searchPlaceholder="Search campaign..."
+                />
               )}
 
               {/* Agency Filter - Only for Super Admin */}
               {isSuperAdmin && (
-                <select
+                <SearchableSelect
                   value={filters.agency ? String(filters.agency) : ''}
                   onChange={(e) => {
                     const selectedAgency = e.target.value
                     setFilters(prev => ({ ...prev, agency: selectedAgency }))
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
-                  className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">- Agency -</option>
-                  {agencies.map((agency) => {
-                    const agencyId = agency._id ? String(agency._id) : ''
-                    return (
-                      <option key={agencyId} value={agencyId}>
-                        {agency.name}
-                      </option>
-                    )
-                  })}
-                </select>
+                  options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
+                  placeholder="- Agency -"
+                  buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
+                  searchPlaceholder="Search agency..."
+                />
               )}
 
-              <select
+              <SearchableSelect
                 value={filters.property ? String(filters.property) : ''}
                 onChange={(e) => {
                   const selectedProperty = e.target.value
                   setFilters(prev => ({ ...prev, property: selectedProperty }))
                   setPagination(prev => ({ ...prev, page: 1 }))
                 }}
-                className="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">- Property -</option>
-                {properties.map((property) => {
-                  const propertyId = property._id ? String(property._id) : ''
-                  return (
-                    <option key={propertyId} value={propertyId}>
-                      {property.title}
-                    </option>
-                  )
-                })}
-              </select>
+                options={properties.map((p) => ({ value: p._id ? String(p._id) : '', label: p.title }))}
+                placeholder="- Property -"
+                buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
+                searchPlaceholder="Search property..."
+              />
 
               {/* Date Range Filter */}
               <div className="relative">
@@ -2685,20 +2680,14 @@ export default function AdminLeadsPage() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 {isSuperAdmin ? (
-                                  <select
+                                  <SearchableSelect
                                     value={lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')}
                                     onChange={(e) => handleQuickAgencyChange(leadId, e.target.value)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[150px] flex-1"
-                                    title="Change Agency"
-                                  >
-                                    <option value="">Unassigned</option>
-                                    {agencies.map((agency) => (
-                                      <option key={agency._id} value={agency._id}>
-                                        {agency.name}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    options={agencies.map((a) => ({ value: a._id, label: a.name }))}
+                                    placeholder="Unassigned"
+                                    buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[150px] flex-1 bg-white"
+                                    searchPlaceholder="Search agency..."
+                                  />
                                 ) : (
                                   <span className="text-sm text-gray-900">
                                     {lead.agency?.name || 'Unassigned'}
@@ -2708,16 +2697,10 @@ export default function AdminLeadsPage() {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 {(isSuperAdmin || isAgencyAdmin) ? (
                                   <div className="flex items-center gap-2">
-                                    <select
+                                    <SearchableSelect
                                       value={lead.assignedAgent?._id || lead.assignedAgent || ''}
                                       onChange={(e) => handleQuickAssign(leadId, e.target.value)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] flex-1"
-                                      title="Assign Agent"
-                                    >
-                                      <option value="">Unassigned</option>
-                                      {(() => {
-                                        // Filter agents based on lead's agency (similar to edit form)
+                                      options={(() => {
                                         let filteredAgents = allAgents.length > 0 ? allAgents : owners
                                         if (lead.agency) {
                                           const leadAgencyId = lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')
@@ -2728,13 +2711,12 @@ export default function AdminLeadsPage() {
                                             })
                                           }
                                         }
-                                        return filteredAgents.map((owner) => (
-                                          <option key={owner._id} value={owner._id}>
-                                            {owner.firstName} {owner.lastName}
-                                          </option>
-                                        ))
+                                        return filteredAgents.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
                                       })()}
-                                    </select>
+                                      placeholder="Unassigned"
+                                      buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] flex-1 bg-white"
+                                      searchPlaceholder="Search agent..."
+                                    />
                                     {canAutoAssign && (
                                       <button
                                         onClick={() => {
@@ -2758,23 +2740,16 @@ export default function AdminLeadsPage() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                 {canEditLead ? (
-                                  <select
-                                    key={`priority-select-${leadId}-${lead.priority || 'null'}`}
+                                  <SearchableSelect
                                     value={lead.priority ? String(lead.priority).charAt(0).toUpperCase() + String(lead.priority).slice(1).toLowerCase() : ''}
                                     onChange={(e) => {
-                                      e.stopPropagation()
                                       handleQuickPriorityChange(leadId, e.target.value)
                                     }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] cursor-pointer"
-                                    title="Change Priority"
-                                  >
-                                    <option value="">Select Priority</option>
-                                    <option value="Hot">Hot</option>
-                                    <option value="Warm">Warm</option>
-                                    <option value="Cold">Cold</option>
-                                    <option value="Not_interested">Not Interested</option>
-                                  </select>
+                                    options={dropdowns.leadPriorities || []}
+                                    placeholder="Select Priority"
+                                    buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px] bg-white"
+                                    searchPlaceholder="Search priority..."
+                                  />
                                 ) : (
                                   <span className={`px-2 py-1 rounded text-xs font-semibold ${String(lead.priority).toLowerCase() === 'hot' ? 'bg-red-100 text-red-800' :
                                     String(lead.priority).toLowerCase() === 'Warm' ? 'bg-yellow-100 text-yellow-800' :
@@ -2832,6 +2807,18 @@ export default function AdminLeadsPage() {
                                     >
                                       <Edit className="h-5 w-5" />
                                     </Link>
+                                  )}
+                                  {canCreateUser && checkEntryPermission(lead, user, 'edit', canEditLead) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleConvertToClient(leadId)
+                                      }}
+                                      className="text-emerald-600 hover:text-emerald-900 transition-colors"
+                                      title="Convert to Client"
+                                    >
+                                      <UserCheck className="h-5 w-5" />
+                                    </button>
                                   )}
                                   {canDeleteLead && (
                                     <button
@@ -3221,70 +3208,50 @@ export default function AdminLeadsPage() {
                 {bulkAction === 'status' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">New Status</label>
-                    <select
+                    <SearchableSelect
                       value={bulkStatus}
                       onChange={(e) => setBulkStatus(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Select Status</option>
-                      <option value="new">New Lead</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="qualified">Qualified</option>
-                      <option value="site_visit_scheduled">Site Visit Scheduled</option>
-                      <option value="site_visit_completed">Site Visit Completed</option>
-                      <option value="negotiation">Negotiation</option>
-                      <option value="booked">Booked</option>
-                      <option value="lost">Lost</option>
-                      <option value="closed">Closed</option>
-                      <option value="junk">Junk / Invalid</option>
-                    </select>
+                      options={dropdowns.leadStatuses || []}
+                      placeholder="Select Status"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search status..."
+                    />
                   </div>
                 ) : bulkAction === 'priority' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Update Priority</label>
-                    <select
+                    <SearchableSelect
                       value={bulkPriority}
                       onChange={(e) => setBulkPriority(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Select Priority</option>
-                      <option value="Hot">Hot</option>
-                      <option value="Warm">Warm</option>
-                      <option value="Cold">Cold</option>
-                      <option value="Not_interested">Not Interested</option>
-                    </select>
+                      options={dropdowns.leadPriorities || []}
+                      placeholder="Select Priority"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search priority..."
+                    />
                   </div>
                 ) : bulkAction === 'agency' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Agency</label>
-                    <select
+                    <SearchableSelect
                       value={bulkAgency}
                       onChange={(e) => setBulkAgency(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Select Agency</option>
-                      {agencies.map((agency) => (
-                        <option key={agency._id} value={agency._id}>
-                          {agency.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={agencies.map((a) => ({ value: a._id, label: a.name }))}
+                      placeholder="Select Agency"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search agency..."
+                    />
                   </div>
                 ) : (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Agent</label>
-                    <select
+                    <SearchableSelect
                       value={bulkAgent}
                       onChange={(e) => setBulkAgent(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Select Agent</option>
-                      {owners.map((owner) => (
-                        <option key={owner._id} value={owner._id}>
-                          {owner.firstName} {owner.lastName}
-                        </option>
-                      ))}
-                    </select>
+                      options={owners.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))}
+                      placeholder="Select Agent"
+                      buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                      searchPlaceholder="Search agent..."
+                    />
                   </div>
                 )}
               </div>
@@ -3344,18 +3311,14 @@ export default function AdminLeadsPage() {
                 </p>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Method</label>
-                  <select
+                  <SearchableSelect
                     value={autoAssignMethod}
                     onChange={(e) => setAutoAssignMethod(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="round_robin">Round-Robin</option>
-                    <option value="workload">Workload-Based (Least Leads)</option>
-                    <option value="location">Location-Based</option>
-                    <option value="project">Project-Based</option>
-                    <option value="source">Source-Based</option>
-                    <option value="smart">Smart Assignment</option>
-                  </select>
+                    options={dropdowns.autoAssignMethods || []}
+                    placeholder="Select method"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                    searchPlaceholder="Search method..."
+                  />
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                   <strong>Note:</strong> {autoAssignMethod === 'round_robin' && 'Leads will be assigned in rotation order.'}

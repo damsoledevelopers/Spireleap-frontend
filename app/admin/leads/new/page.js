@@ -8,6 +8,10 @@ import { api } from '../../../../lib/api'
 import { ArrowLeft, Save, User, Mail, Phone, MapPin, FileText, Building, AlertCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import PhoneField from '../../../../components/Common/PhoneField'
+import SearchableSelect from '../../../../components/Common/SearchableSelect'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
+import { getDropdownOptions } from '../../../../lib/dropdownsApi'
 
 export default function AdminAddLeadPage() {
   const { user, loading: authLoading } = useAuth()
@@ -16,6 +20,25 @@ export default function AdminAddLeadPage() {
   const [properties, setProperties] = useState([])
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
+  const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
+  const sanitizePhone = (v) => String(v || '').replace(/\D/g, '').slice(0, 10)
+  const isValidPhone10 = (v) => String(v || '').replace(/\D/g, '').length === 10
+  const sanitizeDecimal = (v) => {
+    // allow digits and one dot, e.g. "123.45"
+    const s = String(v ?? '').replace(/[^\d.]/g, '')
+    const firstDot = s.indexOf('.')
+    if (firstDot === -1) return s
+    return s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  const sanitizeLanguagesInput = (v) => String(v || '').replace(/[^a-zA-Z\s,.'-]/g, '')
+  // Lead form fields should be normal text inputs (no dropdowns)
   const [duplicates, setDuplicates] = useState([])
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [formData, setFormData] = useState({
@@ -49,9 +72,25 @@ export default function AdminAddLeadPage() {
       },
       preferredLocation: [],
       propertyType: [],
+      preferredRooms: '',
+      preferredSize: '',
+      buyerType: '',
+      paymentMethod: '',
+      nationality: '',
+      dob: '',
+      spokenLanguages: [],
       timeline: '',
       requirements: ''
     }
+  })
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+  const [alternatePhoneCountryCode, setAlternatePhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+  const [dropdowns, setDropdowns] = useState({
+    budgetCurrencies: [],
+    inquiryTimelines: [],
+    leadPriorities: [],
+    leadSources: [],
+    leadStatuses: []
   })
 
   useEffect(() => {
@@ -60,13 +99,38 @@ export default function AdminAddLeadPage() {
     }
   }, [user, authLoading])
 
+  // If an existing phone value is present (e.g. prefill), split it into cc + national
+  useEffect(() => {
+    const main = splitE164Phone(formData.contact.phone)
+    if (main.countryCode) setPhoneCountryCode(main.countryCode)
+    if (main.phone !== formData.contact.phone) {
+      // Only keep national digits in the input state; submit as E.164
+      handleInputChange('contact.phone', main.phone)
+    }
+
+    const alt = splitE164Phone(formData.contact.alternatePhone)
+    if (alt.countryCode) setAlternatePhoneCountryCode(alt.countryCode)
+    if (alt.phone !== formData.contact.alternatePhone) {
+      handleInputChange('contact.alternatePhone', alt.phone)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const fetchInitialData = async () => {
     try {
-      const [propertiesRes, agentsRes, agenciesRes] = await Promise.all([
+      const [dropdownsRes, propertiesRes, agentsRes, agenciesRes] = await Promise.all([
+        getDropdownOptions(),
         api.get('/properties?limit=100'),
         api.get('/users?role=agent'),
         api.get('/agencies')
       ])
+      setDropdowns({
+        budgetCurrencies: dropdownsRes.budgetCurrencies || [],
+        inquiryTimelines: dropdownsRes.inquiryTimelines || [],
+        leadPriorities: dropdownsRes.leadPriorities || [],
+        leadSources: dropdownsRes.leadSources || [],
+        leadStatuses: dropdownsRes.leadStatuses || []
+      })
       setProperties(propertiesRes.data.properties || [])
       setAgents(agentsRes.data.users || [])
       setAgencies(agenciesRes.data.agencies || [])
@@ -98,14 +162,47 @@ export default function AdminAddLeadPage() {
     }
   }
 
+  const validateLead = () => {
+    if (!formData.contact.firstName || formData.contact.firstName !== sanitizeName(formData.contact.firstName)) {
+      return { ok: false, message: 'First name must contain only alphabets' }
+    }
+    if (!formData.contact.lastName || formData.contact.lastName !== sanitizeName(formData.contact.lastName)) {
+      return { ok: false, message: 'Last name must contain only alphabets' }
+    }
+    if (!formData.contact.phone || !isValidPhone10(formData.contact.phone)) {
+      return { ok: false, message: 'Phone number must be exactly 10 digits' }
+    }
+    if (formData.contact.alternatePhone && !isValidPhone10(formData.contact.alternatePhone)) {
+      return { ok: false, message: 'Alternate phone number must be exactly 10 digits' }
+    }
+    if (!isValidZip(formData.contact.address?.zipCode)) {
+      return { ok: false, message: 'ZIP Code must be 5 digits or 9 digits (ZIP+4)' }
+    }
+    return { ok: true }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      const v = validateLead()
+      if (!v.ok) {
+        toast.error(v.message)
+        setLoading(false)
+        return
+      }
+
       // Clean up form data
       const submitData = {
         ...formData,
+        contact: {
+          ...formData.contact,
+          phone: buildE164Phone(phoneCountryCode, sanitizePhone(formData.contact.phone)),
+          alternatePhone: formData.contact.alternatePhone
+            ? buildE164Phone(alternatePhoneCountryCode, sanitizePhone(formData.contact.alternatePhone))
+            : formData.contact.alternatePhone
+        },
         property: formData.property || undefined,
         agency: formData.agency || undefined,
         assignedAgent: formData.assignedAgent || undefined,
@@ -118,7 +215,8 @@ export default function AdminAddLeadPage() {
             max: formData.inquiry.budget.max ? parseFloat(formData.inquiry.budget.max) : undefined
           },
           preferredLocation: formData.inquiry.preferredLocation.filter(l => l.trim()),
-          propertyType: formData.inquiry.propertyType.filter(t => t.trim())
+          propertyType: formData.inquiry.propertyType.filter(t => t.trim()),
+          spokenLanguages: (formData.inquiry.spokenLanguages || []).filter(Boolean)
         }
       }
 
@@ -127,6 +225,13 @@ export default function AdminAddLeadPage() {
       if (!submitData.inquiry.requirements) delete submitData.inquiry.requirements
       if (!submitData.inquiry.timeline) delete submitData.inquiry.timeline
       if (!submitData.contact.alternatePhone) delete submitData.contact.alternatePhone
+      if (!submitData.inquiry.nationality) delete submitData.inquiry.nationality
+      if (!submitData.inquiry.dob) delete submitData.inquiry.dob
+      if (!submitData.inquiry.preferredRooms) delete submitData.inquiry.preferredRooms
+      if (!submitData.inquiry.preferredSize) delete submitData.inquiry.preferredSize
+      if (!submitData.inquiry.buyerType) delete submitData.inquiry.buyerType
+      if (!submitData.inquiry.paymentMethod) delete submitData.inquiry.paymentMethod
+      if (!submitData.inquiry.spokenLanguages || submitData.inquiry.spokenLanguages.length === 0) delete submitData.inquiry.spokenLanguages
 
       const response = await api.post('/leads', submitData)
 
@@ -151,8 +256,22 @@ export default function AdminAddLeadPage() {
   const handleIgnoreDuplicates = async () => {
     setLoading(true)
     try {
+      const v = validateLead()
+      if (!v.ok) {
+        toast.error(v.message)
+        setLoading(false)
+        return
+      }
+
       const submitData = {
         ...formData,
+        contact: {
+          ...formData.contact,
+          phone: buildE164Phone(phoneCountryCode, sanitizePhone(formData.contact.phone)),
+          ...(formData.contact.alternatePhone && {
+            alternatePhone: buildE164Phone(alternatePhoneCountryCode, sanitizePhone(formData.contact.alternatePhone))
+          })
+        },
         property: formData.property || undefined,
         agency: formData.agency || undefined,
         assignedAgent: formData.assignedAgent || undefined,
@@ -166,7 +285,8 @@ export default function AdminAddLeadPage() {
             max: formData.inquiry.budget.max ? parseFloat(formData.inquiry.budget.max) : undefined
           },
           preferredLocation: formData.inquiry.preferredLocation.filter(l => l.trim()),
-          propertyType: formData.inquiry.propertyType.filter(t => t.trim())
+          propertyType: formData.inquiry.propertyType.filter(t => t.trim()),
+          spokenLanguages: (formData.inquiry.spokenLanguages || []).filter(Boolean)
         }
       }
       await api.post('/leads', submitData)
@@ -239,7 +359,7 @@ export default function AdminAddLeadPage() {
                   type="text"
                   required
                   value={formData.contact.firstName}
-                  onChange={(e) => handleInputChange('contact.firstName', e.target.value)}
+                  onChange={(e) => handleInputChange('contact.firstName', sanitizeName(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
@@ -251,7 +371,7 @@ export default function AdminAddLeadPage() {
                   type="text"
                   required
                   value={formData.contact.lastName}
-                  onChange={(e) => handleInputChange('contact.lastName', e.target.value)}
+                  onChange={(e) => handleInputChange('contact.lastName', sanitizeName(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
@@ -273,13 +393,82 @@ export default function AdminAddLeadPage() {
                   <Phone className="h-4 w-4" />
                   Phone *
                 </label>
-                <input
-                  type="tel"
+                <PhoneField
                   required
-                  value={formData.contact.phone}
-                  onChange={(e) => handleInputChange('contact.phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  label=""
+                  countryCodeName="contact.phoneCountryCode"
+                  phoneName="contact.phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.contact.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => handleInputChange('contact.phone', sanitizePhone(value))}
                 />
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                <MapPin className="h-4 w-4" />
+                Address
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Street
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.street}
+                    onChange={(e) => handleInputChange('contact.address.street', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.city}
+                    onChange={(e) => handleInputChange('contact.address.city', sanitizeAlphaText(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.state}
+                    onChange={(e) => handleInputChange('contact.address.state', sanitizeAlphaText(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.country}
+                    onChange={(e) => handleInputChange('contact.address.country', sanitizeAlphaText(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ZIP Code
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.zipCode}
+                    onChange={(e) => handleInputChange('contact.address.zipCode', sanitizeZip(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="5 or 9 digits"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -296,112 +485,86 @@ export default function AdminAddLeadPage() {
                   <Building className="h-4 w-4" />
                   Agency *
                 </label>
-                <select
+                <SearchableSelect
                   required
                   value={String(formData.agency || '')}
-                  onChange={(e) => {
-                    const selectedValue = e.target.value
-                    handleInputChange('agency', selectedValue)
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Select an agency</option>
-                  {agencies.map((agency) => {
-                    const agencyId = agency._id ? String(agency._id) : ''
-                    return (
-                      <option key={agencyId} value={agencyId}>
-                        {agency.name}
-                      </option>
-                    )
-                  })}
-                </select>
+                  onChange={(e) => handleInputChange('agency', e.target.value)}
+                  options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
+                  placeholder="Select an agency"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search agency..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Source *
                 </label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.source}
                   onChange={(e) => handleInputChange('source', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="website">Website</option>
-                  <option value="phone">Phone</option>
-                  <option value="email">Email</option>
-                  <option value="walk_in">Walk In</option>
-                  <option value="referral">Referral</option>
-                  <option value="social_media">Social Media</option>
-                  <option value="other">Other</option>
-                </select>
+                  options={dropdowns.leadSources}
+                  placeholder="Select source"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search source..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status *
                 </label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="new">New</option>
-                  <option value="contacted">Contacted</option>
-                  <option value="site_visit">Site Visit</option>
-                  <option value="negotiation">Negotiation</option>
-                  <option value="closed">Closed</option>
-                  <option value="lost">Lost</option>
-                </select>
+                  options={dropdowns.leadStatuses}
+                  placeholder="Select status"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search status..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Priority *
                 </label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.priority}
                   onChange={(e) => handleInputChange('priority', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="Hot">Hot</option>
-                  <option value="Warm">Warm</option>
-                  <option value="Cold">Cold</option>
-                  <option value="Not_interested">Not Interested</option>
-                </select>
+                  options={dropdowns.leadPriorities}
+                  placeholder="Select priority"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search priority..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Property
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.property}
                   onChange={(e) => handleInputChange('property', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Select a property (optional)</option>
-                  {properties.map((property) => (
-                    <option key={property._id} value={property._id}>
-                      {property.title} - {property.location?.city}
-                    </option>
-                  ))}
-                </select>
+                  options={properties.map((p) => ({
+                    value: p._id,
+                    label: `${p.title}${p.location?.city ? ` - ${p.location.city}` : ''}`
+                  }))}
+                  placeholder="Select a property (optional)"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search property..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assign to Agent
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.assignedAgent}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Unassigned</option>
-                  {agents.map((agent) => (
-                    <option key={agent._id || agent.id} value={agent._id || agent.id}>
-                      {agent.firstName} {agent.lastName}
-                    </option>
-                  ))}
-                </select>
+                  options={agents.map((a) => ({ value: a._id || a.id, label: `${a.firstName} ${a.lastName}`.trim() }))}
+                  placeholder="Unassigned"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search agent..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -440,9 +603,10 @@ export default function AdminAddLeadPage() {
                     Budget Min
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={formData.inquiry.budget.min}
-                    onChange={(e) => handleInputChange('inquiry.budget.min', e.target.value)}
+                    onChange={(e) => handleInputChange('inquiry.budget.min', sanitizeDecimal(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
@@ -451,9 +615,10 @@ export default function AdminAddLeadPage() {
                     Budget Max
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={formData.inquiry.budget.max}
-                    onChange={(e) => handleInputChange('inquiry.budget.max', e.target.value)}
+                    onChange={(e) => handleInputChange('inquiry.budget.max', sanitizeDecimal(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
@@ -461,35 +626,122 @@ export default function AdminAddLeadPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Currency
                   </label>
-                  <select
+                  <SearchableSelect
                     value={formData.inquiry.budget.currency}
                     onChange={(e) => handleInputChange('inquiry.budget.currency', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                  </select>
+                    options={(dropdowns.budgetCurrencies || []).map((c) => ({ value: c, label: c }))}
+                    placeholder="Currency"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                    searchPlaceholder="Search currency..."
+                  />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Timeline
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.inquiry.timeline}
                   onChange={(e) => handleInputChange('inquiry.timeline', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Select timeline</option>
-                  <option value="immediate">Immediate</option>
-                  <option value="1_month">1 Month</option>
-                  <option value="3_months">3 Months</option>
-                  <option value="6_months">6 Months</option>
-                  <option value="1_year">1 Year</option>
-                  <option value="flexible">Flexible</option>
-                </select>
+                  options={dropdowns.inquiryTimelines}
+                  placeholder="Select timeline"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search timeline..."
+                />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Preferred Rooms
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inquiry.preferredRooms}
+                    onChange={(e) => handleInputChange('inquiry.preferredRooms', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Enter preferred rooms"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Preferred Size
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inquiry.preferredSize}
+                    onChange={(e) => handleInputChange('inquiry.preferredSize', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Enter preferred size"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Buyer Type
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inquiry.buyerType}
+                    onChange={(e) => handleInputChange('inquiry.buyerType', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Enter buyer type"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Method
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inquiry.paymentMethod}
+                    onChange={(e) => handleInputChange('inquiry.paymentMethod', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Enter payment method"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nationality
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.inquiry.nationality}
+                    onChange={(e) => handleInputChange('inquiry.nationality', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Enter nationality"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    DOB
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.inquiry.dob}
+                    onChange={(e) => handleInputChange('inquiry.dob', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Spoken Languages
+                  </label>
+                  <input
+                    type="text"
+                    value={(formData.inquiry.spokenLanguages || []).join(', ')}
+                    onChange={(e) => {
+                      const next = sanitizeLanguagesInput(e.target.value)
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean)
+                      handleInputChange('inquiry.spokenLanguages', next)
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="e.g. English, Arabic"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Requirements

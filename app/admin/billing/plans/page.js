@@ -5,6 +5,7 @@ import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { api } from '../../../../lib/api'
 import toast from 'react-hot-toast'
 import { Plus, RefreshCw, Save, Trash2, Edit, X, Search, ChevronDown, DollarSign } from 'lucide-react'
+import SearchableSelect from '../../../../components/Common/SearchableSelect'
 
 const emptyForm = {
   plan_name: '',
@@ -32,6 +33,17 @@ export default function AdminBillingPlansPage() {
     price_min: '',
     price_max: ''
   })
+  const sanitizePlanName = (v) => String(v || '').replace(/[^a-zA-Z0-9\s.'-]/g, '')
+  const sanitizeDigits = (v, maxLen) => {
+    const s = String(v ?? '').replace(/\D/g, '')
+    return typeof maxLen === 'number' ? s.slice(0, maxLen) : s
+  }
+  const sanitizeDecimal = (v) => {
+    const s = String(v ?? '').replace(/[^\d.]/g, '')
+    const firstDot = s.indexOf('.')
+    if (firstDot === -1) return s
+    return s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
 
   const title = useMemo(() => (editingPlan ? 'Edit Plan' : 'Add Plan'), [editingPlan])
 
@@ -90,6 +102,22 @@ export default function AdminBillingPlansPage() {
     setSaving(true)
 
     try {
+      if (!form.plan_name || form.plan_name !== sanitizePlanName(form.plan_name)) {
+        toast.error('Plan name must be alphanumeric')
+        setSaving(false)
+        return
+      }
+      if (!form.price || Number.isNaN(Number(form.price)) || Number(form.price) < 0) {
+        toast.error('Enter a valid price')
+        setSaving(false)
+        return
+      }
+      if (!form.validity_days || Number.isNaN(Number(form.validity_days)) || Number(form.validity_days) < 0) {
+        toast.error('Enter valid validity days')
+        setSaving(false)
+        return
+      }
+
       const payload = {
         name: form.plan_name,
         price: Number(form.price),
@@ -290,23 +318,23 @@ export default function AdminBillingPlansPage() {
                       <div>
                         <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Min Price</label>
                         <input
-                          type="number"
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="0"
                           className="form-input text-sm"
                           value={filters.price_min}
-                          onChange={(e) => setFilters(prev => ({ ...prev, price_min: e.target.value }))}
+                          onChange={(e) => setFilters(prev => ({ ...prev, price_min: sanitizeDecimal(e.target.value) }))}
                         />
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Max Price</label>
                         <input
-                          type="number"
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="Any"
                           className="form-input text-sm"
                           value={filters.price_max}
-                          onChange={(e) => setFilters(prev => ({ ...prev, price_max: e.target.value }))}
+                          onChange={(e) => setFilters(prev => ({ ...prev, price_max: sanitizeDecimal(e.target.value) }))}
                         />
                       </div>
                     </div>
@@ -489,53 +517,59 @@ export default function AdminBillingPlansPage() {
                     <input
                       className="form-input"
                       value={form.plan_name}
-                      onChange={(e) => setForm(prev => ({ ...prev, plan_name: e.target.value }))}
+                      onChange={(e) => setForm(prev => ({ ...prev, plan_name: sanitizePlanName(e.target.value) }))}
                       required
                     />
                   </div>
                   <div>
                     <label className="form-label">Price</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       className="form-input"
                       value={form.price}
-                      onChange={(e) => setForm(prev => ({ ...prev, price: e.target.value }))}
-                      min={0}
+                      onChange={(e) => setForm(prev => ({ ...prev, price: sanitizeDecimal(e.target.value) }))}
                       required
                     />
                   </div>
                   <div>
                     <label className="form-label">Billing Cycle</label>
-                    <select
-                      className="form-input"
+                    <SearchableSelect
                       value={form.billing_cycle}
                       onChange={(e) => setForm(prev => ({ ...prev, billing_cycle: e.target.value }))}
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
+                      options={[
+                        { value: 'monthly', label: 'Monthly' },
+                        { value: 'yearly', label: 'Yearly' }
+                      ]}
+                      placeholder="Billing cycle"
+                      buttonClassName="form-input w-full bg-white"
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                   <div>
                     <label className="form-label">Validity Days</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="form-input"
                       value={form.validity_days}
-                      onChange={(e) => setForm(prev => ({ ...prev, validity_days: e.target.value }))}
-                      min={0}
+                      onChange={(e) => setForm(prev => ({ ...prev, validity_days: sanitizeDigits(e.target.value, 5) }))}
                       required
                     />
                   </div>
                   <div>
                     <label className="form-label">Status</label>
-                    <select
-                      className="form-input"
+                    <SearchableSelect
                       value={form.is_active ? 'true' : 'false'}
                       onChange={(e) => setForm(prev => ({ ...prev, is_active: e.target.value === 'true' }))}
-                    >
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
+                      options={[
+                        { value: 'true', label: 'Enabled' },
+                        { value: 'false', label: 'Disabled' }
+                      ]}
+                      placeholder="Status"
+                      buttonClassName="form-input w-full bg-white"
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                 </div>
 

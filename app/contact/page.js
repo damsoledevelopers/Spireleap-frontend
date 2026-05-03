@@ -6,6 +6,8 @@ import Footer from '../../components/Layout/Footer'
 import { Phone, Mail, MapPin, Send, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import PhoneField from '../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../lib/phone'
 
 export default function ContactPage() {
   const [pageContent, setPageContent] = useState(null)
@@ -17,10 +19,20 @@ export default function ContactPage() {
     subject: '',
     message: ''
   })
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     fetchPageContent()
+  }, [])
+
+  useEffect(() => {
+    const parsed = splitE164Phone(formData.phone)
+    setPhoneCountryCode(parsed.countryCode || DEFAULT_COUNTRY_CODE)
+    if (parsed.phone !== formData.phone) {
+      setFormData((prev) => ({ ...prev, phone: parsed.phone || '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchPageContent = async () => {
@@ -52,11 +64,17 @@ export default function ContactPage() {
     setLoading(true)
 
     try {
+      const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+      if (formData.phone && !e164Phone) {
+        toast.error('Enter a valid phone number for the selected country')
+        setLoading(false)
+        return
+      }
       // Save contact message to database
       const response = await api.post('/cms/contact-messages', {
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        phone: e164Phone,
         subject: formData.subject,
         message: formData.message
       })
@@ -301,14 +319,15 @@ export default function ContactPage() {
                       <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                         Phone
                       </label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        placeholder="+1 (555) 123-4567"
+                      <PhoneField
+                        label=""
+                        countryCodeName="phoneCountryCode"
+                        phoneName="phone"
+                        countryCodeValue={phoneCountryCode}
+                        phoneValue={formData.phone}
+                        onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                        onPhoneChange={(value) => setFormData((prev) => ({ ...prev, phone: value }))}
+                        showInlineError={Boolean(formData.phone)}
                       />
                     </div>
                   </div>

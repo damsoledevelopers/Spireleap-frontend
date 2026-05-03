@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Home } from 'lucide-react'
 import toast from 'react-hot-toast'
+import SearchableSelect from '../Common/SearchableSelect'
 
 export default function AmenityManagement() {
   const { checkPermission } = useAuth()
@@ -28,7 +29,7 @@ export default function AmenityManagement() {
   const fetchAmenities = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/cms/amenities')
+      const response = await api.get('/settings/amenities')
       setAmenities(response.data.amenities || [])
     } catch (error) {
       console.error('Error fetching amenities:', error)
@@ -63,10 +64,10 @@ export default function AmenityManagement() {
       }
 
       if (editingAmenity) {
-        await api.put(`/cms/amenities/${editingAmenity._id}`, submitData)
+        await api.put(`/settings/amenities/${editingAmenity._id}`, submitData)
         toast.success('Amenity updated successfully')
       } else {
-        await api.post('/cms/amenities', submitData)
+        await api.post('/settings/amenities', submitData)
         toast.success('Amenity created successfully')
       }
       setShowModal(false)
@@ -97,7 +98,7 @@ export default function AmenityManagement() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this amenity?')) return
     try {
-      await api.delete(`/cms/amenities/${id}`)
+      await api.delete(`/settings/amenities/${id}`)
       toast.success('Amenity deleted successfully')
       fetchAmenities()
     } catch (error) {
@@ -134,7 +135,7 @@ export default function AmenityManagement() {
             />
           </div>
         </div>
-        {checkPermission('cms', 'create') && (
+        {checkPermission('settings', 'create') && (
           <button
             onClick={() => {
               resetForm()
@@ -155,7 +156,8 @@ export default function AmenityManagement() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <div className="max-h-[340px] overflow-y-auto scrollbar-hide">
+            <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
@@ -194,12 +196,12 @@ export default function AmenityManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        {checkPermission('cms', 'edit') && (
+                        {checkPermission('settings', 'edit') && (
                           <button onClick={() => handleEdit(amenity)} className="text-primary-600 hover:text-primary-900">
                             <Edit className="h-5 w-5" />
                           </button>
                         )}
-                        {checkPermission('cms', 'delete') && (
+                        {checkPermission('settings', 'delete') && (
                           <button onClick={() => handleDelete(amenity._id)} className="text-red-600 hover:text-red-900">
                             <Trash2 className="h-5 w-5" />
                           </button>
@@ -211,6 +213,7 @@ export default function AmenityManagement() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -243,17 +246,20 @@ export default function AmenityManagement() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <select
+                  <SearchableSelect
                     value={formData.category || 'other'}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="other">Other</option>
-                    <option value="interior">Interior</option>
-                    <option value="exterior">Exterior</option>
-                    <option value="community">Community</option>
-                    <option value="security">Security</option>
-                  </select>
+                    options={[
+                      { value: 'other', label: 'Other' },
+                      { value: 'interior', label: 'Interior' },
+                      { value: 'exterior', label: 'Exterior' },
+                      { value: 'community', label: 'Community' },
+                      { value: 'security', label: 'Security' }
+                    ]}
+                    placeholder="Category"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                    searchPlaceholder="Search category..."
+                  />
                 </div>
                 <div className="flex items-center">
                   <label className="flex items-center">

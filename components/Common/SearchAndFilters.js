@@ -1,6 +1,7 @@
 'use client'
 
 import { Search } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 export default function SearchAndFilters({ 
   onSearch, 
@@ -47,17 +48,13 @@ export default function SearchAndFilters({
           {filters.map((filter, index) => (
             <div key={index}>
               {filter.type === 'select' ? (
-                <select
+                <SearchableSelect
                   value={filter.value}
                   onChange={(e) => onFilterChange(filter.key, e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  {filter.options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={filter.options}
+                  placeholder={filter.placeholder || 'Select...'}
+                  buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full"
+                />
               ) : filter.type === 'date' ? (
                 <input
                   type="date"

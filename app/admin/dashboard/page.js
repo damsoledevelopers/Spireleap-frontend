@@ -69,6 +69,12 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (user && !authLoading) {
       fetchDashboardData()
+      return
+    }
+
+    if (!authLoading && !user) {
+      // Let the route guard redirect; avoid an infinite local loader.
+      setLoading(false)
     }
   }, [user, authLoading])
 

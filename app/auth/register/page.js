@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -9,6 +9,10 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import { validateConfirmPassword, validateEmail, validateName, validatePassword } from '../../../lib/validation'
+import { scrollToFirstErrorField } from '../../../lib/scrollToError'
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -21,29 +25,56 @@ export default function RegisterPage() {
     agency: '',
     phone: '',
   })
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
   const { register } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    const parsed = splitE164Phone(formData.phone)
+    setPhoneCountryCode(parsed.countryCode || DEFAULT_COUNTRY_CODE)
+    if (parsed.phone !== formData.phone) {
+      setFormData((prev) => ({ ...prev, phone: parsed.phone || '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
 
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match')
-      setLoading(false)
-      return
+    const nextErrors = {}
+    nextErrors.firstName = validateName(formData.firstName, 'First name')
+    nextErrors.lastName = validateName(formData.lastName, 'Last name')
+    nextErrors.email = validateEmail(formData.email, 'Email')
+    nextErrors.password = validatePassword(formData.password)
+    nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
+
+    const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+    if (formData.phone && !e164Phone) {
+      nextErrors.phone = 'Enter a valid phone number for the selected country'
     }
 
-    if (formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+    // remove empty keys
+    Object.keys(nextErrors).forEach((k) => {
+      if (!nextErrors[k]) delete nextErrors[k]
+    })
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) {
+      scrollToFirstErrorField(Object.keys(nextErrors))
       setLoading(false)
       return
     }
 
     try {
-      const message = await register(formData)
+      const submitData = {
+        ...formData,
+        phone: e164Phone
+      }
+      const message = await register(submitData)
       toast.success(message || 'Registration successful!')
     } catch (error) {
       toast.error(error.message || 'Registration failed')
@@ -53,10 +84,18 @@ export default function RegisterPage() {
   }
 
   const handleChange = (e) => {
+    const { name, value } = e.target
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     })
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
+    }
   }
 
   return (
@@ -93,11 +132,14 @@ export default function RegisterPage() {
                     name="firstName"
                     type="text"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="First name"
                     value={formData.firstName}
                     onChange={handleChange}
                   />
+                  {errors.firstName && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">{errors.firstName}</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -108,11 +150,14 @@ export default function RegisterPage() {
                     name="lastName"
                     type="text"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="Last name"
                     value={formData.lastName}
                     onChange={handleChange}
                   />
+                  {errors.lastName && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">{errors.lastName}</p>
+                  )}
                 </div>
               </div>
 
@@ -126,26 +171,42 @@ export default function RegisterPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleChange}
                 />
+                {errors.email && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.email}</p>
+                )}
               </div>
 
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                   Phone Number
                 </label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Enter phone number"
-                  value={formData.phone}
-                  onChange={handleChange}
+                <PhoneField
+                  label=""
+                  countryCodeName="phoneCountryCode"
+                  phoneName="phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => {
+                    setFormData((prev) => ({ ...prev, phone: value }))
+                    if (errors.phone) {
+                      setErrors((prev) => {
+                        const next = { ...prev }
+                        delete next.phone
+                        return next
+                      })
+                    }
+                  }}
+                  showInlineError={Boolean(formData.phone)}
                 />
+                {errors.phone && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.phone}</p>
+                )}
               </div>
 
               <div>
@@ -206,7 +267,7 @@ export default function RegisterPage() {
                     autoComplete="new-password"
                     required
                     minLength={6}
-                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
                     placeholder="Minimum 6 characters"
                     value={formData.password}
                     onChange={handleChange}
@@ -223,23 +284,42 @@ export default function RegisterPage() {
                     )}
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.password}</p>
+                )}
               </div>
 
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                   Confirm Password *
                 </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                />
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    )}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.confirmPassword}</p>
+                )}
               </div>
             </div>
 

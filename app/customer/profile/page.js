@@ -15,10 +15,13 @@ import {
     Globe
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 
 export default function CustomerProfile() {
     const { user, login } = useAuth()
     const [loading, setLoading] = useState(false)
+    const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -35,11 +38,13 @@ export default function CustomerProfile() {
 
     useEffect(() => {
         if (user) {
+            const parsed = splitE164Phone(user.phone || '')
+            setPhoneCountryCode(parsed.countryCode || DEFAULT_COUNTRY_CODE)
             setFormData({
                 firstName: user.firstName || '',
                 lastName: user.lastName || '',
                 email: user.email || '',
-                phone: user.phone || '',
+                phone: parsed.phone || '',
                 address: {
                     street: user.address?.street || '',
                     city: user.address?.city || '',
@@ -53,17 +58,26 @@ export default function CustomerProfile() {
 
     const handleChange = (e) => {
         const { name, value } = e.target
+        const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\\s.'-]/g, '')
         if (name.includes('.')) {
             const [parent, child] = name.split('.')
+            const isAlphaOnlyField = parent === 'address' && ['city', 'state', 'country'].includes(child)
+            const isZipField = parent === 'address' && child === 'zipCode'
+            const nextValue = isAlphaOnlyField
+                ? String(value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                : isZipField
+                    ? String(value || '').replace(/\D/g, '').slice(0, 9)
+                    : value
             setFormData(prev => ({
                 ...prev,
                 [parent]: {
                     ...prev[parent],
-                    [child]: value
+                    [child]: nextValue
                 }
             }))
         } else {
-            setFormData(prev => ({ ...prev, [name]: value }))
+            const nextValue = (name === 'firstName' || name === 'lastName') ? sanitizeName(value) : value
+            setFormData(prev => ({ ...prev, [name]: nextValue }))
         }
     }
 
@@ -71,7 +85,32 @@ export default function CustomerProfile() {
         e.preventDefault()
         try {
             setLoading(true)
-            const res = await api.put(`/users/${user.id}`, formData)
+            if (!formData.firstName || formData.firstName !== String(formData.firstName).replace(/[^a-zA-Z\s.'-]/g, '')) {
+                toast.error('First name must contain only alphabets')
+                return
+            }
+            if (!formData.lastName || formData.lastName !== String(formData.lastName).replace(/[^a-zA-Z\s.'-]/g, '')) {
+                toast.error('Last name must contain only alphabets')
+                return
+            }
+            if (formData.address?.zipCode && ![5, 9].includes(formData.address.zipCode.length)) {
+                toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+                return
+            }
+            if (formData.phone && formData.phone.length !== 10) {
+                toast.error('Phone number must be exactly 10 digits')
+                return
+            }
+            const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+            if (formData.phone && !e164Phone) {
+                toast.error('Enter a valid phone number for the selected country')
+                return
+            }
+            const submitData = {
+                ...formData,
+                phone: e164Phone
+            }
+            const res = await api.put(`/users/${user.id}`, submitData)
             toast.success('Profile updated successfully')
             // Update local storage/context user data if needed
         } catch (error) {
@@ -145,13 +184,26 @@ export default function CustomerProfile() {
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phone Number</label>
                                 <div className="relative">
                                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                    <input
-                                        type="tel"
-                                        name="phone"
-                                        value={formData.phone}
-                                        onChange={handleChange}
-                                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
-                                    />
+                                    <div className="pl-10">
+                                        <PhoneField
+                                            label=""
+                                            countryCodeName="phoneCountryCode"
+                                            phoneName="phone"
+                                            countryCodeValue={phoneCountryCode}
+                                            phoneValue={formData.phone}
+                                            onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                                            onPhoneChange={(value) => {
+                                                const digits = String(value || '').replace(/\D/g, '').slice(0, 10)
+                                                setFormData(prev => ({ ...prev, phone: digits }))
+                                            }}
+                                            showInlineError={Boolean(formData.phone)}
+                                        />
+                                        {formData.phone && formData.phone.length !== 10 && (
+                                            <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                                Phone number must be exactly 10 digits
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -204,6 +256,23 @@ export default function CustomerProfile() {
                                         type="text"
                                         name="address.zipCode"
                                         value={formData.address.zipCode}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
+                                    />
+                                    {formData.address.zipCode && ![5, 9].includes(formData.address.zipCode.length) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                            Zip code must be 5 digits or 9 digits (ZIP+4)
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Country</label>
+                                    <input
+                                        type="text"
+                                        name="address.country"
+                                        value={formData.address.country}
                                         onChange={handleChange}
                                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                                     />

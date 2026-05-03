@@ -25,10 +25,15 @@ import {
   Heart
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useCurrency } from '../../contexts/CurrencyContext'
+import { formatMoney } from '../../lib/money'  
 
 export default function HomePage() {
   const router = useRouter()
+  const { selectedCurrency } = useCurrency()
   const [featuredProperties, setFeaturedProperties] = useState([])
+  const [homeProperties, setHomeProperties] = useState([])
+  const [homePropertiesLoading, setHomePropertiesLoading] = useState(true)
   const [testimonials, setTestimonials] = useState([])
   const [blogs, setBlogs] = useState([])
   const [banners, setBanners] = useState([])
@@ -70,6 +75,65 @@ export default function HomePage() {
     fullyFurnished: ''
   })
   const [watchlist, setWatchlist] = useState([])
+
+  const normalize = (v) => (v ?? '').toString().trim().toLowerCase()
+
+  const hasAnyAppliedFilter = Object.entries(searchFilters).some(([_, v]) => !!normalize(v))
+
+  const displayedProperties = (() => {
+    const source = homeProperties
+    if (!hasAnyAppliedFilter) return source.slice(0, 6)
+
+    const minBalconies = Number(searchFilters.balconies || 0)
+    const minBedrooms = Number(searchFilters.livingRoom || 0)
+
+    const wantsUnfurnished = searchFilters.unfurnished === '1'
+    const wantsSemi = searchFilters.semiFurnished === '1'
+    const wantsFully = searchFilters.fullyFurnished === '1'
+    const wantsAnyFurnishing = wantsUnfurnished || wantsSemi || wantsFully
+
+    return source
+      .filter((p) => {
+        const type = normalize(p.propertyType || p.type)
+        const listingType = normalize(p.listingType)
+        const city = normalize(p.location?.city)
+
+        const specs = p.specifications || {}
+        const balconies = Number(specs.balconies || 0)
+        const bedrooms = Number(specs.bedrooms || specs.livingRoom || 0)
+
+        const matchesType =
+          !normalize(searchFilters.propertyType) ||
+          type === normalize(searchFilters.propertyType)
+
+        const matchesListing =
+          !normalize(searchFilters.listingType) ||
+          listingType === normalize(searchFilters.listingType)
+
+        const matchesCity =
+          !normalize(searchFilters.city) ||
+          city.includes(normalize(searchFilters.city))
+
+        const matchesBalconies = !minBalconies || balconies >= minBalconies
+        const matchesBedrooms = !minBedrooms || bedrooms >= minBedrooms
+
+        const matchesFurnishing =
+          !wantsAnyFurnishing ||
+          (wantsUnfurnished && Number(specs.unfurnished || 0) > 0) ||
+          (wantsSemi && Number(specs.semiFurnished || 0) > 0) ||
+          (wantsFully && Number(specs.fullyFurnished || 0) > 0)
+
+        return (
+          matchesType &&
+          matchesListing &&
+          matchesCity &&
+          matchesBalconies &&
+          matchesBedrooms &&
+          matchesFurnishing
+        )
+      })
+      .slice(0, 6)
+  })()
 
   // Get stats from CMS or use defaults
   const getStats = () => {
@@ -164,6 +228,7 @@ export default function HomePage() {
   useEffect(() => {
     fetchHomePageContent()
     fetchFeaturedProperties()
+    fetchHomeProperties()
     fetchTestimonials()
     fetchBlogs()
     fetchBanners()
@@ -188,6 +253,17 @@ export default function HomePage() {
       fetchWatchlist()
     }
   }, [user])
+
+  // Live filtering: when user changes filters, jump to results
+  useEffect(() => {
+    if (!hasAnyAppliedFilter) return
+    if (typeof window === 'undefined') return
+    const timer = setTimeout(() => {
+      const el = document.getElementById('home-properties-results')
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.balconies, searchFilters.livingRoom, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
 
   const fetchWatchlist = async () => {
     try {
@@ -452,6 +528,21 @@ export default function HomePage() {
     }
   }
 
+  const fetchHomeProperties = async () => {
+    try {
+      setHomePropertiesLoading(true)
+      const params = new URLSearchParams({ status: 'active', page: '1', limit: '12' })
+      const response = await api.get(`/properties?${params}`)
+      setHomeProperties(response.data.properties || [])
+    } catch (error) {
+      console.error('Error fetching home properties:', error)
+      toast.error('Failed to load properties')
+      setHomeProperties([])
+    } finally {
+      setHomePropertiesLoading(false)
+    }
+  }
+
   const fetchTestimonials = async () => {
     try {
       const response = await api.get('/cms/testimonials?featured=true&limit=3')
@@ -502,7 +593,7 @@ export default function HomePage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await api.get('/cms/categories?limit=8')
+      const response = await api.get('/settings/categories?limit=8')
       setCategories(response.data.categories || [])
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -511,7 +602,7 @@ export default function HomePage() {
 
   const fetchAmenities = async () => {
     try {
-      const response = await api.get('/cms/amenities?limit=12')
+      const response = await api.get('/settings/amenities?limit=12')
       setAmenities(response.data.amenities || [])
     } catch (error) {
       console.error('Error fetching amenities:', error)
@@ -552,29 +643,13 @@ export default function HomePage() {
   }
 
   const handleSearch = () => {
-    const params = new URLSearchParams(
-      Object.fromEntries(Object.entries(searchFilters).filter(([_, v]) => v))
-    )
-
-    // Always enforce active properties on public search
-    params.set('status', 'active')
-
-    // Redirect to properties page with filters applied
-    if (params.toString()) {
-      router.push(`/properties?${params}`)
-    } else {
-      router.push('/properties')
+    if (typeof window !== 'undefined') {
+      const el = document.getElementById('home-properties-results')
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 
-  const formatPrice = (price) => {
-    if (!price) return 'Price on request'
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0
-    }).format(price)
-  }
+  const formatPrice = (price) => formatMoney(price, selectedCurrency, { minimumFractionDigits: 0 })
 
   const getPrimaryImage = (images) => {
     const primary = images?.find(img => img.isPrimary)
@@ -799,7 +874,7 @@ export default function HomePage() {
             {/* Hero Search Form - Clean two-row layout */}
             <form
               className="max-w-5xl mx-auto animate-fade-in-up animation-delay-800"
-              onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
+              onSubmit={(e) => { e.preventDefault(); }}
             >
               <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/80 p-6 md:p-8 transition-shadow hover:shadow-2xl">
                 {/* Row 1: Property Type | Listing Type | Location */}
@@ -813,15 +888,18 @@ export default function HomePage() {
                       <select
                         value={searchFilters.propertyType}
                         onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
-                        className="w-full px-4 py-3.5 pl-10 pr-9 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 bg-white transition-all appearance-none cursor-pointer"
+                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.propertyType
+                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
+                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
+                          }`}
                         style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                       >
-                        <option value="">All Property Types</option>
-                        <option value="apartment">Apartment</option>
-                        <option value="house">House</option>
-                        <option value="villa">Villa</option>
-                        <option value="condo">Condo</option>
-                        <option value="commercial">Commercial</option>
+                        <option value="" className="text-gray-500">All Property Types</option>
+                        <option value="apartment" className="text-gray-900">Apartment</option>
+                        <option value="house" className="text-gray-900">House</option>
+                        <option value="villa" className="text-gray-900">Villa</option>
+                        <option value="condo" className="text-gray-900">Condo</option>
+                        <option value="commercial" className="text-gray-900">Commercial</option>
                       </select>
                       <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                       <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -836,7 +914,10 @@ export default function HomePage() {
                       <select
                         value={searchFilters.listingType}
                         onChange={(e) => setSearchFilters(prev => ({ ...prev, listingType: e.target.value }))}
-                        className="w-full px-4 py-3.5 pl-10 pr-9 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 bg-white transition-all appearance-none cursor-pointer"
+                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.listingType
+                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
+                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
+                          }`}
                         style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                       >
                         <option value="">Sale/Rent</option>
@@ -874,7 +955,10 @@ export default function HomePage() {
                     <select
                       value={searchFilters.balconies}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, balconies: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base text-gray-900 bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.balconies
+                        ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
+                        : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
+                        }`}
                       style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
                       <option value="">Any</option>
@@ -888,7 +972,10 @@ export default function HomePage() {
                     <select
                       value={searchFilters.livingRoom}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, livingRoom: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base text-gray-900 bg-white focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.livingRoom
+                        ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
+                        : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
+                        }`}
                       style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
                       <option value="">Any</option>
@@ -924,15 +1011,7 @@ export default function HomePage() {
                       Fully
                     </label>
                   </div>
-                  <div className="flex justify-end md:justify-end">
-                    <button
-                      type="submit"
-                      className="w-full md:w-auto bg-primary-600 hover:bg-primary-700 text-white px-6 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-[0.98]"
-                    >
-                      <Search className="h-5 w-5" />
-                      Search
-                    </button>
-                  </div>
+                  {/* No Search button: filtering is live */}
                 </div>
               </div>
             </form>
@@ -981,6 +1060,149 @@ export default function HomePage() {
           </div>
         </section>
       )}
+
+      {/* Home Properties Results (Searchable) */}
+      <section id="home-properties-results" className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
+            <div>
+              <div className="inline-flex items-center px-4 py-2 mb-4 bg-primary-50 text-primary-700 border border-primary-100 rounded-full text-sm font-bold tracking-wide">
+                Browse & Search
+              </div>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900">
+                {hasAnyAppliedFilter ? 'Search Results' : 'Latest Properties'}
+              </h2>
+              <p className="text-gray-600 mt-2 max-w-2xl">
+                {hasAnyAppliedFilter
+                  ? `Showing ${displayedProperties.length} matching properties`
+                  : 'Discover active listings handpicked for you'}
+              </p>
+            </div>
+
+            {hasAnyAppliedFilter && (
+              <button
+                onClick={() => setSearchFilters({
+                  propertyType: '',
+                  listingType: '',
+                  city: '',
+                  minPrice: '',
+                  maxPrice: '',
+                  balconies: '',
+                  livingRoom: '',
+                  unfurnished: '',
+                  semiFurnished: '',
+                  fullyFurnished: ''
+                })}
+                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-bold transition-colors"
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+
+          {homePropertiesLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="relative">
+                <div className="animate-spin rounded-full h-14 w-14 border-4 border-primary-200 border-t-primary-600"></div>
+              </div>
+            </div>
+          ) : displayedProperties.length === 0 ? (
+            <div className="text-center py-16 border border-gray-100 rounded-3xl bg-gray-50">
+              <div className="inline-block p-5 bg-white rounded-full mb-4 border border-gray-100 shadow-sm">
+                <Search className="h-10 w-10 text-gray-400" />
+              </div>
+              <p className="text-lg font-bold text-gray-700">No properties found</p>
+              <p className="text-sm text-gray-500 mt-2">Try changing your filters and search again.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
+              {displayedProperties.map((property) => (
+                <Link
+                  key={property._id}
+                  href={`/properties/${property.slug || property._id}`}
+                  className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col"
+                >
+                  <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                    <img
+                      src={getPrimaryImage(property.images)}
+                      alt={property.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                    <div className="absolute top-4 left-4 flex gap-2">
+                      <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold tracking-widest uppercase bg-white/95 text-gray-900 border border-white/60">
+                        {property.listingType === 'sale' ? 'For Sale' : 'For Rent'}
+                      </span>
+                      {property.featured && (
+                        <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold tracking-widest uppercase bg-primary-600/95 text-white border border-primary-500/50">
+                          Featured
+                        </span>
+                      )}
+                    </div>
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="text-white text-lg font-extrabold truncate drop-shadow">
+                        {property.title}
+                      </div>
+                      <div className="flex items-center text-white/90 text-xs mt-1">
+                        <MapPin className="h-3.5 w-3.5 mr-1.5 text-primary-300" />
+                        <span className="truncate">{property.location?.city}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex flex-col flex-grow">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="text-2xl font-black text-primary-700">
+                        {property.listingType === 'sale' && property.price?.sale
+                          ? formatPrice(property.price.sale)
+                          : property.listingType === 'rent' && property.price?.rent?.amount
+                            ? `${formatPrice(property.price.rent.amount)}`
+                            : 'On Request'}
+                        {property.listingType === 'rent' && (
+                          <span className="text-sm text-gray-400 font-medium ml-1">/mo</span>
+                        )}
+                      </div>
+                      <ArrowRight className="h-5 w-5 text-gray-300 group-hover:text-primary-600 transition-colors mt-1" />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 mt-auto">
+                      <div className="flex items-center justify-center gap-2 bg-gray-50 rounded-2xl py-3 border border-gray-100">
+                        <Bed className="h-4 w-4 text-primary-600" />
+                        <span className="text-xs font-bold text-gray-700">
+                          {property.specifications?.bedrooms || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 bg-gray-50 rounded-2xl py-3 border border-gray-100">
+                        <Bath className="h-4 w-4 text-primary-600" />
+                        <span className="text-xs font-bold text-gray-700">
+                          {property.specifications?.bathrooms || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 bg-gray-50 rounded-2xl py-3 border border-gray-100">
+                        <Square className="h-4 w-4 text-primary-600" />
+                        <span className="text-[10px] font-bold text-gray-700 truncate">
+                          {property.specifications?.area?.value || 0} {property.specifications?.area?.unit || 'sqft'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="text-center mt-14">
+            <Link
+              href="/properties"
+              className="inline-flex items-center justify-center px-8 py-4 bg-gray-900 hover:bg-black text-white rounded-2xl font-bold shadow-xl transition-colors"
+            >
+              View all properties
+              <ArrowRight className="ml-3 h-5 w-5" />
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* Stats Section - Enhanced Modern Design */}
       <section

@@ -8,6 +8,11 @@ import { api } from '@/lib/api'
 import { ArrowLeft, Save, User, Mail, Phone, MapPin, Shield, Eye, EyeOff, Key } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import PhoneField from '@/components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '@/lib/phone'
+import SearchableSelect from '@/components/Common/SearchableSelect'
+import { scrollToFirstErrorField } from '@/lib/scrollToError'
+import { validateEmail, validateName, validatePassword } from '@/lib/validation'
 
 export default function AdminUserEditPage() {
   const params = useParams()
@@ -17,6 +22,8 @@ export default function AdminUserEditPage() {
   const [saving, setSaving] = useState(false)
   const [agencies, setAgencies] = useState([])
   const [showPassword, setShowPassword] = useState(false)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+  const [errors, setErrors] = useState({})
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -35,6 +42,13 @@ export default function AdminUserEditPage() {
     }
   })
 
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
+
   useEffect(() => {
     fetchUser()
     if (currentUser?.role === 'super_admin') {
@@ -47,11 +61,12 @@ export default function AdminUserEditPage() {
       setLoading(true)
       const response = await api.get(`/users/${params.id}`)
       const user = response.data
+      const parsedPhone = splitE164Phone(user.phone || '')
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        phone: user.phone || '',
+        phone: parsedPhone.phone || '',
         role: user.role || '',
         agency: user.agency ? (typeof user.agency === 'object' ? user.agency._id : user.agency) : '',
         isActive: user.isActive !== undefined ? user.isActive : true,
@@ -63,6 +78,7 @@ export default function AdminUserEditPage() {
           zipCode: ''
         }
       })
+      setPhoneCountryCode(parsedPhone.countryCode || DEFAULT_COUNTRY_CODE)
     } catch (error) {
       console.error('Error fetching user:', error)
       toast.error('Failed to load user details')
@@ -94,6 +110,13 @@ export default function AdminUserEditPage() {
     } else {
       setFormData(prev => ({ ...prev, [field]: value }))
     }
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -101,8 +124,33 @@ export default function AdminUserEditPage() {
     setSaving(true)
 
     try {
+      const nextErrors = {}
+      nextErrors.firstName = validateName(formData.firstName, 'First name')
+      nextErrors.lastName = validateName(formData.lastName, 'Last name')
+      nextErrors.email = validateEmail(formData.email, 'Email')
+      if (!isValidZip(formData.address?.zipCode)) {
+        nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      }
+      const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+      if (formData.phone && !e164Phone) {
+        nextErrors.phone = 'Enter a valid phone number for the selected country'
+      }
+      if (currentUser?.role === 'super_admin' && formData.password && formData.password.trim() !== '') {
+        nextErrors.password = validatePassword(formData.password)
+      }
+      Object.keys(nextErrors).forEach((k) => {
+        if (!nextErrors[k]) delete nextErrors[k]
+      })
+      setErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        scrollToFirstErrorField(Object.keys(nextErrors))
+        setSaving(false)
+        return
+      }
+
       const updateData = {
         ...formData,
+        phone: e164Phone || formData.phone,
         agency: formData.agency || undefined,
         address: Object.values(formData.address).some(v => v) ? formData.address : undefined
       }
@@ -184,11 +232,15 @@ export default function AdminUserEditPage() {
                 </label>
                 <input
                   type="text"
+                  name="firstName"
                   required
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`}
                 />
+                {errors.firstName && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.firstName}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -196,11 +248,15 @@ export default function AdminUserEditPage() {
                 </label>
                 <input
                   type="text"
+                  name="lastName"
                   required
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`}
                 />
+                {errors.lastName && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.lastName}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
@@ -209,23 +265,34 @@ export default function AdminUserEditPage() {
                 </label>
                 <input
                   type="email"
+                  name="email"
                   required
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
                 />
+                {errors.email && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <Phone className="h-4 w-4" />
                   Phone
                 </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                <PhoneField
+                  label=""
+                  countryCodeName="phoneCountryCode"
+                  phoneName="phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => handleInputChange('phone', value)}
+                  showInlineError={Boolean(formData.phone)}
                 />
+                {errors.phone && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">{errors.phone}</p>
+                )}
               </div>
               {currentUser?.role === 'super_admin' && (
                 <div>
@@ -236,9 +303,10 @@ export default function AdminUserEditPage() {
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="password"
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-10"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-10 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
                       minLength={6}
                       placeholder="Enter new password"
                     />
@@ -250,20 +318,26 @@ export default function AdminUserEditPage() {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
+                  {errors.password && (
+                    <p className="mt-1 text-xs font-semibold text-red-600">{errors.password}</p>
+                  )}
                 </div>
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.isActive ? 'true' : 'false'}
                   onChange={(e) => handleInputChange('isActive', e.target.value === 'true')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
+                  options={[
+                    { value: 'true', label: 'Active' },
+                    { value: 'false', label: 'Inactive' }
+                  ]}
+                  placeholder="Status"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  searchPlaceholder="Search..."
+                />
               </div>
             </div>
           </div>
@@ -325,10 +399,16 @@ export default function AdminUserEditPage() {
                 </label>
                 <input
                   type="text"
+                  name="address.zipCode"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors['address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                 />
+                {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || errors['address.zipCode'] ? (
+                  <p className="mt-1 text-xs font-semibold text-red-600">
+                    {errors['address.zipCode'] || 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

@@ -42,7 +42,7 @@ const navigation = [
       { name: 'Agencies', href: '/admin/agencies', icon: Building, module: 'agencies' },
       { name: 'Agents', href: '/admin/agents', icon: UserCircle, module: 'agents' },
       { name: 'Staff', href: '/admin/staff', icon: Briefcase, module: 'staff' },
-      { name: 'Users', href: '/admin/users', icon: UserCheck, module: 'users' },
+      { name: 'clients', href: '/admin/users', icon: UserCheck, module: 'users' },
     ]
   },
   { name: 'Properties', href: '/admin/properties', icon: Package, module: 'properties' },

@@ -21,6 +21,12 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import CategoryManagement from '../../../components/CMS/CategoryManagement'
+import AmenityManagement from '../../../components/CMS/AmenityManagement'
+import CurrencyManagement from '../../../components/CMS/CurrencyManagement'
+import LocationManagement from '../../../components/CMS/LocationManagement'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { getDropdownOptions } from '../../../lib/dropdownsApi'
 
 export default function AdminSettings() {
   return <SettingsPageContent />
@@ -44,6 +50,13 @@ export function SettingsPageContent() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({})
+  const [dropdowns, setDropdowns] = useState({
+    currencies: [],
+    timezones: [],
+    languages: [],
+    logLevels: [],
+    backupFrequencies: []
+  })
 
   const togglePasswordVisibility = (fieldName) => {
     setVisiblePasswords(prev => ({
@@ -96,6 +109,14 @@ export function SettingsPageContent() {
   const fetchSettings = async () => {
     try {
       setLoading(true)
+      const dropdownsRes = await getDropdownOptions()
+      setDropdowns({
+        currencies: dropdownsRes.currencies || [],
+        timezones: dropdownsRes.timezones || [],
+        languages: dropdownsRes.languages || [],
+        logLevels: dropdownsRes.logLevels || [],
+        backupFrequencies: dropdownsRes.backupFrequencies || []
+      })
       // Fetch settings from API
       const response = await api.get('/settings')
       const apiSettings = response.data.settings || {}
@@ -205,9 +226,9 @@ export function SettingsPageContent() {
       fields: [
         { name: 'siteName', label: 'Site Name', type: 'text' },
         { name: 'siteDescription', label: 'Site Description', type: 'textarea' },
-        { name: 'defaultCurrency', label: 'Default Currency', type: 'select', options: ['AED', 'USD', 'INR'] },
-        { name: 'timezone', label: 'Timezone', type: 'select', options: ['UTC', 'EST', 'PST', 'GMT'] },
-        { name: 'language', label: 'Language', type: 'select', options: ['en', 'es', 'fr', 'de'] }
+        { name: 'defaultCurrency', label: 'Default Currency', type: 'select', options: dropdowns.currencies },
+        { name: 'timezone', label: 'Timezone', type: 'select', options: dropdowns.timezones },
+        { name: 'language', label: 'Language', type: 'select', options: dropdowns.languages }
       ]
     },
     {
@@ -244,8 +265,8 @@ export function SettingsPageContent() {
       fields: [
         { name: 'maintenanceMode', label: 'Maintenance Mode', type: 'checkbox' },
         { name: 'debugMode', label: 'Debug Mode', type: 'checkbox' },
-        { name: 'logLevel', label: 'Log Level', type: 'select', options: ['debug', 'info', 'warn', 'error'] },
-        { name: 'backupFrequency', label: 'Backup Frequency', type: 'select', options: ['hourly', 'daily', 'weekly', 'monthly'] }
+        { name: 'logLevel', label: 'Log Level', type: 'select', options: dropdowns.logLevels },
+        { name: 'backupFrequency', label: 'Backup Frequency', type: 'select', options: dropdowns.backupFrequencies }
       ]
     },
     {
@@ -405,17 +426,14 @@ export function SettingsPageContent() {
                         />
                       )}
                       {field.type === 'select' && (
-                        <select
-                          className="form-input"
+                        <SearchableSelect
                           value={settings[section.id][field.name]}
                           onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
-                        >
-                          {field.options.map(option => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                          options={(field.options || []).map((o) => ({ value: o, label: String(o) }))}
+                          placeholder="Select..."
+                          buttonClassName="form-input w-full"
+                          searchPlaceholder="Search..."
+                        />
                       )}
                       {field.type === 'checkbox' && (
                         <div className="flex items-center">
@@ -436,6 +454,48 @@ export function SettingsPageContent() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Amenities & Categories (Settings Module) */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-medium text-gray-900">Property Metadata</h3>
+            <p className="text-sm text-gray-500">Manage categories and amenities used across the site</p>
+          </div>
+          <div className="card-body space-y-8">
+            <div>
+              <h4 className="text-base font-semibold text-gray-900 mb-3">Categories</h4>
+              <CategoryManagement />
+            </div>
+            <div>
+              <h4 className="text-base font-semibold text-gray-900 mb-3">Amenities</h4>
+              <AmenityManagement />
+            </div>
+          </div>
+        </div>
+
+        {/* Currency (Settings Module) */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-medium text-gray-900">Currency</h3>
+            <p className="text-sm text-gray-500">Manage supported currencies and INR conversion rates</p>
+          </div>
+          <div className="card-body">
+            <CurrencyManagement />
+          </div>
+        </div>
+
+        {/* Locations (Settings Module) */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-medium text-gray-900">Locations</h3>
+            <p className="text-sm text-gray-500">
+              Manage country / state / city entries used in property filters and centralized dropdowns
+            </p>
+          </div>
+          <div className="card-body">
+            <LocationManagement />
+          </div>
         </div>
 
         {/* System Information */}

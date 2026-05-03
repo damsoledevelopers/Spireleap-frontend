@@ -1,5 +1,7 @@
 'use client'
 
+import SearchableSelect from './SearchableSelect'
+
 export default function FormField({
   label,
   name,
@@ -39,22 +41,17 @@ export default function FormField({
           className={baseInputClass}
         />
       ) : type === 'select' ? (
-        <select
+        <SearchableSelect
           id={name}
           name={name}
           value={value}
           onChange={onChange}
           required={required}
           disabled={disabled}
-          className={baseInputClass}
-        >
-          {placeholder && <option value="">{placeholder}</option>}
-          {options.map((option) => (
-            <option key={option.value || option} value={option.value || option}>
-              {option.label || option}
-            </option>
-          ))}
-        </select>
+          placeholder={placeholder || 'Select...'}
+          options={options}
+          buttonClassName={baseInputClass}
+        />
       ) : type === 'checkbox' ? (
         <div className="flex items-center">
           <input

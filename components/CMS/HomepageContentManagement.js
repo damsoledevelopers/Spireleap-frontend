@@ -6,6 +6,21 @@ import { api } from '../../lib/api'
 import { Save, Home, ChevronDown, ChevronUp, Palette } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+const MAX_HERO_WORDS = 4
+const countWords = (s) => {
+  const t = String(s || '').trim()
+  if (!t) return 0
+  return t.split(/\s+/).filter(Boolean).length
+}
+
+const clampWords = (s, maxWords = MAX_HERO_WORDS) => {
+  const raw = String(s ?? '')
+  const words = raw.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return raw
+  if (words.length <= maxWords) return raw
+  return words.slice(0, maxWords).join(' ')
+}
+
 export default function HomepageContentManagement() {
   const { checkPermission } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -119,6 +134,18 @@ export default function HomepageContentManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // Word count validation for Hero Title/Subtitle
+    const heroTitleWords = countWords(formData.heroTitle)
+    if (heroTitleWords > MAX_HERO_WORDS) {
+      toast.error(`Hero Title cannot exceed ${MAX_HERO_WORDS} words`)
+      return
+    }
+    const heroSubtitleWords = countWords(formData.heroSubtitle)
+    if (heroSubtitleWords > MAX_HERO_WORDS) {
+      toast.error(`Hero Subtitle cannot exceed ${MAX_HERO_WORDS} words`)
+      return
+    }
 
     // Word count validation for Hero Description
     const heroDescWords = formData.heroDescription.trim() ? formData.heroDescription.trim().split(/\s+/).length : 0
@@ -236,12 +263,27 @@ export default function HomepageContentManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hero Title</label>
                 <input
-                  type="text"
-                  value={formData.heroTitle}
-                  onChange={(e) => setFormData({ ...formData, heroTitle: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Find Your Dream Property Today"
-                />
+  type="text"
+  value={formData.heroTitle}
+  onChange={(e) => {
+    setFormData({ ...formData, heroTitle: e.target.value })
+  }}
+  onBlur={() => {
+    if (countWords(formData.heroTitle) > MAX_HERO_WORDS) {
+      setFormData((prev) => ({ ...prev, heroTitle: clampWords(prev.heroTitle, MAX_HERO_WORDS) }))
+    }
+  }}
+  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
+    countWords(formData.heroTitle) > MAX_HERO_WORDS ? 'border-red-500 focus:ring-red-200' : 'border-gray-300'
+  }`}
+  placeholder="Find Your Dream Property Today"
+/>
+                <p className={`mt-1 text-xs font-semibold ${countWords(formData.heroTitle) > MAX_HERO_WORDS ? 'text-red-500' : 'text-gray-500'}`}>
+                  {countWords(formData.heroTitle)}/{MAX_HERO_WORDS} words
+                </p>
+                {countWords(formData.heroTitle) > MAX_HERO_WORDS && (
+                  <p className="text-red-500 text-xs mt-1">Hero Title cannot exceed {MAX_HERO_WORDS} words.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hero Subtitle</label>
@@ -249,9 +291,22 @@ export default function HomepageContentManagement() {
                   type="text"
                   value={formData.heroSubtitle}
                   onChange={(e) => setFormData({ ...formData, heroSubtitle: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  onBlur={() => {
+                    if (countWords(formData.heroSubtitle) > MAX_HERO_WORDS) {
+                      setFormData((prev) => ({ ...prev, heroSubtitle: clampWords(prev.heroSubtitle, MAX_HERO_WORDS) }))
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 ${
+                    countWords(formData.heroSubtitle) > MAX_HERO_WORDS ? 'border-red-500 focus:ring-red-200' : 'border-gray-300'
+                  }`}
                   placeholder="Property Today"
                 />
+                <p className={`mt-1 text-xs font-semibold ${countWords(formData.heroSubtitle) > MAX_HERO_WORDS ? 'text-red-500' : 'text-gray-500'}`}>
+                  {countWords(formData.heroSubtitle)}/{MAX_HERO_WORDS} words
+                </p>
+                {countWords(formData.heroSubtitle) > MAX_HERO_WORDS && (
+                  <p className="text-red-500 text-xs mt-1">Hero Subtitle cannot exceed {MAX_HERO_WORDS} words.</p>
+                )}
               </div>
               <div>
                 <div className="flex justify-between items-center mb-1">

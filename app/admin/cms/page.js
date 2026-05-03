@@ -25,8 +25,6 @@ import toast from 'react-hot-toast'
 import BlogManagement from '../../../components/CMS/BlogManagement'
 import PageManagement from '../../../components/CMS/PageManagement'
 import BannerManagement from '../../../components/CMS/BannerManagement'
-import CategoryManagement from '../../../components/CMS/CategoryManagement'
-import AmenityManagement from '../../../components/CMS/AmenityManagement'
 import TestimonialManagement from '../../../components/CMS/TestimonialManagement'
 import HomepageContentManagement from '../../../components/CMS/HomepageContentManagement'
 import AboutUsManagement from '../../../components/CMS/AboutUsManagement'
@@ -40,8 +38,6 @@ const tabs = [
   { id: 'blogs', name: 'Blogs', icon: FileText },
   { id: 'pages', name: 'Pages', icon: FileText },
   { id: 'banners', name: 'Banners', icon: Image },
-  { id: 'categories', name: 'Categories', icon: Tag },
-  { id: 'amenities', name: 'Amenities', icon: Home },
   { id: 'testimonials', name: 'Testimonials', icon: Star },
   { id: 'about', name: 'About Us', icon: Users },
   { id: 'contact', name: 'Contact Us', icon: Phone },
@@ -105,8 +101,6 @@ export function CMSManagementPageContent() {
           {activeTab === 'blogs' && <BlogManagement />}
           {activeTab === 'pages' && <PageManagement />}
           {activeTab === 'banners' && <BannerManagement />}
-          {activeTab === 'categories' && <CategoryManagement />}
-          {activeTab === 'amenities' && <AmenityManagement />}
           {activeTab === 'testimonials' && <TestimonialManagement />}
           {activeTab === 'about' && <AboutUsManagement />}
           {activeTab === 'contact' && <ContactUsManagement />}

@@ -8,6 +8,7 @@ import { api } from '../../../lib/api'
 import { Users, Plus, Edit, Trash2, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Briefcase, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 
 export function StaffPageContent() {
   const { user, checkPermission } = useAuth()
@@ -272,31 +273,33 @@ export function StaffPageContent() {
             <p className="mt-1 text-sm text-gray-500">Manage all staff members</p>
           </div>
           <div className="flex items-center gap-3">
-            <select
+            <SearchableSelect
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium"
-            >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <select
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              placeholder="All Status"
+              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
+              searchPlaceholder="Search status..."
+            />
+            <SearchableSelect
               value={departmentFilter}
-              onChange={(e) => {
-                setDepartmentFilter(e.target.value)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[150px]"
-            >
-              <option value="">All Departments</option>
-              <option value="accounts">Accounts</option>
-              <option value="hr">HR</option>
-              <option value="support">Support</option>
-              <option value="marketing">Marketing</option>
-              <option value="other">Other</option>
-            </select>
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Departments' },
+                { value: 'accounts', label: 'Accounts' },
+                { value: 'hr', label: 'HR' },
+                { value: 'support', label: 'Support' },
+                { value: 'marketing', label: 'Marketing' },
+                { value: 'other', label: 'Other' }
+              ]}
+              placeholder="All Departments"
+              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[180px] bg-white"
+              searchPlaceholder="Search department..."
+            />
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input

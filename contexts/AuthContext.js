@@ -3,24 +3,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '../lib/api'
+import { getToken, setToken, removeToken } from '../lib/tokenStorage'
 
 const AuthContext = createContext(undefined)
-
-// Helper functions for localStorage (browser-specific, persists across sessions)
-const getToken = () => {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('token')
-}
-
-const setToken = (token) => {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('token', token)
-}
-
-const removeToken = () => {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('token')
-}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -95,9 +80,9 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const login = async (email, password) => {
+  const login = async (email, password, { rememberMe = false } = {}) => {
     try {
-      const response = await api.post('/auth/login', { email, password })
+      const response = await api.post('/auth/login', { email, password, rememberMe })
       const { token, user: userData } = response.data
 
       if (!userData || !userData.role) {
@@ -105,8 +90,8 @@ export function AuthProvider({ children }) {
         throw new Error('Invalid login response')
       }
 
-      // Store token in localStorage (persists across browser sessions)
-      setToken(token)
+      // Default: sessionStorage (clears on browser close). Optional: localStorage via rememberMe.
+      setToken(token, { rememberMe })
 
       // Fetch fresh user data from /auth/me to ensure we have latest data including agency and effective permissions
       try {
@@ -183,8 +168,8 @@ export function AuthProvider({ children }) {
       const response = await api.post('/auth/register', cleanedData)
       const { token, user: newUser, message } = response.data
 
-      // Store token in localStorage (persists across browser sessions)
-      setToken(token)
+      // Registration should behave like normal login: session-only by default.
+      setToken(token, { rememberMe: false })
       setUser(newUser)
 
       // Determine redirect path

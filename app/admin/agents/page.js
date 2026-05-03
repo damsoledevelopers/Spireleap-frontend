@@ -8,6 +8,7 @@ import { api } from '../../../lib/api'
 import { UserCircle, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 
 export default function AgentsPage() {
   const { user, loading: authLoading, checkPermission } = useAuth()
@@ -306,33 +307,31 @@ export default function AgentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <select
+            <SearchableSelect
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium"
-            >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              placeholder="All Status"
+              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
+              searchPlaceholder="Search status..."
+            />
             {/* Agency Filter - Only for Super Admin */}
             {isSuperAdmin && (
-              <select
+              <SearchableSelect
                 value={agencyFilter}
-                onChange={(e) => {
-                  setAgencyFilter(e.target.value)
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[150px]"
-              >
-                <option value="">All Agencies</option>
-                {agencies.map((agency) => (
-                  <option key={agency._id} value={agency._id}>
-                    {agency.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => setAgencyFilter(e.target.value)}
+                options={[
+                  { value: '', label: 'All Agencies' },
+                  ...agencies.map((a) => ({ value: a._id, label: a.name }))
+                ]}
+                placeholder="All Agencies"
+                buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[180px] bg-white"
+                searchPlaceholder="Search agency..."
+              />
             )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

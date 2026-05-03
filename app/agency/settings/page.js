@@ -6,12 +6,15 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
 import { Settings, Save, Building, Mail, Phone, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 
 export default function AgencySettingsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [agency, setAgency] = useState(null)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -56,21 +59,25 @@ export default function AgencySettingsPage() {
       const response = await api.get(`/agencies/${agencyId}`)
       const agencyData = response.data.agency
       setAgency(agencyData)
+      const parsedPhone = splitE164Phone(agencyData?.contact?.phone || '')
+      setPhoneCountryCode(parsedPhone.countryCode || DEFAULT_COUNTRY_CODE)
       setFormData({
         name: agencyData.name || '',
         description: agencyData.description || '',
-        contact: agencyData.contact || {
-          email: '',
-          phone: '',
-          website: '',
-          address: {
-            street: '',
-            city: '',
-            state: '',
-            country: '',
-            zipCode: ''
-          }
-        },
+        contact: agencyData.contact
+          ? { ...agencyData.contact, phone: parsedPhone.phone || '' }
+          : {
+              email: '',
+              phone: '',
+              website: '',
+              address: {
+                street: '',
+                city: '',
+                state: '',
+                country: '',
+                zipCode: ''
+              }
+            },
         settings: agencyData.settings || {
           currency: 'USD',
           timezone: 'UTC',
@@ -121,7 +128,14 @@ export default function AgencySettingsPage() {
       const agencyId = typeof user.agency === 'object' && user.agency._id 
         ? user.agency._id 
         : user.agency
-      const response = await api.put(`/agencies/${agencyId}`, formData)
+      const submitData = {
+        ...formData,
+        contact: {
+          ...formData.contact,
+          phone: buildE164Phone(phoneCountryCode, formData.contact.phone)
+        }
+      }
+      const response = await api.put(`/agencies/${agencyId}`, submitData)
       toast.success('Agency settings updated successfully!')
       
       // Update the agency state with the response
@@ -230,12 +244,15 @@ export default function AgencySettingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <input
-                  type="tel"
+                <PhoneField
                   required
-                  value={formData.contact.phone}
-                  onChange={(e) => handleInputChange('contact.phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  label=""
+                  countryCodeName="contact.phoneCountryCode"
+                  phoneName="contact.phone"
+                  countryCodeValue={phoneCountryCode}
+                  phoneValue={formData.contact.phone}
+                  onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                  onPhoneChange={(value) => handleInputChange('contact.phone', value)}
                 />
               </div>
               <div className="md:col-span-2">

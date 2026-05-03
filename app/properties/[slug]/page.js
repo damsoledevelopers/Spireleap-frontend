@@ -4,12 +4,163 @@ import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
-import { MapPin, Bed, Bath, Square, Car, Calendar, Phone, Mail, Share2, Heart, Loader2, Clock, Tag, Building } from 'lucide-react'
+import { MapPin, Bed, Bath, Square, Car, Phone, Mail, Heart, Loader2, Clock, Tag, Building, ChevronLeft, ChevronRight, ExternalLink, QrCode } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../contexts/AuthContext'
+import PhoneField from '../../../components/Common/PhoneField'
+import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
+
+const BACKEND_ORIGIN = (() => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  return apiUrl.replace(/\/api\/?$/, '')
+})()
+
+const resolveImageUrl = (raw) => {
+  if (!raw) return ''
+
+  const candidate =
+    typeof raw === 'string'
+      ? raw
+      : (raw.url || raw.path || raw.secure_url || raw.imageUrl || raw.location || '')
+
+  if (!candidate) return ''
+
+  // Already absolute
+  if (/^https?:\/\//i.test(candidate)) return candidate
+
+  // Relative from backend
+  if (candidate.startsWith('/')) return `${BACKEND_ORIGIN}${candidate}`
+
+  // Likely "uploads/..." or filename
+  if (candidate.startsWith('uploads/')) return `${BACKEND_ORIGIN}/${candidate}`
+
+  return `${BACKEND_ORIGIN}/uploads/${candidate}`
+}
+
+/** Turn regulatory QR payload (e.g. listing URL) into a safe href for links. */
+function regulatoryLinkHref(raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  const t = raw.trim()
+  if (!t) return ''
+  if (/^https?:\/\//i.test(t)) return t
+  if (/^mailto:/i.test(t)) return t
+  if (t.startsWith('/')) {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${t}`
+    }
+    const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+    return appOrigin ? `${appOrigin}${t}` : t
+  }
+  return `https://${t}`
+}
+
+function formatListedAt(value) {
+  if (!value) return ''
+  try {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return String(value)
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  } catch {
+    return String(value)
+  }
+}
+
+function PropertyImageGallery({ title, images }) {
+  const safeImages = Array.isArray(images) ? images.filter(Boolean) : []
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [safeImages.length])
+
+  if (safeImages.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="relative h-72 sm:h-96 bg-gray-200">
+          <img
+            src="/placeholder-property.jpg"
+            alt={title || 'Property image'}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const prev = () => setActiveIndex((i) => (i - 1 + safeImages.length) % safeImages.length)
+  const next = () => setActiveIndex((i) => (i + 1) % safeImages.length)
+
+  const active = safeImages[activeIndex]
+  const activeUrl = resolveImageUrl(active)
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="relative h-72 sm:h-[520px] bg-gray-200">
+        <img
+          src={activeUrl || '/placeholder-property.jpg'}
+          alt={title || `Property image ${activeIndex + 1}`}
+          className="w-full h-full object-cover"
+        />
+
+        {safeImages.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow"
+              aria-label="Previous image"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow"
+              aria-label="Next image"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/55 text-white text-xs px-2 py-1 rounded-full">
+              {activeIndex + 1} / {safeImages.length}
+            </div>
+          </>
+        )}
+      </div>
+
+      {safeImages.length > 1 && (
+        <div className="p-4">
+          <div className="flex gap-2 overflow-x-auto">
+            {safeImages.map((img, idx) => {
+              const url = resolveImageUrl(img)
+              const isActive = idx === activeIndex
+              return (
+                <button
+                  key={url || idx}
+                  type="button"
+                  onClick={() => setActiveIndex(idx)}
+                  className={`relative h-16 w-24 flex-shrink-0 rounded overflow-hidden border ${isActive ? 'border-primary-600' : 'border-gray-200 hover:border-gray-300'}`}
+                  aria-label={`View image ${idx + 1}`}
+                >
+                  <img
+                    src={url || '/placeholder-property.jpg'}
+                    alt={`${title || 'Property'} thumbnail ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function PropertyDetailPage() {
   const params = useParams()
@@ -17,8 +168,11 @@ export default function PropertyDetailPage() {
   const searchParams = useSearchParams()
   const from = searchParams.get('from')
   const { user } = useAuth()
+  const { selectedCurrency, ratesByCode } = useCurrency()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [similarProperties, setSimilarProperties] = useState([])
+  const [similarLoading, setSimilarLoading] = useState(false)
   const [inquiryForm, setInquiryForm] = useState({
     firstName: '',
     lastName: '',
@@ -26,6 +180,7 @@ export default function PropertyDetailPage() {
     phone: '',
     message: ''
   })
+  const [inquiryPhoneCountryCode, setInquiryPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [submitting, setSubmitting] = useState(false)
   const [inWishlist, setInWishlist] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
@@ -87,12 +242,58 @@ export default function PropertyDetailPage() {
     }
   }
 
+  const getPrimaryImageUrl = (images) => {
+    const primary = images?.find((img) => img?.isPrimary)
+    return (
+      resolveImageUrl(primary) ||
+      resolveImageUrl(images?.[0]) ||
+      '/placeholder-property.jpg'
+    )
+  }
+
+  const fetchSimilarProperties = async (currentProperty) => {
+    if (!currentProperty?._id) return
+
+    try {
+      setSimilarLoading(true)
+
+      const qs = new URLSearchParams()
+      qs.set('status', 'active')
+      qs.set('limit', '12')
+
+      if (currentProperty.propertyType) qs.set('propertyType', currentProperty.propertyType)
+      if (currentProperty.listingType && currentProperty.listingType !== 'both') qs.set('listingType', currentProperty.listingType)
+      if (currentProperty.location?.city) qs.set('city', currentProperty.location.city)
+
+      // "area" supports matching address/neighborhood/landmark in backend
+      const areaHint = currentProperty.location?.neighborhood || currentProperty.location?.landmark || ''
+      if (areaHint) qs.set('area', areaHint)
+
+      const response = await api.get(`/properties?${qs.toString()}`)
+      const list = Array.isArray(response.data?.properties) ? response.data.properties : []
+      const filtered = list.filter((p) => String(p?._id) !== String(currentProperty._id))
+
+      setSimilarProperties(filtered.slice(0, 6))
+    } catch (error) {
+      console.error('Error fetching similar properties:', error)
+      setSimilarProperties([])
+    } finally {
+      setSimilarLoading(false)
+    }
+  }
+
   // Initialize wishlist state from property data
   useEffect(() => {
     if (property) {
       setInWishlist(!!property.inWishlist)
     }
   }, [property])
+
+  useEffect(() => {
+    if (!property?._id) return
+    fetchSimilarProperties(property)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [property?._id])
 
   const toggleWishlist = async () => {
     if (!user) {
@@ -129,6 +330,12 @@ export default function PropertyDetailPage() {
     e.preventDefault()
     setSubmitting(true)
     try {
+      const e164Phone = inquiryForm.phone ? buildE164Phone(inquiryPhoneCountryCode, inquiryForm.phone) : ''
+      if (inquiryForm.phone && !e164Phone) {
+        toast.error('Enter a valid phone number for the selected country')
+        setSubmitting(false)
+        return
+      }
       // Prepare contact data with proper structure
       const leadData = {
         property: property._id,
@@ -136,7 +343,7 @@ export default function PropertyDetailPage() {
           firstName: inquiryForm.firstName || '',
           lastName: inquiryForm.lastName || '',
           email: inquiryForm.email || '',
-          phone: inquiryForm.phone || ''
+          phone: e164Phone
         },
         inquiry: {
           message: inquiryForm.message || ''
@@ -156,6 +363,7 @@ export default function PropertyDetailPage() {
         phone: '',
         message: ''
       })
+      setInquiryPhoneCountryCode(DEFAULT_COUNTRY_CODE)
     } catch (error) {
       console.error('Error submitting inquiry:', error)
       console.error('Error response:', error.response?.data)
@@ -174,6 +382,15 @@ export default function PropertyDetailPage() {
       setSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    const parsed = splitE164Phone(inquiryForm.phone)
+    setInquiryPhoneCountryCode(parsed.countryCode || DEFAULT_COUNTRY_CODE)
+    if (parsed.phone !== inquiryForm.phone) {
+      setInquiryForm((prev) => ({ ...prev, phone: parsed.phone || '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleBookProperty = async (e) => {
     e.preventDefault()
@@ -198,14 +415,7 @@ export default function PropertyDetailPage() {
     }
   }
 
-  const formatPrice = (price) => {
-    if (!price) return 'Price on request'
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0
-    }).format(price)
-  }
+  const formatPrice = (price) => formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
 
   if (loading) {
     return (
@@ -228,8 +438,21 @@ export default function PropertyDetailPage() {
     )
   }
 
-  const primaryImage = property.images?.find(img => img.isPrimary) || property.images?.[0]
-  const otherImages = property.images?.filter(img => img.url !== primaryImage?.url) || []
+  const orderedImages = Array.isArray(property.images) ? property.images : []
+  const reg = property.regulatoryInformation || {}
+  const qrHref = regulatoryLinkHref(reg.qrValue)
+  const qrImageSrc = resolveImageUrl(reg.qrImage)
+  const hasRegulatoryDetails = !!(
+    reg.reference ||
+    reg.listedAt ||
+    reg.brokerLicense ||
+    reg.agencyName ||
+    reg.zoneName ||
+    reg.agentLicense ||
+    reg.dldPermitNumber ||
+    qrImageSrc ||
+    reg.qrValue
+  )
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -252,33 +475,15 @@ export default function PropertyDetailPage() {
           }
         </Link>
 
+        {/* First row: images only (matches requested layout) */}
+        <div className="mb-8">
+          <PropertyImageGallery title={property.title} images={orderedImages} />
+        </div>
+
+        {/* Second row: all other sections below images */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Images */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="relative h-96 bg-gray-200">
-                <img
-                  src={primaryImage?.url || '/placeholder-property.jpg'}
-                  alt={property.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              {otherImages.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 p-4">
-                  {otherImages.slice(0, 4).map((img, idx) => (
-                    <div key={idx} className="relative h-20 bg-gray-200 rounded overflow-hidden">
-                      <img
-                        src={img.url}
-                        alt={`${property.title} ${idx + 2}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Property Details */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-start justify-between mb-4">
@@ -399,6 +604,99 @@ export default function PropertyDetailPage() {
                 <p className="text-gray-700 whitespace-pre-line">{property.description}</p>
               </div>
 
+              {/* Property details (regulatory + QR → opens qrValue URL) */}
+              {hasRegulatoryDetails && (
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Building className="h-5 w-5 text-primary-600" />
+                    Property details
+                  </h2>
+                  <div
+                    className={`grid gap-6 ${
+                      qrImageSrc || qrHref ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
+                    }`}
+                  >
+                    <div className="space-y-3 text-sm">
+                      {reg.reference && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Reference</span>
+                          <span className="font-medium text-gray-900">{reg.reference}</span>
+                        </div>
+                      )}
+                      {reg.listedAt && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Listed at</span>
+                          <span className="font-medium text-gray-900">{formatListedAt(reg.listedAt)}</span>
+                        </div>
+                      )}
+                      {reg.brokerLicense && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Broker license</span>
+                          <span className="font-medium text-gray-900">{reg.brokerLicense}</span>
+                        </div>
+                      )}
+                      {reg.agencyName && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Agency name</span>
+                          <span className="font-medium text-gray-900">{reg.agencyName}</span>
+                        </div>
+                      )}
+                      {reg.zoneName && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Zone</span>
+                          <span className="font-medium text-gray-900">{reg.zoneName}</span>
+                        </div>
+                      )}
+                      {reg.agentLicense && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">Agent license</span>
+                          <span className="font-medium text-gray-900">{reg.agentLicense}</span>
+                        </div>
+                      )}
+                      {reg.dldPermitNumber && (
+                        <div className="flex flex-col sm:flex-row sm:gap-3 sm:items-baseline">
+                          <span className="text-gray-500 shrink-0 sm:w-36">DLD permit</span>
+                          <span className="font-medium text-gray-900">{reg.dldPermitNumber}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {(qrImageSrc || qrHref) && (
+                      <div className="flex flex-col items-center md:items-stretch gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100 max-w-sm md:max-w-none">
+                        <p className="text-sm font-medium text-gray-700 flex items-center justify-center md:justify-start gap-2">
+                          <QrCode className="h-4 w-4 text-primary-600" />
+                          Listing QR
+                        </p>
+                        {qrImageSrc && (
+                          <div className="flex justify-center md:justify-start">
+                            <img
+                              src={qrImageSrc}
+                              alt="Uploaded listing QR code"
+                              className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+                            />
+                          </div>
+                        )}
+                        {qrHref ? (
+                          <a
+                            href={qrHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 shadow-sm transition"
+                          >
+                            <ExternalLink className="h-4 w-4 shrink-0" />
+                            Open link from QR
+                          </a>
+                        ) : qrImageSrc ? (
+                          <p className="text-xs text-gray-500 text-center md:text-left">
+                            Add a QR value (URL) for this listing to enable the button below the image.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Amenities */}
               {property.amenities && property.amenities.length > 0 && (
                 <div className="mt-6">
@@ -418,16 +716,27 @@ export default function PropertyDetailPage() {
               {property.location?.coordinates && (
                 <div className="mt-6">
                   <h2 className="text-xl font-semibold mb-3">Location</h2>
-                  <div className="h-64 bg-gray-200 rounded-lg overflow-hidden">
-                    <iframe
-                      width="100%"
-                      height="100%"
-                      frameBorder="0"
-                      style={{ border: 0 }}
-                      src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&q=${property.location.coordinates.lat},${property.location.coordinates.lng}`}
-                      allowFullScreen
-                    />
-                  </div>
+                  {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+                    <div className="h-64 bg-gray-200 rounded-lg overflow-hidden">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                        style={{ border: 0 }}
+                        src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${property.location.coordinates.lat},${property.location.coordinates.lng}`}
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-64 bg-gray-100 border border-dashed border-gray-300 rounded-lg flex items-center justify-center p-6">
+                      <div className="text-center text-gray-600">
+                        <p className="font-medium">Google Maps API key not configured</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Set <code className="bg-gray-200 px-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in <code className="bg-gray-200 px-1 rounded">.env.local</code>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -561,13 +870,15 @@ export default function PropertyDetailPage() {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
-                <input
-                  type="tel"
-                  placeholder="Phone"
-                  value={inquiryForm.phone}
-                  onChange={(e) => setInquiryForm(prev => ({ ...prev, phone: e.target.value }))}
+                <PhoneField
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  label=""
+                  countryCodeName="inquiryPhoneCountryCode"
+                  phoneName="phone"
+                  countryCodeValue={inquiryPhoneCountryCode}
+                  phoneValue={inquiryForm.phone}
+                  onCountryCodeChange={(value) => setInquiryPhoneCountryCode(value)}
+                  onPhoneChange={(value) => setInquiryForm(prev => ({ ...prev, phone: value }))}
                 />
                 <textarea
                   placeholder="Message"
@@ -644,6 +955,83 @@ export default function PropertyDetailPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Similar Properties */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Similar Properties</h2>
+            <Link href="/properties" className="text-sm font-medium text-primary-600 hover:underline">
+              View all
+            </Link>
+          </div>
+
+          {similarLoading ? (
+            <div className="bg-white rounded-lg shadow-sm p-8 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+            </div>
+          ) : similarProperties.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-6 text-gray-600">
+              No similar properties found.
+            </div>
+          ) : (
+            <div className="flex gap-5 overflow-x-auto pb-3">
+              {similarProperties.map((p) => (
+                <Link
+                  key={p._id}
+                  href={`/properties/${p.slug || p._id}`}
+                  className="min-w-[260px] max-w-[260px] bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                >
+                  <div className="relative h-40 bg-gray-200">
+                    <img
+                      src={getPrimaryImageUrl(p.images)}
+                      alt={p.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute top-2 left-2 bg-white/95 text-gray-900 px-2 py-1 rounded text-xs font-semibold">
+                      {p.listingType === 'sale' ? 'For Sale' : p.listingType === 'rent' ? 'For Rent' : 'Sale/Rent'}
+                    </span>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-primary-600 font-bold text-lg mb-1">
+                      {p.listingType === 'sale' && p.price?.sale
+                        ? formatPrice(p.price.sale)
+                        : p.listingType === 'rent' && p.price?.rent?.amount
+                          ? `${formatPrice(p.price.rent.amount)}/${p.price.rent.period || 'month'}`
+                          : 'Price on request'}
+                    </p>
+                    <p className="text-sm text-gray-900 font-semibold line-clamp-1">{p.title}</p>
+                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">
+                      {p.location?.city}{p.location?.state ? `, ${p.location.state}` : ''}
+                    </p>
+
+                    <div className="flex items-center gap-3 text-gray-600 text-xs mt-3">
+                      {p.specifications?.bedrooms !== undefined && (
+                        <div className="flex items-center gap-1">
+                          <Bed className="h-4 w-4" />
+                          <span>{p.specifications.bedrooms}</span>
+                        </div>
+                      )}
+                      {p.specifications?.bathrooms !== undefined && (
+                        <div className="flex items-center gap-1">
+                          <Bath className="h-4 w-4" />
+                          <span>{p.specifications.bathrooms}</span>
+                        </div>
+                      )}
+                      {p.specifications?.area?.value !== undefined && (
+                        <div className="flex items-center gap-1">
+                          <Square className="h-4 w-4" />
+                          <span>
+                            {p.specifications.area.value} {p.specifications.area.unit}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <Footer />

@@ -3,20 +3,24 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAuth } from '../../contexts/AuthContext'
-import { Menu, X, User, ChevronDown, Search, Heart } from 'lucide-react'
+import { Menu, X, User, ChevronDown, Search, Heart, Coins } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
+import { useCurrency } from '../../contexts/CurrencyContext'
 
 export default function Header() {
   const { user } = useAuth()
+  const { selectedCurrency, setSelectedCurrency, currencies } = useCurrency()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [buyDropdownOpen, setBuyDropdownOpen] = useState(false)
   const [rentDropdownOpen, setRentDropdownOpen] = useState(false)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false)
+  const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false)
   const pathname = usePathname()
   const buyRef = useRef(null)
   const rentRef = useRef(null)
   const servicesRef = useRef(null)
+  const currencyRef = useRef(null)
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -30,15 +34,25 @@ export default function Header() {
       if (servicesRef.current && !servicesRef.current.contains(event.target)) {
         setServicesDropdownOpen(false)
       }
+      if (currencyRef.current && !currencyRef.current.contains(event.target)) {
+        setCurrencyDropdownOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Hide header for logged-in admin/agent/staff users on public pages
-  // They should use DashboardLayout instead
-  if (user && ['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role)) {
+  // Hide header only on dashboard areas (DashboardLayout is used there).
+  // Keep it visible on public pages (home/properties/etc), even if an admin is logged in.
+  if (
+    user &&
+    ['super_admin', 'agency_admin', 'agent', 'staff'].includes(user.role) &&
+    (pathname?.startsWith('/admin') ||
+      pathname?.startsWith('/agency') ||
+      pathname?.startsWith('/agent') ||
+      pathname?.startsWith('/staff'))
+  ) {
     return null
   }
 
@@ -90,7 +104,7 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
-            <Link
+            {/* <Link
               href="/home"
               className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/home'
                   ? 'text-primary-600 bg-primary-50'
@@ -98,7 +112,7 @@ export default function Header() {
                 }`}
             >
               Home
-            </Link>
+            </Link> */}
 
             {/* Buy Dropdown */}
             <div className="relative" ref={buyRef}>
@@ -206,7 +220,7 @@ export default function Header() {
               )}
             </div>
 
-            <Link
+            {/* <Link
               href="/about"
               className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/about'
                   ? 'text-primary-600 bg-primary-50'
@@ -214,18 +228,20 @@ export default function Header() {
                 }`}
             >
               About
-            </Link>
+            </Link> */}
 
-            <Link
-              href="/billing"
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/billing'
+            {user && (
+              <Link
+                href="/billing"
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/billing'
                   ? 'text-primary-600 bg-primary-50'
                   : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                }`}
-            >
-              Billing
-            </Link>
-            <Link
+                  }`}
+              >
+                Billing
+              </Link>
+            )}
+            {/* <Link
               href="/blog"
               className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/blog'
                   ? 'text-primary-600 bg-primary-50'
@@ -233,8 +249,8 @@ export default function Header() {
                 }`}
             >
               Blog
-            </Link>
-            <Link
+            </Link> */}
+            {/* <Link
               href="/contact"
               className={`px-4 py-2 rounded-lg font-medium transition-all ${pathname === '/contact'
                   ? 'text-primary-600 bg-primary-50'
@@ -242,7 +258,7 @@ export default function Header() {
                 }`}
             >
               Contact
-            </Link>
+            </Link> */}
 
             {/* Login and Register Buttons */}
             {!user && (
@@ -277,6 +293,45 @@ export default function Header() {
                 <span className="font-medium">{user.firstName}</span>
               </Link>
             )}
+
+            {/* Currency Dropdown (Right side) */}
+            <div className="relative ml-3" ref={currencyRef}>
+              <button
+                onClick={() => {
+                  setCurrencyDropdownOpen(!currencyDropdownOpen)
+                  setBuyDropdownOpen(false)
+                  setRentDropdownOpen(false)
+                  setServicesDropdownOpen(false)
+                }}
+                className={`px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 border ${
+                  currencyDropdownOpen ? 'text-primary-700 bg-primary-50 border-primary-200' : 'text-gray-700 border-gray-200 hover:text-primary-600 hover:bg-gray-50'
+                }`}
+                title="Select currency"
+              >
+                <Coins className="h-4 w-4 text-primary-600" />
+                <span className="text-sm font-semibold">{selectedCurrency}</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${currencyDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {currencyDropdownOpen && (
+                <div className="absolute top-full right-0 mt-2 w-44 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 max-h-72 overflow-y-auto">
+                  {(currencies?.length ? currencies : [selectedCurrency]).map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCurrency(code)
+                        setCurrencyDropdownOpen(false)
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        code === selectedCurrency ? 'bg-primary-50 text-primary-700 font-semibold' : 'text-gray-700 hover:bg-primary-50 hover:text-primary-600'
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Mobile menu button */}
@@ -292,6 +347,22 @@ export default function Header() {
         {mobileMenuOpen && (
           <div className="lg:hidden pb-6 border-t border-gray-100">
             <div className="flex flex-col space-y-1 pt-4">
+              {/* Mobile Currency Select */}
+              <div className="px-4 py-2">
+                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Currency</label>
+                <select
+                  value={selectedCurrency}
+                  onChange={(e) => setSelectedCurrency(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white text-sm"
+                >
+                  {(currencies?.length ? currencies : [selectedCurrency]).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <Link
                 href="/home"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
@@ -327,34 +398,36 @@ export default function Header() {
               >
                 Services
               </Link>
-              <Link
+              {/* <Link
                 href="/about"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 About
-              </Link>
-              <Link
-                href="/billing"
-                className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Billing
-              </Link>
-              <Link
+              </Link> */}
+              {user && (
+                <Link
+                  href="/billing"
+                  className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Billing
+                </Link>
+              )}
+              {/* <Link
                 href="/blog"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Blog
-              </Link>
-              <Link
+              </Link> */}
+              {/* <Link
                 href="/contact"
                 className="px-4 py-3 text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Contact
-              </Link>
+              </Link> */}
               {user ? (
                 <Link
                   href="/admin/dashboard"

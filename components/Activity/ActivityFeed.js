@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Activity, Filter, Search, Download, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
+import SearchableSelect from '../Common/SearchableSelect'
 
 const formatTimeAgo = (date) => {
   const now = new Date()
@@ -91,19 +92,22 @@ export default function ActivityFeed({ entityType, entityId, limit = 50 }) {
             <Filter className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700">Filters:</span>
           </div>
-          <select
+          <SearchableSelect
             value={filter.type}
             onChange={(e) => setFilter({ ...filter, type: e.target.value })}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">All Types</option>
-            <option value="lead_created">Lead Created</option>
-            <option value="lead_updated">Lead Updated</option>
-            <option value="property_created">Property Created</option>
-            <option value="property_updated">Property Updated</option>
-            <option value="payment_received">Payment Received</option>
-            <option value="task_completed">Task Completed</option>
-          </select>
+            options={[
+              { value: '', label: 'All Types' },
+              { value: 'lead_created', label: 'Lead Created' },
+              { value: 'lead_updated', label: 'Lead Updated' },
+              { value: 'property_created', label: 'Property Created' },
+              { value: 'property_updated', label: 'Property Updated' },
+              { value: 'payment_received', label: 'Payment Received' },
+              { value: 'task_completed', label: 'Task Completed' }
+            ]}
+            placeholder="All Types"
+            buttonClassName="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
+            searchPlaceholder="Search type..."
+          />
           <input
             type="date"
             value={filter.date}

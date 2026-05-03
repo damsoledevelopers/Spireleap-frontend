@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 
 export default function AdminPropertiesPage() {
   const { user, loading: authLoading, checkPermission } = useAuth()
@@ -568,48 +569,56 @@ export default function AdminPropertiesPage() {
         {/* Filter Buttons */}
         <div className="flex flex-wrap gap-3 items-center">
           {/* Status Filter - Direct Dropdown */}
-          <select
+          <SearchableSelect
             value={filters.status}
             onChange={(e) => {
               setFilters(prev => ({ ...prev, status: e.target.value }))
               setPagination(prev => ({ ...prev, current: 1 }))
             }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="sold">Sold</option>
-            <option value="rented">Rented</option>
-            <option value="inactive">Inactive</option>
-            <option value="booked">Booked</option>
-            <option value="draft">Draft</option>
-          </select>
+            options={[
+              { value: '', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'sold', label: 'Sold' },
+              { value: 'rented', label: 'Rented' },
+              { value: 'inactive', label: 'Inactive' },
+              { value: 'booked', label: 'Booked' },
+              { value: 'draft', label: 'Draft' }
+            ]}
+            placeholder="All Status"
+            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[160px] ${
+              filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+            }`}
+            searchPlaceholder="Search status..."
+          />
 
           {/* Property Type Filter - Direct Dropdown */}
-          <select
+          <SearchableSelect
             value={filters.propertyType}
             onChange={(e) => {
               setFilters(prev => ({ ...prev, propertyType: e.target.value }))
               setPagination(prev => ({ ...prev, current: 1 }))
             }}
-            className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
-          >
-            <option value="">All Types</option>
-            <option value="apartment">Apartment</option>
-            <option value="house">House</option>
-            <option value="villa">Villa</option>
-            <option value="condo">Condo</option>
-            <option value="townhouse">Townhouse</option>
-            <option value="land">Land</option>
-            <option value="commercial">Commercial</option>
-            <option value="office">Office</option>
-            <option value="retail">Retail</option>
-            <option value="warehouse">Warehouse</option>
-            <option value="other">Other</option>
-          </select>
+            options={[
+              { value: '', label: 'All Types' },
+              { value: 'apartment', label: 'Apartment' },
+              { value: 'house', label: 'House' },
+              { value: 'villa', label: 'Villa' },
+              { value: 'condo', label: 'Condo' },
+              { value: 'townhouse', label: 'Townhouse' },
+              { value: 'land', label: 'Land' },
+              { value: 'commercial', label: 'Commercial' },
+              { value: 'office', label: 'Office' },
+              { value: 'retail', label: 'Retail' },
+              { value: 'warehouse', label: 'Warehouse' },
+              { value: 'other', label: 'Other' }
+            ]}
+            placeholder="All Types"
+            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[170px] ${
+              filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+            }`}
+            searchPlaceholder="Search type..."
+          />
 
           {/* Price Filter Button */}
           <div className="relative">
@@ -721,40 +730,46 @@ export default function AdminPropertiesPage() {
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms</label>
-                      <select
+                      <SearchableSelect
                         value={filters.bedrooms}
                         onChange={(e) => {
                           setFilters(prev => ({ ...prev, bedrooms: e.target.value }))
                           setPagination(prev => ({ ...prev, current: 1 }))
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      >
-                        <option value="">Any</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                      </select>
+                        options={[
+                          { value: '', label: 'Any' },
+                          { value: '1', label: '1' },
+                          { value: '2', label: '2' },
+                          { value: '3', label: '3' },
+                          { value: '4', label: '4' },
+                          { value: '5', label: '5' },
+                          { value: '6', label: '6' }
+                        ]}
+                        placeholder="Any"
+                        buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+                        searchPlaceholder="Search..."
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
-                      <select
+                      <SearchableSelect
                         value={filters.bathrooms}
                         onChange={(e) => {
                           setFilters(prev => ({ ...prev, bathrooms: e.target.value }))
                           setPagination(prev => ({ ...prev, current: 1 }))
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      >
-                        <option value="">Any</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                      </select>
+                        options={[
+                          { value: '', label: 'Any' },
+                          { value: '1', label: '1' },
+                          { value: '2', label: '2' },
+                          { value: '3', label: '3' },
+                          { value: '4', label: '4' },
+                          { value: '5', label: '5' }
+                        ]}
+                        placeholder="Any"
+                        buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+                        searchPlaceholder="Search..."
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Min Area (sqft)</label>
@@ -1074,22 +1089,22 @@ export default function AdminPropertiesPage() {
 
           {/* Agency Filter - Only for Super Admin */}
           {isSuperAdmin && (
-            <select
+            <SearchableSelect
               value={filters.agency}
               onChange={(e) => {
                 setFilters(prev => ({ ...prev, agency: e.target.value }))
                 setPagination(prev => ({ ...prev, current: 1 }))
               }}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium ${filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-                }`}
-            >
-              <option value="">All Agencies</option>
-              {agencies.map((agency) => (
-                <option key={agency._id} value={agency._id}>
-                  {agency.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'All Agencies' },
+                ...agencies.map((a) => ({ value: a._id, label: a.name }))
+              ]}
+              placeholder="All Agencies"
+              buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[180px] ${
+                filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              }`}
+              searchPlaceholder="Search agency..."
+            />
           )}
 
           {/* Date Range Filter Button */}
@@ -1346,26 +1361,29 @@ export default function AdminPropertiesPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             {canEditProperty ? (
-                              <select
+                              <SearchableSelect
                                 value={property.status || 'inactive'}
                                 onChange={(e) => handleQuickStatusUpdate(propertyId, e.target.value)}
-                                className={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
+                                options={[
+                                  { value: 'active', label: 'Active' },
+                                  { value: 'pending', label: 'Pending' },
+                                  { value: 'booked', label: 'Booked' },
+                                  { value: 'sold', label: 'Sold' },
+                                  { value: 'rented', label: 'Rented' },
+                                  { value: 'inactive', label: 'Inactive' },
+                                  { value: 'unavailable', label: 'Unavailable' },
+                                  { value: 'draft', label: 'Draft' }
+                                ]}
+                                placeholder="Status"
+                                buttonClassName={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[140px]
                                   ${property.status === 'active' ? 'text-green-800 bg-green-50' :
                                     property.status === 'booked' ? 'text-orange-800 bg-orange-50' :
                                       property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
                                         property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
                                           property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
                                             'text-gray-800 bg-gray-50'}`}
-                              >
-                                <option value="active">Active</option>
-                                <option value="pending">Pending</option>
-                                <option value="booked">Booked</option>
-                                <option value="sold">Sold</option>
-                                <option value="rented">Rented</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="unavailable">Unavailable</option>
-                                <option value="draft">Draft</option>
-                              </select>
+                                searchPlaceholder="Search..."
+                              />
                             ) : (
                               property.status === 'active' ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

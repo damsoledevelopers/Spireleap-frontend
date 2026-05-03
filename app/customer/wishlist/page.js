@@ -16,10 +16,27 @@ import {
 import Link from 'next/link'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import { useCurrency } from '../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../lib/money'
 
 export default function MyWishlist() {
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
+    const { selectedCurrency, ratesByCode } = useCurrency()
+
+    const formatPrice = (property) => {
+        if (!property?.price) return 'Contact'
+        if (property.listingType === 'sale' && property.price?.sale) {
+            return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        }
+        if (property.listingType === 'rent' && property.price?.rent?.amount) {
+            const amt = formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+            return `${amt}/${property.price.rent.period || 'month'}`
+        }
+        if (property.price?.sale) return formatMoneyFromAed(property.price.sale, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        if (property.price?.rent?.amount) return formatMoneyFromAed(property.price.rent.amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+        return 'Contact'
+    }
 
     useEffect(() => {
         fetchWishlist()
@@ -124,7 +141,7 @@ export default function MyWishlist() {
 
                                         <div className="mt-auto flex items-center justify-between">
                                             <p className="text-lg font-extrabold text-primary-600">
-                                                ${property.price?.sale?.toLocaleString() || property.price?.rent?.amount?.toLocaleString()}
+                                                {formatPrice(property)}
                                             </p>
                                             <Link
                                                 href={`/properties/${property.slug || property._id}?from=wishlist`}
