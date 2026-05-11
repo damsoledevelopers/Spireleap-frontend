@@ -14,6 +14,10 @@ import SearchableSelect from '../../../../components/Common/SearchableSelect'
 // Dynamically import Google Maps to avoid SSR issues
 const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
 
+function RequiredMark() {
+  return <span className="text-red-500 ml-0.5 font-bold" aria-hidden="true">*</span>
+}
+
 export default function AdminAddPropertyPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -339,6 +343,17 @@ export default function AdminAddPropertyPage() {
         return
       }
 
+      if (!String(formData.title || '').trim()) {
+        toast.error('Title is required')
+        setLoading(false)
+        return
+      }
+      if (!String(formData.description || '').trim()) {
+        toast.error('Description is required')
+        setLoading(false)
+        return
+      }
+
       if (!isValidZip(formData.location?.zipCode)) {
         toast.error('ZIP Code must be 5 digits or 9 digits (ZIP+4)')
         setLoading(false)
@@ -507,6 +522,7 @@ export default function AdminAddPropertyPage() {
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
                     Agency{user?.role === 'super_admin' ? ' (optional)' : ''}
+                    {user?.role === 'agency_admin' ? <RequiredMark /> : null}
                   </label>
                   <SearchableSelect
                     value={formData.agency}
@@ -550,9 +566,13 @@ export default function AdminAddPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Title</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Title
+                  <RequiredMark />
+                </label>
                 <input
                   type="text"
+                  required
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -560,7 +580,10 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Property Type</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Property Type
+                  <RequiredMark />
+                </label>
                 <SearchableSelect
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
@@ -583,7 +606,10 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Listing Type</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Listing Type
+                  <RequiredMark />
+                </label>
                 <SearchableSelect
                   value={formData.listingType}
                   onChange={(e) => handleInputChange('listingType', e.target.value)}
@@ -622,9 +648,13 @@ export default function AdminAddPropertyPage() {
                 )}
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Description
+                  <RequiredMark />
+                </label>
                 <textarea
                   rows={4}
+                  required
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
