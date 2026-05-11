@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
+import DetailsModal from '../../../components/Common/DetailsModal'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
 import {
@@ -46,6 +47,7 @@ import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 import { validateConfirmPassword, validateEmail, validateName, validatePassword } from '../../../lib/validation'
 import { scrollToFirstErrorField } from '../../../lib/scrollToError'
 
@@ -74,6 +76,21 @@ export default function AdminUsers() {
   const [selectedUserInquiries, setSelectedUserInquiries] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedInquiry, setSelectedInquiry] = useState(null) // For viewing detailed inquiry
+  const [detailsUser, setDetailsUser] = useState(null)
+
+  const formatDate = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const formatDateTime = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+  }
 
   // Check for tab parameter and redirect accordingly
   useEffect(() => {
@@ -112,6 +129,9 @@ export default function AdminUsers() {
   const [showAddUserPassword, setShowAddUserPassword] = useState(false)
   const [showAddUserConfirmPassword, setShowAddUserConfirmPassword] = useState(false)
   const [addUserErrors, setAddUserErrors] = useState({})
+  const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+  const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -119,15 +139,125 @@ export default function AdminUsers() {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'user'
+    role: 'user',
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      country: '',
+      zipCode: ''
+    }
   })
   const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [submitting, setSubmitting] = useState(false)
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
+  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
+  const isValidZip = (v) => {
+    const s = String(v || '').trim()
+    if (!s) return true
+    return s.length === 5 || s.length === 9
+  }
 
   useEffect(() => {
     fetchAdminUsers()
   }, [])
+
+  useEffect(() => {
+    fetchCountries()
+  }, [])
+
+  useEffect(() => {
+    fetchStates(formData.address.country)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.country])
+
+  useEffect(() => {
+    fetchCities(formData.address.country, formData.address.state)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.country, formData.address.state])
+
+  const fetchCountries = async () => {
+    try {
+      setGeoLoading((p) => ({ ...p, countries: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+      const countries = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean)
+        : []
+      countries.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, countries }))
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      setGeo((p) => ({ ...p, countries: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, countries: false }))
+    }
+  }
+
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+      setFormData((prev) => ({ ...prev, address: { ...prev.address, state: '', city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading((p) => ({ ...p, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean)
+        : []
+      states.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, states, cities: [] }))
+      setFormData((prev) => {
+        const currentState = prev.address.state
+        if (!currentState || states.includes(currentState)) return prev
+        return { ...prev, address: { ...prev.address, state: '', city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, states: false }))
+    }
+  }
+
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo((p) => ({ ...p, cities: [] }))
+      setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading((p) => ({ ...p, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c || '').trim()).filter(Boolean)
+        : []
+      cities.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, cities }))
+      setFormData((prev) => {
+        const currentCity = prev.address.city
+        if (!currentCity || cities.includes(currentCity)) return prev
+        return { ...prev, address: { ...prev.address, city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo((p) => ({ ...p, cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, cities: false }))
+    }
+  }
 
   const fetchAdminUsers = async () => {
     try {
@@ -230,16 +360,22 @@ export default function AdminUsers() {
       return
     }
 
-    if (window.confirm('Are you sure you want to delete this admin user?')) {
-      try {
-        await api.delete(`/users/${adminId}`)
-        toast.success('Admin user deleted successfully')
-        fetchAdminUsers()
-      } catch (error) {
-        console.error('Delete admin error:', error)
-        const errorMessage = error.response?.data?.message || 'Failed to delete admin user'
-        toast.error(errorMessage)
-      }
+    const ok = await confirm({
+      title: 'Delete User',
+      message: 'Are you sure you want to delete this admin user?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
+
+    try {
+      await api.delete(`/users/${adminId}`)
+      toast.success('Admin user deleted successfully')
+      fetchAdminUsers()
+    } catch (error) {
+      console.error('Delete admin error:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to delete admin user'
+      toast.error(errorMessage)
     }
   }
 
@@ -275,6 +411,9 @@ export default function AdminUsers() {
       if (formData.phone && !e164Phone) {
         nextErrors.phone = 'Enter a valid phone number for the selected country'
       }
+      if (!isValidZip(formData.address?.zipCode)) {
+        nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      }
       Object.keys(nextErrors).forEach((k) => {
         if (!nextErrors[k]) delete nextErrors[k]
       })
@@ -284,9 +423,19 @@ export default function AdminUsers() {
         return
       }
 
+      const cleanedAddress = {}
+      Object.entries(formData.address || {}).forEach(([k, v]) => {
+        const trimmed = typeof v === 'string' ? v.trim() : v
+        if (trimmed) cleanedAddress[k] = trimmed
+      })
+
       const payload = {
         ...formData,
-        phone: e164Phone || formData.phone
+        phone: e164Phone || formData.phone,
+        address: cleanedAddress
+      }
+      if (Object.keys(cleanedAddress).length === 0) {
+        delete payload.address
       }
       delete payload.confirmPassword
       await api.post('/users', payload)
@@ -299,7 +448,14 @@ export default function AdminUsers() {
         phone: '',
         password: '',
         confirmPassword: '',
-        role: 'user'
+        role: 'user',
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          country: '',
+          zipCode: ''
+        }
       })
       setPhoneCountryCode(DEFAULT_COUNTRY_CODE)
       setAddUserErrors({})
@@ -313,6 +469,30 @@ export default function AdminUsers() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const closeAddUserModal = () => {
+    setShowAddModal(false)
+    setPhoneCountryCode(DEFAULT_COUNTRY_CODE)
+    setFormData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+      role: 'user',
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        country: '',
+        zipCode: ''
+      }
+    })
+    setAddUserErrors({})
+    setShowAddUserPassword(false)
+    setShowAddUserConfirmPassword(false)
   }
 
 
@@ -481,32 +661,25 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Manage all regular users
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 flex-wrap">
             {/* Date Range Filter Button - Left End */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${startDate || endDate
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
                   ? 'border-primary-500 text-gray-900'
                   : 'border-gray-300 text-gray-700'
                   }`}
               >
-                <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                <span>
+                <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                <span className="whitespace-nowrap">
                   {startDate && endDate
-                    ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                     : startDate
-                      ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ...`
+                      ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                       : endDate
-                        ? `Date: ... - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                         : 'Date Range'}
                 </span>
                 {startDate || endDate ? (
@@ -533,6 +706,7 @@ export default function AdminUsers() {
                         <input
                           type="date"
                           value={startDate}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => {
                             const newStartDate = e.target.value
                             setStartDate(newStartDate)
@@ -553,6 +727,7 @@ export default function AdminUsers() {
                             setEndDate(newEndDate)
                           }}
                           min={startDate || undefined}
+                          max={new Date().toISOString().split('T')[0]}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
@@ -609,63 +784,72 @@ export default function AdminUsers() {
             {canCreateUser && (
               <button
                 onClick={() => setShowAddModal(true)}
-                className="btn-primary flex items-center gap-2 bg-primary-600 hover:bg-primary-700"
+                className="btn-primary flex items-center gap-2 bg-primary-600 hover:bg-primary-700 whitespace-nowrap flex-shrink-0"
               >
                 <Plus className="h-4 w-4" />
                 Add User
               </button>
             )}
-          </div>
         </div>
 
 
         {/* Admin Users Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+          <table className="w-full table-fixed divide-y divide-gray-200">
+            <colgroup>
+              <col className="w-[24%]" />
+              <col className="w-[26%]" />
+              <col className="w-32" />
+              <col className="w-24" />
+              <col className="w-24" />
+              <col className="w-32" />
+            </colgroup>
+            <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                  User
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                  Phone
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                  Inquiries
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedAdmins.length === 0 ? (
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Address
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Registered
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Inquiries
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                    Actions
-                  </th>
+                  <td colSpan="6" className="px-4 py-12 text-center">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg font-medium">No users found</p>
+                    <p className="text-gray-400 text-sm mt-2">
+                      {filteredAdmins.length === 0
+                        ? 'Try adjusting your filters'
+                        : 'No users on this page'}
+                    </p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedAdmins.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center">
-                      <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500 text-lg font-medium">No users found</p>
-                      <p className="text-gray-400 text-sm mt-2">
-                        {filteredAdmins.length === 0
-                          ? 'Try adjusting your filters'
-                          : 'No users on this page'}
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedAdmins.map((admin) => (
-                    <tr key={admin._id || admin.id} className="hover:bg-logo-beige transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
+              ) : (
+                paginatedAdmins.map((admin) => (
+                  <tr key={admin._id || admin.id} className="hover:bg-logo-beige transition-colors">
+                    <td className="px-4 py-4 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setDetailsUser(admin)}
+                        className="text-left w-full focus:outline-none"
+                        title="View details"
+                      >
+                        <div className="flex items-center min-w-0">
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                               <span className="text-sm font-medium text-gray-700">
@@ -673,9 +857,9 @@ export default function AdminUsers() {
                               </span>
                             </div>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              <span className="text-gray-900">
+                          <div className="ml-3 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 truncate">
+                              <span className="text-gray-900 hover:text-primary-700">
                                 {admin.firstName} {admin.lastName}
                               </span>
                               {admin._id === user?.id && (
@@ -684,140 +868,93 @@ export default function AdminUsers() {
                                 </span>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {admin.company || 'Alvasco'}
-                            </div>
+                            {admin.company && (
+                              <div className="text-xs text-gray-500 truncate">{admin.company}</div>
+                            )}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{admin.email}</div>
-                        <div className="text-sm text-gray-500">{admin.phone || 'No phone'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {admin.address ? (
-                            <>
-                              {admin.address.street && <div>{admin.address.street}</div>}
-                              <div>
-                                {[admin.address.city, admin.address.state, admin.address.zipCode]
-                                  .filter(Boolean)
-                                  .join(', ')}
-                              </div>
-                              {admin.address.country && <div className="text-gray-500 text-xs">{admin.address.country}</div>}
-                            </>
-                          ) : (
-                            <span className="text-gray-400">No address</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {admin.createdAt || admin.created_at
-                            ? new Date(admin.createdAt || admin.created_at).toLocaleDateString()
-                            : '-'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {admin.createdAt || admin.created_at
-                            ? new Date(admin.createdAt || admin.created_at).toLocaleTimeString('en-GB', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true
-                            })
-                            : ''}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {(() => {
-                          const userEmail = admin.email?.toLowerCase()
-                          const inquiryCount = userInquiries[userEmail]?.length || 0
-                          return (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="text-sm font-semibold text-gray-900">{inquiryCount}</span>
-                              {inquiryCount > 0 && (
-                                <button
-                                  onClick={() => handleViewInquiries(admin)}
-                                  className="text-xs text-primary-600 hover:text-primary-800 underline"
-                                  title="View inquiries"
-                                >
-                                  View
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {admin.isActive ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Inactive
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                        <div className="flex items-center justify-center gap-3">
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-900 truncate" title={admin.email || ''}>
+                      {admin.email || '—'}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-900 truncate" title={admin.phone || ''}>
+                      {admin.phone || '—'}
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      {(() => {
+                        const userEmail = admin.email?.toLowerCase()
+                        const inquiryCount = userInquiries[userEmail]?.length || 0
+                        return (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-sm font-semibold text-gray-900">{inquiryCount}</span>
+                            {inquiryCount > 0 && (
+                              <button
+                                onClick={() => handleViewInquiries(admin)}
+                                className="text-xs text-primary-600 hover:text-primary-800 underline"
+                                title="View inquiries"
+                              >
+                                View
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      {admin.isActive ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Inactive
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-center text-sm font-medium">
+                      <div className="flex items-center justify-center gap-2">
+                        <Link
+                          href={`/admin/users/${String(admin._id || admin.id)}`}
+                          className="text-gray-600 hover:text-primary-600 transition-colors"
+                          title="Open page"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </Link>
+                        {isSuperAdmin && (
                           <Link
-                            href={`/admin/users/${String(admin._id || admin.id)}`}
-                            className="text-gray-600 hover:text-primary-600 transition-colors"
-                            title="View details"
+                            href={`/admin/permissions?type=user&id=${String(admin._id || admin.id)}`}
+                            className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                            title="Permissions (this user only)"
                           >
-                            <Eye className="h-5 w-5" />
+                            <Shield className="h-5 w-5" />
                           </Link>
-                          {isSuperAdmin && (
-                            <Link
-                              href={`/admin/permissions?type=user&id=${String(admin._id || admin.id)}`}
-                              className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                              title="Permissions (this user only)"
-                            >
-                              <Shield className="h-5 w-5" />
-                            </Link>
-                          )}
-                          {canEditUser && (
-                            <Link
-                              href={`/admin/users/${String(admin._id || admin.id)}/edit`}
-                              className="text-primary-600 hover:text-primary-900 transition-colors"
-                              title="Edit"
-                            >
-                              <Edit className="h-5 w-5" />
-                            </Link>
-                          )}
-                          {admin._id !== user?.id && (
-                            <>
-                              {canDeleteUser && (
-                                <button
-                                  onClick={() => handleDeleteAdmin(admin._id || admin.id)}
-                                  className="text-red-600 hover:text-red-900 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              )}
-                              {canEditUser && (
-                                <button
-                                  onClick={() => handleStatusChange(admin._id || admin.id, !admin.isActive)}
-                                  className={`px-2 py-1 text-xs rounded ${admin.isActive
-                                    ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                                    : 'bg-green-100 text-green-800 hover:bg-green-200'
-                                    }`}
-                                  title={admin.isActive ? 'Deactivate' : 'Activate'}
-                                >
-                                  {admin.isActive ? 'Deactivate' : 'Activate'}
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        )}
+                        {canEditUser && (
+                          <Link
+                            href={`/admin/users/${String(admin._id || admin.id)}/edit`}
+                            className="text-primary-600 hover:text-primary-900 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit className="h-5 w-5" />
+                          </Link>
+                        )}
+                        {admin._id !== user?.id && canDeleteUser && (
+                          <button
+                            onClick={() => handleDeleteAdmin(admin._id || admin.id)}
+                            className="text-red-600 hover:text-red-900 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -899,17 +1036,29 @@ export default function AdminUsers() {
 
         {/* Add Admin Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Add User</h3>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="mb-4 relative bg-[#FEE2E2] px-6 py-4 rounded-t-lg">
+                <h3 className="text-lg font-bold text-gray-900 text-center">Add User</h3>
+                <button
+                  type="button"
+                  onClick={closeAddUserModal}
+                  className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  aria-label="Close add user modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="px-6 pb-6">
               <form onSubmit={handleAddUser}>
                 <div className="space-y-4">
                   <div>
-                    <label className="form-label">First Name</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <input
                       type="text"
                       className={`form-input ${addUserErrors.firstName ? 'border-red-500' : ''}`}
                       required
+                      placeholder="Enter first name"
                       value={formData.firstName}
                       onChange={(e) => {
                         setFormData({ ...formData, firstName: sanitizeName(e.target.value) })
@@ -927,11 +1076,12 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div>
-                    <label className="form-label">Last Name</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <input
                       type="text"
                       className={`form-input ${addUserErrors.lastName ? 'border-red-500' : ''}`}
                       required
+                      placeholder="Enter last name"
                       value={formData.lastName}
                       onChange={(e) => {
                         setFormData({ ...formData, lastName: sanitizeName(e.target.value) })
@@ -949,11 +1099,12 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div>
-                    <label className="form-label">Email</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <input
                       type="email"
                       className={`form-input ${addUserErrors.email ? 'border-red-500' : ''}`}
                       required
+                      placeholder="Enter email"
                       value={formData.email}
                       onChange={(e) => {
                         setFormData({ ...formData, email: e.target.value })
@@ -971,7 +1122,7 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div>
-                    <label className="form-label">Phone</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Phone</label>
                     <PhoneField
                       label=""
                       countryCodeName="phoneCountryCode"
@@ -996,12 +1147,13 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div>
-                    <label className="form-label">Password</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <div className="relative">
                       <input
                         type={showAddUserPassword ? 'text' : 'password'}
                         className={`form-input pr-10 ${addUserErrors.password ? 'border-red-500' : ''}`}
                         required
+                        placeholder="Enter password"
                         value={formData.password}
                         onChange={(e) => {
                           setFormData({ ...formData, password: e.target.value })
@@ -1034,12 +1186,13 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div>
-                    <label className="form-label">Confirm Password</label>
+                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Confirm Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <div className="relative">
                       <input
                         type={showAddUserConfirmPassword ? 'text' : 'password'}
                         className={`form-input pr-10 ${addUserErrors.confirmPassword ? 'border-red-500' : ''}`}
                         required
+                        placeholder="Confirm password"
                         value={formData.confirmPassword}
                         onChange={(e) => {
                           setFormData({ ...formData, confirmPassword: e.target.value })
@@ -1071,25 +1224,112 @@ export default function AdminUsers() {
                     )}
                   </div>
                 </div>
+
+                {/* Address */}
+                <div className="mt-6">
+                  <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Address
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Street</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={formData.address.street}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          address: { ...prev.address, street: e.target.value }
+                        }))}
+                        placeholder="Enter street address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
+                      <select
+                        className="form-input"
+                        value={formData.address.country}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          address: { ...prev.address, country: e.target.value }
+                        }))}
+                      >
+                        <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                        {geo.countries.map((country) => (
+                          <option key={country} value={country}>{country}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
+                      <select
+                        className="form-input disabled:bg-gray-100"
+                        value={formData.address.state}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          address: { ...prev.address, state: e.target.value }
+                        }))}
+                        disabled={!formData.address.country || geoLoading.states}
+                      >
+                        <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                        {geo.states.map((state) => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
+                      <select
+                        className="form-input disabled:bg-gray-100"
+                        value={formData.address.city}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          address: { ...prev.address, city: e.target.value }
+                        }))}
+                        disabled={!formData.address.state || geoLoading.cities}
+                      >
+                        <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                        {geo.cities.map((city) => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">ZIP Code</label>
+                      <input
+                        type="text"
+                        className={`form-input ${addUserErrors['address.zipCode'] ? 'border-red-500' : ''}`}
+                        value={formData.address.zipCode}
+                        onChange={(e) => {
+                          const cleaned = sanitizeZip(e.target.value)
+                          setFormData((prev) => ({
+                            ...prev,
+                            address: { ...prev.address, zipCode: cleaned }
+                          }))
+                          if (addUserErrors['address.zipCode']) {
+                            setAddUserErrors((prev) => {
+                              const next = { ...prev }
+                              delete next['address.zipCode']
+                              return next
+                            })
+                          }
+                        }}
+                        placeholder="Enter ZIP code"
+                      />
+                      {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || addUserErrors['address.zipCode'] ? (
+                        <p className="mt-1 text-xs font-semibold text-red-600">
+                          {addUserErrors['address.zipCode'] || 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex justify-end space-x-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowAddModal(false)
-                      setPhoneCountryCode(DEFAULT_COUNTRY_CODE)
-                      setFormData({
-                        firstName: '',
-                        lastName: '',
-                        email: '',
-                        phone: '',
-                        password: '',
-                        confirmPassword: '',
-                        role: 'user'
-                      })
-                      setAddUserErrors({})
-                      setShowAddUserPassword(false)
-                      setShowAddUserConfirmPassword(false)
-                    }}
+                    onClick={closeAddUserModal}
                     className="btn-secondary"
                     disabled={submitting}
                   >
@@ -1104,6 +1344,7 @@ export default function AdminUsers() {
                   </button>
                 </div>
               </form>
+              </div>
             </div>
           </div>
         )}
@@ -1147,27 +1388,27 @@ export default function AdminUsers() {
                   // Table View
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             #
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Property
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Priority
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Created Date
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Price
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
                             Actions
                           </th>
                         </tr>
@@ -1176,14 +1417,21 @@ export default function AdminUsers() {
                         {selectedUserInquiries.map((inquiry, index) => {
                           // Use main property or first interested property so name/location/price show when main property is missing
                           const displayProperty = inquiry.property || inquiry.interestedProperties?.[0]?.property
+                          const toRupee = (value) => {
+                            const numeric = Number(value)
+                            return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : null
+                          }
                           const propertyPrice = displayProperty?.price
                             ? (typeof displayProperty.price === 'object'
-                              ? (displayProperty.price.sale
-                                ? `₹${Number(displayProperty.price.sale).toLocaleString()}`
-                                : displayProperty.price.rent?.amount
-                                  ? `₹${Number(displayProperty.price.rent.amount).toLocaleString()}/${displayProperty.price.rent.period || 'month'}`
+                              ? (displayProperty.price.sale !== undefined && displayProperty.price.sale !== null && displayProperty.price.sale !== ''
+                                ? (toRupee(displayProperty.price.sale) || 'N/A')
+                                : (displayProperty.price.rent?.amount !== undefined && displayProperty.price.rent?.amount !== null && displayProperty.price.rent?.amount !== '')
+                                  ? (() => {
+                                    const rentAmount = toRupee(displayProperty.price.rent.amount)
+                                    return rentAmount ? `${rentAmount}/${displayProperty.price.rent.period || 'month'}` : 'N/A'
+                                  })()
                                   : 'Price on request')
-                              : `₹${Number(displayProperty.price).toLocaleString()}`)
+                              : (toRupee(displayProperty.price) || 'N/A'))
                             : 'Price on request'
 
                           return (
@@ -1296,6 +1544,86 @@ export default function AdminUsers() {
         )}
 
       </div>
+
+      <DetailsModal
+        isOpen={!!detailsUser}
+        onClose={() => setDetailsUser(null)}
+        title={detailsUser ? `${detailsUser.firstName || ''} ${detailsUser.lastName || ''}`.trim() || 'User' : ''}
+        subtitle={detailsUser?.email}
+        avatar={
+          detailsUser ? (
+            <div className="h-14 w-14 rounded-full bg-gray-300 flex items-center justify-center">
+              <span className="text-base font-semibold text-gray-700">
+                {detailsUser.firstName?.charAt(0)}{detailsUser.lastName?.charAt(0)}
+              </span>
+            </div>
+          ) : null
+        }
+        sections={detailsUser ? [
+          {
+            title: 'Contact',
+            items: [
+              { label: 'Email', value: detailsUser.email },
+              { label: 'Phone', value: detailsUser.phone },
+              { label: 'Company', value: detailsUser.company },
+              {
+                label: 'Status',
+                value: detailsUser.isActive ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>
+                ),
+              },
+            ],
+          },
+          detailsUser.address ? {
+            title: 'Address',
+            items: [
+              { label: 'Street', value: detailsUser.address.street },
+              { label: 'Country', value: detailsUser.address.country },
+              { label: 'State', value: detailsUser.address.state },
+              { label: 'City', value: detailsUser.address.city },
+              { label: 'Zip code', value: detailsUser.address.zipCode },
+            ],
+          } : null,
+          {
+            title: 'Activity',
+            items: [
+              {
+                label: 'Inquiries',
+                value: userInquiries[detailsUser.email?.toLowerCase()]?.length || 0,
+              },
+              { label: 'Registered', value: formatDateTime(detailsUser.createdAt || detailsUser.created_at) },
+            ],
+          },
+        ].filter(Boolean) : []}
+        actions={detailsUser ? (
+          <>
+            {canEditUser && (
+              <Link
+                href={`/admin/users/${String(detailsUser._id || detailsUser.id)}/edit`}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              >
+                Edit
+              </Link>
+            )}
+            <Link
+              href={`/admin/users/${String(detailsUser._id || detailsUser.id)}`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Open page
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDetailsUser(null)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

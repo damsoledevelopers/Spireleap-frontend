@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
@@ -68,6 +68,54 @@ function formatListedAt(value) {
   } catch {
     return String(value)
   }
+}
+
+const DISPLAY_NA = 'N/A'
+
+function hasMeaningfulText(value) {
+  return value != null && String(value).trim() !== ''
+}
+
+function formatAddressLine(location) {
+  if (!location || typeof location !== 'object') return DISPLAY_NA
+  const parts = [location.address, location.city, location.state, location.zipCode]
+    .map((p) => (p == null ? '' : String(p).trim()))
+    .filter(Boolean)
+  return parts.length ? parts.join(', ') : DISPLAY_NA
+}
+
+/** Area: missing or invalid numeric value → N/A (avoids blank + "sqft"). */
+function formatAreaLine(specifications) {
+  const area = specifications?.area
+  if (!area) return DISPLAY_NA
+  const raw = area.value
+  const unit = hasMeaningfulText(area.unit) ? String(area.unit).trim() : ''
+  const num = raw === '' || raw == null ? NaN : Number(raw)
+  if (Number.isFinite(num) && num > 0) {
+    return unit ? `${num} ${unit}` : String(num)
+  }
+  if (hasMeaningfulText(raw) && !Number.isFinite(num)) {
+    const t = String(raw).trim()
+    return unit ? `${t} ${unit}` : t
+  }
+  return DISPLAY_NA
+}
+
+/** Parking: unset or 0 (common placeholder) → N/A on public listing. */
+function formatParkingValue(parking) {
+  if (parking == null || parking === '') return DISPLAY_NA
+  const n = Number(parking)
+  if (!Number.isFinite(n)) {
+    return hasMeaningfulText(parking) ? String(parking).trim() : DISPLAY_NA
+  }
+  if (n === 0) return DISPLAY_NA
+  return String(n)
+}
+
+function formatSimilarLocationLine(loc) {
+  if (!loc || typeof loc !== 'object') return DISPLAY_NA
+  const parts = [loc.city, loc.state].map((p) => (p == null ? '' : String(p).trim())).filter(Boolean)
+  return parts.length ? parts.join(', ') : DISPLAY_NA
 }
 
 function PropertyImageGallery({ title, images }) {
@@ -184,6 +232,36 @@ export default function PropertyDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [inWishlist, setInWishlist] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
+  const similarScrollRef = useRef(null)
+  const [similarScrollEdges, setSimilarScrollEdges] = useState({ atStart: true, atEnd: true })
+
+  const updateSimilarScrollEdges = useCallback(() => {
+    const el = similarScrollRef.current
+    if (!el) return
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    const maxScroll = Math.max(0, scrollWidth - clientWidth)
+    const atStart = scrollLeft <= 2
+    const atEnd = scrollLeft >= maxScroll - 2 || maxScroll <= 0
+    setSimilarScrollEdges({ atStart, atEnd })
+  }, [])
+
+  useEffect(() => {
+    if (!similarProperties.length) return
+    const t = requestAnimationFrame(() => updateSimilarScrollEdges())
+    return () => cancelAnimationFrame(t)
+  }, [similarProperties, updateSimilarScrollEdges])
+
+  useEffect(() => {
+    const el = similarScrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => updateSimilarScrollEdges())
+    ro.observe(el)
+    window.addEventListener('resize', updateSimilarScrollEdges)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', updateSimilarScrollEdges)
+    }
+  }, [similarProperties.length, updateSimilarScrollEdges])
 
   useEffect(() => {
     fetchProperty()
@@ -477,7 +555,10 @@ export default function PropertyDetailPage() {
 
         {/* First row: images only (matches requested layout) */}
         <div className="mb-8">
-          <PropertyImageGallery title={property.title} images={orderedImages} />
+          <PropertyImageGallery
+            title={hasMeaningfulText(property.title) ? property.title : DISPLAY_NA}
+            images={orderedImages}
+          />
         </div>
 
         {/* Second row: all other sections below images */}
@@ -488,12 +569,12 @@ export default function PropertyDetailPage() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{property.title}</h1>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    {hasMeaningfulText(property.title) ? property.title : DISPLAY_NA}
+                  </h1>
                   <div className="flex items-center text-gray-600">
-                    <MapPin className="h-5 w-5 mr-2" />
-                    <span>
-                      {property.location?.address}, {property.location?.city}, {property.location?.state} {property.location?.zipCode}
-                    </span>
+                    <MapPin className="h-5 w-5 mr-2 shrink-0" />
+                    <span>{formatAddressLine(property.location)}</span>
                   </div>
                 </div>
                 <div className="text-right">
@@ -576,32 +657,28 @@ export default function PropertyDetailPage() {
                   </div>
                 )}
 
-                {property.specifications?.area && (
-                  <div className="flex items-center gap-2">
-                    <Square className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500">Area</p>
-                      <p className="font-semibold">
-                        {property.specifications.area.value} {property.specifications.area.unit}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <Square className="h-5 w-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-500">Area</p>
+                    <p className="font-semibold">{formatAreaLine(property.specifications)}</p>
                   </div>
-                )}
-                {property.specifications?.parking !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <Car className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500">Parking</p>
-                      <p className="font-semibold">{property.specifications.parking}</p>
-                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Car className="h-5 w-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-500">Parking</p>
+                    <p className="font-semibold">{formatParkingValue(property.specifications?.parking)}</p>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Description */}
               <div className="mt-6">
                 <h2 className="text-xl font-semibold mb-3">Description</h2>
-                <p className="text-gray-700 whitespace-pre-line">{property.description}</p>
+                <p className="text-gray-700 whitespace-pre-line">
+                  {hasMeaningfulText(property.description) ? property.description : DISPLAY_NA}
+                </p>
               </div>
 
               {/* Property details (regulatory + QR → opens qrValue URL) */}
@@ -913,7 +990,8 @@ export default function PropertyDetailPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
-                      {property.agent.firstName} {property.agent.lastName}
+                      {[property.agent.firstName, property.agent.lastName].filter(Boolean).join(' ').trim() ||
+                        DISPLAY_NA}
                     </h3>
                     {property.agent.agentInfo?.bio && (
                       <p className="text-sm text-gray-600 mt-1">{property.agent.agentInfo.bio}</p>
@@ -946,7 +1024,9 @@ export default function PropertyDetailPage() {
                     <img src={property.agency.logo} alt={property.agency.name} className="w-12 h-12 object-contain" />
                   )}
                   <div>
-                    <h3 className="font-semibold text-gray-900">{property.agency.name}</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      {hasMeaningfulText(property.agency?.name) ? property.agency.name : DISPLAY_NA}
+                    </h3>
                     {property.agency.contact?.phone && (
                       <p className="text-sm text-gray-600">{property.agency.contact.phone}</p>
                     )}
@@ -975,12 +1055,28 @@ export default function PropertyDetailPage() {
               No similar properties found.
             </div>
           ) : (
-            <div className="flex gap-5 overflow-x-auto pb-3">
+            <div className="flex items-stretch gap-2 sm:gap-3">
+              <button
+                type="button"
+                aria-label="Scroll similar properties left"
+                disabled={similarScrollEdges.atStart}
+                onClick={() => {
+                  similarScrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })
+                }}
+                className="flex shrink-0 self-center h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-30"
+              >
+                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+              <div
+                ref={similarScrollRef}
+                onScroll={updateSimilarScrollEdges}
+                className="flex min-w-0 flex-1 gap-5 overflow-x-auto scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
               {similarProperties.map((p) => (
                 <Link
                   key={p._id}
                   href={`/properties/${p.slug || p._id}`}
-                  className="min-w-[260px] max-w-[260px] bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                  className="min-w-[260px] max-w-[260px] shrink-0 bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <div className="relative h-40 bg-gray-200">
                     <img
@@ -1000,10 +1096,10 @@ export default function PropertyDetailPage() {
                           ? `${formatPrice(p.price.rent.amount)}/${p.price.rent.period || 'month'}`
                           : 'Price on request'}
                     </p>
-                    <p className="text-sm text-gray-900 font-semibold line-clamp-1">{p.title}</p>
-                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">
-                      {p.location?.city}{p.location?.state ? `, ${p.location.state}` : ''}
+                    <p className="text-sm text-gray-900 font-semibold line-clamp-1">
+                      {hasMeaningfulText(p.title) ? p.title : DISPLAY_NA}
                     </p>
+                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">{formatSimilarLocationLine(p.location)}</p>
 
                     <div className="flex items-center gap-3 text-gray-600 text-xs mt-3">
                       {p.specifications?.bedrooms !== undefined && (
@@ -1018,18 +1114,26 @@ export default function PropertyDetailPage() {
                           <span>{p.specifications.bathrooms}</span>
                         </div>
                       )}
-                      {p.specifications?.area?.value !== undefined && (
-                        <div className="flex items-center gap-1">
-                          <Square className="h-4 w-4" />
-                          <span>
-                            {p.specifications.area.value} {p.specifications.area.unit}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1">
+                        <Square className="h-4 w-4" />
+                        <span>{formatAreaLine(p.specifications)}</span>
+                      </div>
                     </div>
                   </div>
                 </Link>
               ))}
+              </div>
+              <button
+                type="button"
+                aria-label="Scroll similar properties right"
+                disabled={similarScrollEdges.atEnd}
+                onClick={() => {
+                  similarScrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })
+                }}
+                className="flex shrink-0 self-center h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-30"
+              >
+                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
             </div>
           )}
         </div>

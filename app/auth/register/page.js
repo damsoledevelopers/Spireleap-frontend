@@ -124,8 +124,8 @@ export default function RegisterPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
-                    First Name *
+                  <label htmlFor="firstName" className="block text-sm font-bold text-gray-900 mb-2">
+                    First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="firstName"
@@ -142,8 +142,8 @@ export default function RegisterPage() {
                   )}
                 </div>
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
-                    Last Name *
+                  <label htmlFor="lastName" className="block text-sm font-bold text-gray-900 mb-2">
+                    Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="lastName"
@@ -162,8 +162,8 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address *
+                <label htmlFor="email" className="block text-sm font-bold text-gray-900 mb-2">
+                  Email Address<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="email"
@@ -182,7 +182,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="phone" className="block text-sm font-bold text-gray-900 mb-2">
                   Phone Number
                 </label>
                 <PhoneField
@@ -210,8 +210,8 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                  Account Type *
+                <label htmlFor="role" className="block text-sm font-bold text-gray-900 mb-2">
+                  Account Type<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <select
                   id="role"
@@ -237,7 +237,7 @@ export default function RegisterPage() {
 
               {(formData.role === 'agent' || formData.role === 'agency_admin' || formData.role === 'staff') && (
                 <div>
-                  <label htmlFor="agency" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="agency" className="block text-sm font-bold text-gray-900 mb-2">
                     Agency ID (Optional)
                   </label>
                   <input
@@ -256,8 +256,8 @@ export default function RegisterPage() {
               )}
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Password *
+                <label htmlFor="password" className="block text-sm font-bold text-gray-900 mb-2">
+                  Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -290,8 +290,8 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password *
+                <label htmlFor="confirmPassword" className="block text-sm font-bold text-gray-900 mb-2">
+                  Confirm Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <div className="relative">
                   <input

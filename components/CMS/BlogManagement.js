@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Eye, EyeOff, Search, FileText, Camera, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 // Dynamically import react-quill to avoid SSR issues
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
@@ -13,6 +14,7 @@ import 'react-quill/dist/quill.snow.css'
 
 export default function BlogManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [blogs, setBlogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -133,7 +135,13 @@ export default function BlogManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this blog?')) return
+    const ok = await confirm({
+      title: 'Delete Blog',
+      message: 'Are you sure you want to delete this blog?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       await api.delete(`/cms/blogs/${id}`)
@@ -287,7 +295,7 @@ export default function BlogManagement() {
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -298,7 +306,7 @@ export default function BlogManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Excerpt</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Excerpt</label>
                   <textarea
                     value={formData.excerpt}
                     onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
@@ -308,7 +316,7 @@ export default function BlogManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Content<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   {typeof window !== 'undefined' && (
                     <ReactQuill
                       theme="snow"
@@ -320,7 +328,7 @@ export default function BlogManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Featured Image</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Featured Image</label>
                   <div className="flex gap-2">
                     <div className="flex-1 relative">
                       <input
@@ -361,7 +369,7 @@ export default function BlogManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Tags (comma-separated)</label>
                   <input
                     type="text"
                     value={formData.tags}
@@ -373,7 +381,7 @@ export default function BlogManagement() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Status</label>
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
@@ -393,7 +401,7 @@ export default function BlogManagement() {
                         onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
                         className="mr-2"
                       />
-                      <span className="text-sm font-medium text-gray-700">Featured</span>
+                      <span className="text-sm font-bold text-gray-900">Featured</span>
                     </label>
                   </div>
                 </div>
@@ -402,7 +410,7 @@ export default function BlogManagement() {
                   <h3 className="text-lg font-semibold mb-3">SEO Settings</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Meta Title</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Meta Title</label>
                       <input
                         type="text"
                         value={formData.seo.metaTitle}
@@ -414,7 +422,7 @@ export default function BlogManagement() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Meta Description</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Meta Description</label>
                       <textarea
                         value={formData.seo.metaDescription}
                         onChange={(e) => setFormData({
@@ -426,7 +434,7 @@ export default function BlogManagement() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Keywords (comma-separated)</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Keywords (comma-separated)</label>
                       <input
                         type="text"
                         value={formData.seo.keywords}
@@ -464,6 +472,7 @@ export default function BlogManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

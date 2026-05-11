@@ -286,14 +286,14 @@ export default function PermissionsPage() {
                     <div className={isEntityMode ? 'lg:col-span-4' : 'lg:col-span-3'}>
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
+                                <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Module</th>
-                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase">View</th>
-                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase">Create</th>
-                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase">Edit</th>
-                                        <th className="px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase">Delete</th>
-                                        <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase">Master</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Module</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">View</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Create</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Edit</th>
+                                        <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Delete</th>
+                                        <th className="px-6 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Master</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">

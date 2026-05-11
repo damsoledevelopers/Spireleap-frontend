@@ -5,9 +5,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function TestimonialManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [testimonials, setTestimonials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -76,7 +78,13 @@ export default function TestimonialManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this testimonial?')) return
+    const ok = await confirm({
+      title: 'Delete Testimonial',
+      message: 'Are you sure you want to delete this testimonial?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/cms/testimonials/${id}`)
       toast.success('Testimonial deleted successfully')
@@ -192,7 +200,7 @@ export default function TestimonialManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingTestimonial ? 'Edit Testimonial' : 'Create New Testimonial'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -202,7 +210,7 @@ export default function TestimonialManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Role<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -212,7 +220,7 @@ export default function TestimonialManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Content<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <textarea
                     required
                     value={formData.content}
@@ -222,7 +230,7 @@ export default function TestimonialManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rating *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Rating<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <select
                     required
                     value={formData.rating}
@@ -237,7 +245,7 @@ export default function TestimonialManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Image URL</label>
                   <input
                     type="url"
                     value={formData.image}
@@ -253,7 +261,7 @@ export default function TestimonialManagement() {
                       onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Featured</span>
+                    <span className="text-sm font-bold text-gray-900">Featured</span>
                   </label>
                   <label className="flex items-center">
                     <input
@@ -262,7 +270,7 @@ export default function TestimonialManagement() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -286,6 +294,7 @@ export default function TestimonialManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

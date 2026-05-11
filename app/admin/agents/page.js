@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { UserCircle, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield } from 'lucide-react'
+import { UserCircle, Plus, Edit, Trash2, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
+import DetailsModal from '../../../components/Common/DetailsModal'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
 export default function AgentsPage() {
   const { user, loading: authLoading, checkPermission } = useAuth()
@@ -45,9 +47,7 @@ export default function AgentsPage() {
   const [agentMetrics, setAgentMetrics] = useState({
     totalAgents: 0,
     activeAgents: 0,
-    inactiveAgents: 0,
-    totalProperties: 0,
-    totalLeads: 0
+    inactiveAgents: 0
   })
   const [statusFilter, setStatusFilter] = useState('') // Filter by status (active/inactive)
   const [agencyFilter, setAgencyFilter] = useState('') // Filter by agency
@@ -63,6 +63,22 @@ export default function AgentsPage() {
     total: 0,
     limit: 20
   })
+  const [detailsAgent, setDetailsAgent] = useState(null)
+  const { confirm, ConfirmDialog } = useConfirmDialog()
+
+  const formatDate = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const formatDateTime = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+  }
 
   useEffect(() => {
     // Reset pagination when filters change
@@ -181,19 +197,6 @@ export default function AgentsPage() {
     }
   }
 
-  const clearFilters = () => {
-    setStatusFilter('')
-    setAgencyFilter('')
-    setSearchTerm('')
-    setStartDate('')
-    setEndDate('')
-    fetchAgents()
-  }
-
-  const hasActiveFilters = () => {
-    return statusFilter !== '' || agencyFilter !== '' || searchTerm.trim() !== '' || startDate !== '' || endDate !== ''
-  }
-
   const fetchMetrics = async () => {
     try {
       // Use the optimized dashboard stats endpoint
@@ -203,9 +206,7 @@ export default function AgentsPage() {
       setAgentMetrics({
         totalAgents: stats.totalAgents || 0,
         activeAgents: stats.activeAgents || 0,
-        inactiveAgents: stats.inactiveAgents || 0,
-        totalProperties: stats.totalProperties || 0,
-        totalLeads: stats.totalLeads || 0
+        inactiveAgents: stats.inactiveAgents || 0
       })
 
       // Since stats.totalUsers is total agents for non-superadmin, let's refine this
@@ -217,7 +218,13 @@ export default function AgentsPage() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this agent?')) return
+    const ok = await confirm({
+      title: 'Delete Agent',
+      message: 'Are you sure you want to delete this agent?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       await api.delete(`/users/${id}`)
@@ -249,7 +256,7 @@ export default function AgentsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Agent Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
@@ -277,36 +284,10 @@ export default function AgentsPage() {
               <UserX className="h-10 w-10 text-red-500 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-sm p-4 border-l-4 border-orange-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 font-medium">Total Properties</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{agentMetrics.totalProperties}</p>
-              </div>
-              <Package className="h-10 w-10 text-orange-500 opacity-80" />
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg shadow-sm p-4 border-l-4 border-teal-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 font-medium">Total Leads</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{agentMetrics.totalLeads}</p>
-              </div>
-              <TrendingUp className="h-10 w-10 text-teal-500 opacity-80" />
-            </div>
-          </div>
         </div>
 
         {/* Filter Section */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {isSuperAdmin ? 'Manage all real estate agents' :
-                'Manage your agency agents'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 flex-wrap">
             <SearchableSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -350,19 +331,19 @@ export default function AgentsPage() {
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${startDate || endDate
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
                   ? 'border-primary-500 text-gray-900'
                   : 'border-gray-300 text-gray-700'
                   }`}
               >
-                <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                <span>
+                <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                <span className="whitespace-nowrap">
                   {startDate && endDate
-                    ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                     : startDate
-                      ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ...`
+                      ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                       : endDate
-                        ? `Date: ... - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                         : 'Date Range'}
                 </span>
                 {startDate || endDate ? (
@@ -390,6 +371,7 @@ export default function AgentsPage() {
                         <input
                           type="date"
                           value={startDate}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => {
                             const newStartDate = e.target.value
                             setStartDate(newStartDate)
@@ -410,6 +392,7 @@ export default function AgentsPage() {
                             setEndDate(newEndDate)
                           }}
                           min={startDate || undefined}
+                          max={new Date().toISOString().split('T')[0]}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
@@ -440,21 +423,12 @@ export default function AgentsPage() {
                 </>
               )}
             </div>
-            {hasActiveFilters() && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Clear Filters
-              </button>
-            )}
             {canCreateAgent && (
-              <Link href="/admin/agents/add" className="btn btn-primary">
+              <Link href="/admin/agents/add" className="btn btn-primary whitespace-nowrap flex-shrink-0">
                 <Plus className="h-5 w-5 mr-2" />
                 Add Agent
               </Link>
             )}
-          </div>
         </div>
 
         {loading ? (
@@ -465,77 +439,63 @@ export default function AgentsPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <UserCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No agents found</p>
-            {canCreateAgent && (
-              <Link href="/admin/agents/add" className="btn btn-primary mt-4">
-                <Plus className="h-5 w-5 mr-2" />
-                Add Your First Agent
-              </Link>
-            )}
           </div>
         ) : (
           <>
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Profile
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                        onClick={() => handleSort('name')}
-                      >
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          Name
-                          {sortColumn === 'name' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Phone
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Agency
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Status
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                        onClick={() => handleSort('createdAt')}
-                      >
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          Created Date
-                          {sortColumn === 'createdAt' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                        onClick={() => handleSort('updatedAt')}
-                      >
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          Last Updated
-                          {sortColumn === 'updatedAt' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {agents.map((agent) => (
-                      <tr key={String(agent._id)} className="hover:bg-logo-beige transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+              <table className="w-full table-fixed divide-y divide-gray-200">
+                <colgroup>
+                  <col className="w-16" />
+                  <col className="w-[18%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-32" />
+                  <col className="w-[18%]" />
+                  <col className="w-24" />
+                  <col className="w-28" />
+                </colgroup>
+                <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Profile
+                    </th>
+                    <th
+                      className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider cursor-pointer"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center gap-2">
+                        Name
+                        {sortColumn === 'name' && (
+                          sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Phone
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Agency
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {agents.map((agent) => (
+                    <tr key={String(agent._id)} className="hover:bg-logo-beige transition-colors">
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsAgent(agent)}
+                          className="block focus:outline-none"
+                          title="View details"
+                        >
                           {agent.profileImage ? (
                             <img
                               src={agent.profileImage}
@@ -549,87 +509,75 @@ export default function AgentsPage() {
                               </span>
                             </div>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-gray-900">
+                        </button>
+                      </td>
+                      <td className="px-4 py-4 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsAgent(agent)}
+                          className="text-left w-full focus:outline-none"
+                          title="View details"
+                        >
+                          <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 truncate">
                             {agent.firstName} {agent.lastName}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{agent.email || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{agent.phone || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {agent.agency?.name || agent.agency || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {agent.isActive ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Inactive
-                            </span>
+                        </button>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agent.email || ''}>
+                        {agent.email || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agent.phone || ''}>
+                        {agent.phone || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 truncate">
+                        {agent.agency?.name || agent.agency || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {agent.isActive ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm font-medium">
+                        <div className="flex items-center justify-center gap-2">
+                          {isSuperAdmin && (
+                            <Link
+                              href={`/admin/permissions?type=agent&id=${String(agent._id)}`}
+                              className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                              title="Permissions (this agent only)"
+                            >
+                              <Shield className="h-5 w-5" />
+                            </Link>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {agent.createdAt || agent.created_at ? (
-                            new Date(agent.createdAt || agent.created_at).toLocaleDateString()
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                          {canEditAgent && (
+                            <Link
+                              href={`/admin/agents/${String(agent._id)}/edit`}
+                              className="text-primary-600 hover:text-primary-900 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="h-5 w-5" />
+                            </Link>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {agent.updatedAt || agent.updated_at ? (
-                            <div className="flex flex-col">
-                              <span>{new Date(agent.updatedAt || agent.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                              <span className="text-xs text-gray-500">{new Date(agent.updatedAt || agent.updated_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                          {canDeleteAgent && (
+                            <button
+                              onClick={() => handleDelete(agent._id)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                          <div className="flex items-center justify-center gap-3">
-                            {isSuperAdmin && (
-                              <Link
-                                href={`/admin/permissions?type=agent&id=${String(agent._id)}`}
-                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                                title="Permissions (this agent only)"
-                              >
-                                <Shield className="h-5 w-5" />
-                              </Link>
-                            )}
-                            {canEditAgent && (
-                              <Link
-                                href={`/admin/agents/${String(agent._id)}/edit`}
-                                className="text-primary-600 hover:text-primary-900 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit className="h-5 w-5" />
-                              </Link>
-                            )}
-                            {canDeleteAgent && (
-                              <button
-                                onClick={() => handleDelete(agent._id)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-5 w-5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             {/* Pagination */}
@@ -706,6 +654,75 @@ export default function AgentsPage() {
           </>
         )}
       </div>
+
+      <DetailsModal
+        isOpen={!!detailsAgent}
+        onClose={() => setDetailsAgent(null)}
+        title={detailsAgent ? `${detailsAgent.firstName || ''} ${detailsAgent.lastName || ''}`.trim() || 'Agent' : ''}
+        subtitle={detailsAgent?.email}
+        avatar={
+          detailsAgent ? (
+            detailsAgent.profileImage ? (
+              <img
+                src={detailsAgent.profileImage}
+                alt={`${detailsAgent.firstName} ${detailsAgent.lastName}`}
+                className="h-14 w-14 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
+                <span className="text-white font-semibold">
+                  {detailsAgent.firstName?.charAt(0)}{detailsAgent.lastName?.charAt(0)}
+                </span>
+              </div>
+            )
+          ) : null
+        }
+        sections={detailsAgent ? [
+          {
+            title: 'Contact',
+            items: [
+              { label: 'Email', value: detailsAgent.email },
+              { label: 'Phone', value: detailsAgent.phone },
+              { label: 'Agency', value: detailsAgent.agency?.name || detailsAgent.agency },
+              {
+                label: 'Status',
+                value: detailsAgent.isActive ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>
+                ),
+              },
+            ],
+          },
+          {
+            title: 'Timeline',
+            items: [
+              { label: 'Created', value: formatDate(detailsAgent.createdAt || detailsAgent.created_at) },
+              { label: 'Last updated', value: formatDateTime(detailsAgent.updatedAt || detailsAgent.updated_at) },
+            ],
+          },
+        ] : []}
+        actions={detailsAgent ? (
+          <>
+            {canEditAgent && (
+              <Link
+                href={`/admin/agents/${String(detailsAgent._id)}/edit`}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              >
+                Edit
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setDetailsAgent(null)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

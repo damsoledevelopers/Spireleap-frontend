@@ -300,7 +300,7 @@ export default function FooterManagement() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Company Name
                   <span className="text-red-500 ml-1">*</span>
                 </label>
@@ -313,7 +313,7 @@ export default function FooterManagement() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Company Tagline
                 </label>
                 <input
@@ -326,7 +326,7 @@ export default function FooterManagement() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-bold text-gray-900 mb-2">
                 Description
               </label>
               <textarea
@@ -350,7 +350,7 @@ export default function FooterManagement() {
           <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Phone Number
                 </label>
                 <input
@@ -362,7 +362,7 @@ export default function FooterManagement() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Email Address
                 </label>
                 <input
@@ -375,7 +375,7 @@ export default function FooterManagement() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-bold text-gray-900 mb-2">
                 Physical Address
               </label>
               <textarea
@@ -397,7 +397,7 @@ export default function FooterManagement() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Facebook URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Facebook URL</label>
               <input
                 type="url"
                 value={formData.socialMedia.facebook}
@@ -410,7 +410,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Twitter URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Twitter URL</label>
               <input
                 type="url"
                 value={formData.socialMedia.twitter}
@@ -423,7 +423,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Instagram URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Instagram URL</label>
               <input
                 type="url"
                 value={formData.socialMedia.instagram}
@@ -436,7 +436,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">LinkedIn URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">LinkedIn URL</label>
               <input
                 type="url"
                 value={formData.socialMedia.linkedin}
@@ -449,7 +449,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">YouTube URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">YouTube URL</label>
               <input
                 type="url"
                 value={formData.socialMedia.youtube}
@@ -625,7 +625,7 @@ export default function FooterManagement() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Terms & Conditions URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Terms & Conditions URL</label>
               <input
                 type="text"
                 value={formData.bottomLinks.terms}
@@ -638,7 +638,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Privacy Policy URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Privacy Policy URL</label>
               <input
                 type="text"
                 value={formData.bottomLinks.privacy}
@@ -651,7 +651,7 @@ export default function FooterManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Support URL</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Support URL</label>
               <input
                 type="text"
                 value={formData.bottomLinks.support}
@@ -675,7 +675,7 @@ export default function FooterManagement() {
           <div className="space-y-5">
             {/* Predefined Copyright Text - Read Only */}
             <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-xl border-2 border-gray-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <label className="block text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <span className="text-primary-600">🔒</span>
                 Predefined Copyright Text (Fixed)
               </label>

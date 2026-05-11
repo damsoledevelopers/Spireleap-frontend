@@ -1,14 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { api } from '../../../../lib/api'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../../../contexts/AuthContext'
-import { RefreshCw, Eye, Trash2, Power, X, ChevronDown, DollarSign, Calendar, Search, User } from 'lucide-react'
+import { RefreshCw, Eye, Trash2, Power, X, ChevronDown, Calendar, Search, User } from 'lucide-react'
+import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
+
+/** Display currency for subscription amounts (aligned with billing plans / admin) */
+const SUBSCRIPTION_PRICE_CURRENCY = 'INR'
+
+function formatDateFilterSummary(startDate, endDate) {
+  const s = String(startDate || '').trim()
+  const e = String(endDate || '').trim()
+  if (!s && !e) return null
+  const fmt = (d) => {
+    if (!d) return '…'
+    const x = new Date(`${d}T12:00:00`)
+    return Number.isNaN(x.getTime())
+      ? d
+      : x.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+  if (s && e) return `${fmt(s)} – ${fmt(e)}`
+  if (s) return `From ${fmt(s)}`
+  return `Until ${fmt(e)}`
+}
 
 export default function AdminBillingSubscriptionsPage() {
   const { user: currentUser } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [subscriptions, setSubscriptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [openFilter, setOpenFilter] = useState(null) // 'price', 'date' or null
@@ -23,6 +44,20 @@ export default function AdminBillingSubscriptionsPage() {
   })
   const [selectedPlans, setSelectedPlans] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
+
+  const priceRangeButtonLabel = useMemo(() => {
+    const min = String(filters.price_min || '').trim()
+    const max = String(filters.price_max || '').trim()
+    if (!min && !max) return 'Price Range'
+    const left = min || '0'
+    const right = max || 'Any'
+    return `${SUBSCRIPTION_PRICE_CURRENCY} ${left} – ${right}`
+  }, [filters.price_min, filters.price_max])
+
+  const dateRangeButtonLabel = useMemo(() => {
+    const summary = formatDateFilterSummary(filters.start_date, filters.end_date)
+    return summary || 'Date Range'
+  }, [filters.start_date, filters.end_date])
 
   const fetchSubscriptions = async (currentFilters = null) => {
     try {
@@ -158,7 +193,13 @@ export default function AdminBillingSubscriptionsPage() {
   }
 
   const deleteSubscription = async (sub) => {
-    if (!window.confirm('Delete this subscription?')) return
+    const ok = await confirm({
+      title: 'Delete Subscription',
+      message: 'Delete this subscription?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/subscriptions/${sub._id}`)
       setSubscriptions(prev => prev.filter(s => s._id !== sub._id))
@@ -233,25 +274,29 @@ export default function AdminBillingSubscriptionsPage() {
             {/* Price Range Dropdown */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 ${openFilter === 'price' || filters.price_min || filters.price_max
+                title={priceRangeButtonLabel}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 max-w-[min(100%,280px)] ${openFilter === 'price' || filters.price_min || filters.price_max
                   ? 'border-primary-600 bg-primary-50 text-primary-700 font-medium'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
                   }`}
               >
-                <DollarSign className="h-4 w-4" />
-                <span>Price Range</span>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openFilter === 'price' ? 'rotate-180' : ''}`} />
+                <span className="text-xs font-bold text-gray-600 shrink-0">{SUBSCRIPTION_PRICE_CURRENCY}</span>
+                <span className="truncate text-sm">{priceRangeButtonLabel}</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${openFilter === 'price' ? 'rotate-180' : ''}`} />
               </button>
 
               {openFilter === 'price' && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)} />
                   <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Filter by Price</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Filter by Price ({SUBSCRIPTION_PRICE_CURRENCY})</h3>
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div>
-                        <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Min Price</label>
+                        <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">
+                          Min ({SUBSCRIPTION_PRICE_CURRENCY})
+                        </label>
                         <input
                           type="number"
                           min="0"
@@ -262,7 +307,9 @@ export default function AdminBillingSubscriptionsPage() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Max Price</label>
+                        <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">
+                          Max ({SUBSCRIPTION_PRICE_CURRENCY})
+                        </label>
                         <input
                           type="number"
                           min="0"
@@ -302,15 +349,17 @@ export default function AdminBillingSubscriptionsPage() {
             {/* Date Range Dropdown */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setOpenFilter(openFilter === 'date' ? null : 'date')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 ${openFilter === 'date' || filters.start_date || filters.end_date
+                title={dateRangeButtonLabel}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 max-w-[min(100%,320px)] ${openFilter === 'date' || filters.start_date || filters.end_date
                   ? 'border-primary-600 bg-primary-50 text-primary-700 font-medium'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
                   }`}
               >
-                <Calendar className="h-4 w-4" />
-                <span>Date Range</span>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${openFilter === 'date' ? 'rotate-180' : ''}`} />
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span className="truncate text-sm">{dateRangeButtonLabel}</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${openFilter === 'date' ? 'rotate-180' : ''}`} />
               </button>
 
               {openFilter === 'date' && (
@@ -325,6 +374,7 @@ export default function AdminBillingSubscriptionsPage() {
                           type="date"
                           className="form-input text-sm"
                           value={filters.start_date}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => setFilters(prev => ({ ...prev, start_date: e.target.value }))}
                         />
                       </div>
@@ -334,6 +384,8 @@ export default function AdminBillingSubscriptionsPage() {
                           type="date"
                           className="form-input text-sm"
                           value={filters.end_date}
+                          min={filters.start_date || undefined}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => setFilters(prev => ({ ...prev, end_date: e.target.value }))}
                         />
                       </div>
@@ -364,27 +416,6 @@ export default function AdminBillingSubscriptionsPage() {
               )}
             </div>
 
-            {(filters.search || filters.isActive || filters.price_min || filters.price_max || filters.start_date || filters.end_date) && (
-              <button
-                onClick={() => {
-                  const reset = {
-                    isActive: 'true',
-                    plan_id: '',
-                    search: '',
-                    price_min: '',
-                    price_max: '',
-                    start_date: '',
-                    end_date: ''
-                  };
-                  setFilters(reset);
-                  fetchSubscriptions(reset);
-                }}
-                className="text-sm font-medium text-red-600 hover:text-red-700 px-2 py-1 flex items-center gap-1 active:scale-95 transition-transform"
-              >
-                <X className="h-4 w-4" />
-                Clear Filters
-              </button>
-            )}
           </div>
         </div>
 
@@ -392,16 +423,16 @@ export default function AdminBillingSubscriptionsPage() {
           <div className="card-body p-0">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">User</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Plan</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Provider</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Start</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">End</th>
+                    <th className="px-6 py-3 text-right text-xs font-bold text-white uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -430,7 +461,14 @@ export default function AdminBillingSubscriptionsPage() {
                         <span className="font-medium text-gray-900">{s.plan?.plan_name}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                        {s.plan?.price !== undefined ? `$${s.plan.price}` : '-'}
+                        {s.plan?.price !== undefined ? (
+                          <>
+                            <span className="text-gray-500 font-medium mr-1">{SUBSCRIPTION_PRICE_CURRENCY}</span>
+                            {s.plan.price}
+                          </>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 capitalize">{s.provider || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -491,14 +529,14 @@ export default function AdminBillingSubscriptionsPage() {
               <div className="p-6">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Plan</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Price</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Provider</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Start</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">End</th>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -508,7 +546,14 @@ export default function AdminBillingSubscriptionsPage() {
                             {p.plan?.plan_name}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            {p.plan?.price !== undefined ? `$${p.plan.price}` : '-'}
+                            {p.plan?.price !== undefined ? (
+                              <>
+                                <span className="text-gray-500 font-medium mr-1">{SUBSCRIPTION_PRICE_CURRENCY}</span>
+                                {p.plan.price}
+                              </>
+                            ) : (
+                              '-'
+                            )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{p.provider || '-'}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{p.startedAt ? new Date(p.startedAt).toLocaleDateString() : (p.start_date ? new Date(p.start_date).toLocaleDateString() : '-')}</td>
@@ -526,6 +571,7 @@ export default function AdminBillingSubscriptionsPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

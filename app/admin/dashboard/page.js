@@ -225,8 +225,15 @@ export default function SuperAdminDashboard() {
 
         {/* Stats Grid - Matching User Design */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {dynamicStats.map((stat) => {
+          {dynamicStats.map((stat, index) => {
             const StatIcon = stat.icon
+            const accents = [
+              { bg: 'bg-indigo-100', icon: 'text-indigo-600', ring: 'ring-indigo-200' },
+              { bg: 'bg-emerald-100', icon: 'text-emerald-600', ring: 'ring-emerald-200' },
+              { bg: 'bg-amber-100', icon: 'text-amber-600', ring: 'ring-amber-200' },
+              { bg: 'bg-rose-100', icon: 'text-rose-600', ring: 'ring-rose-200' },
+            ]
+            const accent = accents[index % accents.length]
             return (
               <Link
                 key={stat.name}
@@ -234,11 +241,11 @@ export default function SuperAdminDashboard() {
                 className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all group"
               >
                 <div className="flex items-center space-x-5">
-                  <div className="flex-shrink-0 p-3 bg-gray-50 rounded-xl group-hover:bg-indigo-50 transition-colors">
-                    <StatIcon className="h-7 w-7 text-gray-400 group-hover:text-indigo-600" />
+                  <div className={`flex-shrink-0 p-3 ${accent.bg} rounded-xl ring-1 ${accent.ring} group-hover:scale-105 group-hover:shadow-sm transition-all`}>
+                    <StatIcon className={`h-7 w-7 ${accent.icon}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-500 truncate mb-1">
+                    <p className="text-sm font-bold text-gray-700 truncate mb-1">
                       {stat.name}
                     </p>
                     <div className="flex items-baseline space-x-2">
@@ -262,7 +269,7 @@ export default function SuperAdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Inquiry Sources Pie Chart - More attractive donut design */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Inquiries by Source</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Inquiries by Source</h2>
             <div className="h-64">
               {inquirySourceData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -295,7 +302,7 @@ export default function SuperAdminDashboard() {
 
           {/* Property Status Donut Chart - Showing all statuses */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Property Inventory Status</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Property Inventory Status</h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -321,7 +328,7 @@ export default function SuperAdminDashboard() {
           {/* Inquiries by Agency Bar Chart (Only for Super Admin/Staff) */}
           {(user?.role === 'super_admin' || user?.role === 'staff') && (
             <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Agencies by Lead Volume</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Top Agencies by Lead Volume</h2>
               <div className="h-80">
                 {agencyInquiryData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -347,41 +354,49 @@ export default function SuperAdminDashboard() {
 
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {(user?.role === 'super_admin') && (
               <Link
                 href="/admin/agencies"
-                className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                className="p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-center group"
               >
-                <Building className="h-6 w-6 text-indigo-600 mx-auto mb-2" />
-                <p className="text-sm font-medium text-gray-700">Add Agency</p>
+                <div className="mx-auto mb-2 inline-flex items-center justify-center h-12 w-12 rounded-xl bg-indigo-100 ring-1 ring-indigo-200 group-hover:scale-105 transition-transform">
+                  <Building className="h-6 w-6 text-indigo-600" />
+                </div>
+                <p className="text-sm font-bold text-gray-800">Add Agency</p>
               </Link>
             )}
             {(user?.role === 'super_admin' || user?.role === 'agency_admin' || user?.role === 'agent') && (
               <Link
                 href="/admin/properties"
-                className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                className="p-4 border border-gray-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-200 transition-colors text-center group"
               >
-                <Package className="h-6 w-6 text-indigo-600 mx-auto mb-2" />
-                <p className="text-sm font-medium text-gray-700">Add Property</p>
+                <div className="mx-auto mb-2 inline-flex items-center justify-center h-12 w-12 rounded-xl bg-emerald-100 ring-1 ring-emerald-200 group-hover:scale-105 transition-transform">
+                  <Package className="h-6 w-6 text-emerald-600" />
+                </div>
+                <p className="text-sm font-bold text-gray-800">Add Property</p>
               </Link>
             )}
             {(user?.role === 'super_admin' || user?.role === 'agency_admin' || user?.role === 'agent') && (
               <Link
                 href="/admin/leads"
-                className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                className="p-4 border border-gray-200 rounded-lg hover:bg-amber-50 hover:border-amber-200 transition-colors text-center group"
               >
-                <Users className="h-6 w-6 text-indigo-600 mx-auto mb-2" />
-                <p className="text-sm font-medium text-gray-700">Manage Leads</p>
+                <div className="mx-auto mb-2 inline-flex items-center justify-center h-12 w-12 rounded-xl bg-amber-100 ring-1 ring-amber-200 group-hover:scale-105 transition-transform">
+                  <Users className="h-6 w-6 text-amber-600" />
+                </div>
+                <p className="text-sm font-bold text-gray-800">Manage Leads</p>
               </Link>
             )}
             <Link
               href="/admin/reports"
-              className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-center"
+              className="p-4 border border-gray-200 rounded-lg hover:bg-rose-50 hover:border-rose-200 transition-colors text-center group"
             >
-              <FileText className="h-6 w-6 text-indigo-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">View Reports</p>
+              <div className="mx-auto mb-2 inline-flex items-center justify-center h-12 w-12 rounded-xl bg-rose-100 ring-1 ring-rose-200 group-hover:scale-105 transition-transform">
+                <FileText className="h-6 w-6 text-rose-600" />
+              </div>
+              <p className="text-sm font-bold text-gray-800">View Reports</p>
             </Link>
           </div>
         </div>

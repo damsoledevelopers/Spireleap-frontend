@@ -1,10 +1,19 @@
 'use client'
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { REPORT_NA } from '../../../lib/reportDisplay'
 
 export default function AgentPerformanceChart({ data }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/50 text-sm text-gray-500">
+        {REPORT_NA}
+      </div>
+    )
+  }
+
   const chartData = (data || []).slice(0, 10).map(agent => ({
-    name: `${agent.firstName} ${agent.lastName}`.substring(0, 15),
+    name: String(agent.name || `${agent.firstName || ''} ${agent.lastName || ''}`.trim() || agent.email || 'Agent').substring(0, 15),
     leads: agent.totalLeads || 0,
     converted: agent.convertedLeads || 0,
     conversionRate: agent.conversionRate || 0

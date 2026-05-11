@@ -5,9 +5,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Code, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function ScriptManagement() {
     const { checkPermission } = useAuth()
+    const { confirm, ConfirmDialog } = useConfirmDialog()
     const [scripts, setScripts] = useState([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
@@ -70,7 +72,13 @@ export default function ScriptManagement() {
     }
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this script?')) return
+        const ok = await confirm({
+            title: 'Delete Script',
+            message: 'Are you sure you want to delete this script?',
+            confirmText: 'Delete',
+            tone: 'danger'
+        })
+        if (!ok) return
         try {
             await api.delete(`/cms/scripts/${id}`)
             toast.success('Script deleted successfully')
@@ -214,7 +222,7 @@ export default function ScriptManagement() {
                             </div>
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Script Name *</label>
+                                    <label className="block text-sm font-bold text-gray-900 mb-1">Script Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         required
@@ -225,7 +233,7 @@ export default function ScriptManagement() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+                                    <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
                                     <input
                                         type="text"
                                         value={formData.description}
@@ -236,7 +244,7 @@ export default function ScriptManagement() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Placement</label>
+                                        <label className="block text-sm font-bold text-gray-900 mb-1">Placement</label>
                                         <select
                                             value={formData.placement}
                                             onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
@@ -260,7 +268,7 @@ export default function ScriptManagement() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Script Code *</label>
+                                    <label className="block text-sm font-bold text-gray-900 mb-1">Script Code<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                                     <textarea
                                         required
                                         value={formData.code}
@@ -292,6 +300,7 @@ export default function ScriptManagement() {
                     </div>
                 </div>
             )}
+            <ConfirmDialog />
         </div>
     )
 }

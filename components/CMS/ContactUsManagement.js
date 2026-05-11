@@ -151,7 +151,7 @@ export default function ContactUsManagement() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 required
@@ -162,7 +162,7 @@ export default function ContactUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -180,7 +180,7 @@ export default function ContactUsManagement() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Phone</label>
                 <input
                   type="text"
                   value={formData.phone}
@@ -190,7 +190,7 @@ export default function ContactUsManagement() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Email</label>
                 <input
                   type="email"
                   value={formData.email}
@@ -201,7 +201,7 @@ export default function ContactUsManagement() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Address</label>
               <textarea
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -211,7 +211,7 @@ export default function ContactUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Office Hours</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Office Hours</label>
               <input
                 type="text"
                 value={formData.officeHours}
@@ -228,7 +228,7 @@ export default function ContactUsManagement() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">SEO Settings</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meta Title</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Meta Title</label>
               <input
                 type="text"
                 value={formData.seo.metaTitle}
@@ -240,7 +240,7 @@ export default function ContactUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meta Description</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Meta Description</label>
               <textarea
                 value={formData.seo.metaDescription}
                 onChange={(e) => setFormData({
@@ -252,7 +252,7 @@ export default function ContactUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Keywords (comma-separated)</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Keywords (comma-separated)</label>
               <input
                 type="text"
                 value={formData.seo.keywords}

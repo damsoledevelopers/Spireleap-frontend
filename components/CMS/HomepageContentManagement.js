@@ -261,7 +261,7 @@ export default function HomepageContentManagement() {
           {expandedSections.hero && (
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hero Title</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Hero Title</label>
                 <input
   type="text"
   value={formData.heroTitle}
@@ -286,7 +286,7 @@ export default function HomepageContentManagement() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hero Subtitle</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Hero Subtitle</label>
                 <input
                   type="text"
                   value={formData.heroSubtitle}
@@ -310,7 +310,7 @@ export default function HomepageContentManagement() {
               </div>
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-gray-700">Hero Description</label>
+                  <label className="block text-sm font-bold text-gray-900">Hero Description</label>
                   <span className={`text-xs font-semibold ${formData.heroDescription.trim() ? (formData.heroDescription.trim().split(/\s+/).length > 250 ? 'text-red-500' : 'text-gray-500') : 'text-gray-500'}`}>
                     {formData.heroDescription.trim() ? formData.heroDescription.trim().split(/\s+/).length : 0}/250 words
                   </span>

@@ -284,8 +284,8 @@ export default function ContactPage() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Send us a Message</h2>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name *
+                    <label htmlFor="name" className="block text-sm font-bold text-gray-900 mb-2">
+                      Full Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="text"
@@ -301,8 +301,8 @@ export default function ContactPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                        Email *
+                      <label htmlFor="email" className="block text-sm font-bold text-gray-900 mb-2">
+                        Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="email"
@@ -312,11 +312,11 @@ export default function ContactPage() {
                         value={formData.email}
                         onChange={handleChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        placeholder="your@email.com"
+                        placeholder="Enter email"
                       />
                     </div>
                     <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="phone" className="block text-sm font-bold text-gray-900 mb-2">
                         Phone
                       </label>
                       <PhoneField
@@ -333,8 +333,8 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                      Subject *
+                    <label htmlFor="subject" className="block text-sm font-bold text-gray-900 mb-2">
+                      Subject<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="text"
@@ -349,8 +349,8 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                      Message *
+                    <label htmlFor="message" className="block text-sm font-bold text-gray-900 mb-2">
+                      Message<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <textarea
                       id="message"

@@ -8,6 +8,8 @@ import { api } from '../../../../lib/api'
 import {
   ArrowLeft,
   Edit,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   Bed,
   Bath,
@@ -29,6 +31,7 @@ export default function AdminPropertyViewPage() {
   const { user } = useAuth()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
 
   useEffect(() => {
     fetchProperty()
@@ -50,17 +53,48 @@ export default function AdminPropertyViewPage() {
 
   const formatPrice = (price) => {
     if (!price) return 'N/A'
-    if (typeof price === 'object') {
-      if (price.sale) return `$${Number(price.sale).toLocaleString()}`
-      if (price.rent) return `$${Number(price.rent.amount).toLocaleString()}/${price.rent.period}`
+    const toCurrency = (value) => {
+      const numeric = Number(value)
+      return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
     }
-    return `$${Number(price).toLocaleString()}`
+
+    if (typeof price === 'object') {
+      if (price.sale !== undefined && price.sale !== null && price.sale !== '') {
+        return toCurrency(price.sale) || 'N/A'
+      }
+      if (price.rent?.amount !== undefined && price.rent?.amount !== null && price.rent?.amount !== '') {
+        const rentAmount = toCurrency(price.rent.amount)
+        return rentAmount ? `${rentAmount}/${price.rent.period || 'monthly'}` : 'N/A'
+      }
+      return 'N/A'
+    }
+    return toCurrency(price) || 'N/A'
   }
 
   const getImageUrl = (image) => {
     if (typeof image === 'string') return image
     return image?.url || image
   }
+
+  const getOrderedImages = () => {
+    const images = Array.isArray(property?.images) ? property.images.filter(Boolean) : []
+    if (images.length <= 1) return images
+    const primaryIndex = images.findIndex((img) => img?.isPrimary)
+    if (primaryIndex <= 0) return images
+    return [images[primaryIndex], ...images.filter((_, idx) => idx !== primaryIndex)]
+  }
+
+  const orderedImages = getOrderedImages()
+
+  useEffect(() => {
+    setActiveImageIndex(0)
+  }, [property?.id, property?._id, orderedImages.length])
+
+  useEffect(() => {
+    if (!property) return
+    const name = property.title?.trim() || 'Property'
+    document.title = `${name} · Admin`
+  }, [property])
 
   if (loading) {
     return (
@@ -85,12 +119,9 @@ export default function AdminPropertyViewPage() {
     )
   }
 
-  const primaryImage = property.images?.find(img => img?.isPrimary) || property.images?.[0]
-  const otherImages = property.images?.filter((img, idx) => {
-    const imgUrl = getImageUrl(img)
-    const primaryUrl = getImageUrl(primaryImage)
-    return imgUrl !== primaryUrl && idx > 0
-  }) || []
+  const activeImage = orderedImages[activeImageIndex]
+  const totalImages = orderedImages.length
+  const canSlide = totalImages > 1
 
   return (
     <DashboardLayout>
@@ -100,9 +131,11 @@ export default function AdminPropertyViewPage() {
             <Link href="/admin/properties" className="text-gray-600 hover:text-gray-900">
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Property Details</h1>
-              <p className="mt-1 text-sm text-gray-500">View property information</p>
+            <div className="min-w-0 pr-4">
+              <h1 className="text-2xl font-bold text-gray-900 leading-tight break-words">
+                {property.title?.trim() || 'Untitled property'}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">Property details</p>
             </div>
           </div>
           <Link
@@ -120,9 +153,9 @@ export default function AdminPropertyViewPage() {
             {/* Images */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="relative h-96 bg-gray-200">
-                {primaryImage ? (
+                {activeImage ? (
                   <img
-                    src={getImageUrl(primaryImage)}
+                    src={getImageUrl(activeImage)}
                     alt={property.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -134,20 +167,51 @@ export default function AdminPropertyViewPage() {
                     <Package className="h-16 w-16 text-gray-400" />
                   </div>
                 )}
+                {canSlide && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setActiveImageIndex((prev) => (prev === 0 ? totalImages - 1 : prev - 1))}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full"
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveImageIndex((prev) => (prev === totalImages - 1 ? 0 : prev + 1))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    <span className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                      {activeImageIndex + 1}/{totalImages}
+                    </span>
+                  </>
+                )}
               </div>
-              {otherImages.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 p-4">
-                  {otherImages.slice(0, 4).map((img, idx) => (
-                    <div key={idx} className="relative h-20 bg-gray-200 rounded overflow-hidden">
+              {orderedImages.length > 1 && (
+                <div className="grid grid-cols-4 md:grid-cols-6 gap-2 p-4">
+                  {orderedImages.map((img, idx) => (
+                    <button
+                      key={`${getImageUrl(img)}-${idx}`}
+                      type="button"
+                      onClick={() => setActiveImageIndex(idx)}
+                      className={`relative h-20 bg-gray-200 rounded overflow-hidden border-2 ${
+                        idx === activeImageIndex ? 'border-primary-600' : 'border-transparent'
+                      }`}
+                      aria-label={`View image ${idx + 1}`}
+                    >
                       <img
                         src={getImageUrl(img)}
-                        alt={`${property.title} ${idx + 2}`}
+                        alt={`${property.title} ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           e.target.style.display = 'none'
                         }}
                       />
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -157,9 +221,9 @@ export default function AdminPropertyViewPage() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">{property.title}</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Location</h2>
                   <div className="flex items-center text-gray-600">
-                    <MapPin className="h-5 w-5 mr-2" />
+                    <MapPin className="h-5 w-5 mr-2 shrink-0" />
                     <span>
                       {property.location?.address && `${property.location.address}, `}
                       {property.location?.city}, {property.location?.state}

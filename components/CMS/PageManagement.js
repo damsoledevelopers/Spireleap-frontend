@@ -6,12 +6,14 @@ import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
 import 'react-quill/dist/quill.snow.css'
 
 export default function PageManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [pages, setPages] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -103,7 +105,13 @@ export default function PageManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this page?')) return
+    const ok = await confirm({
+      title: 'Delete Page',
+      message: 'Are you sure you want to delete this page?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/cms/pages/${id}`)
       toast.success('Page deleted successfully')
@@ -235,7 +243,7 @@ export default function PageManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingPage ? 'Edit Page' : 'Create New Page'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -251,7 +259,7 @@ export default function PageManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Slug *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Slug<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -261,7 +269,7 @@ export default function PageManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Template</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Template</label>
                   <select
                     value={formData.template}
                     onChange={(e) => setFormData({ ...formData, template: e.target.value })}
@@ -275,7 +283,7 @@ export default function PageManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Content<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   {typeof window !== 'undefined' && (
                     <ReactQuill
                       theme="snow"
@@ -289,7 +297,7 @@ export default function PageManagement() {
                   <h3 className="text-lg font-semibold mb-3">SEO Settings</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Meta Title</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Meta Title</label>
                       <input
                         type="text"
                         value={formData.seo.metaTitle}
@@ -301,7 +309,7 @@ export default function PageManagement() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Meta Description</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Meta Description</label>
                       <textarea
                         value={formData.seo.metaDescription}
                         onChange={(e) => setFormData({
@@ -313,7 +321,7 @@ export default function PageManagement() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Keywords (comma-separated)</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Keywords (comma-separated)</label>
                       <input
                         type="text"
                         value={formData.seo.keywords}
@@ -334,7 +342,7 @@ export default function PageManagement() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -358,6 +366,7 @@ export default function PageManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

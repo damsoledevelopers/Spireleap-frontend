@@ -23,7 +23,7 @@ export default function FormField({
 
   return (
     <div className="form-group">
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor={name} className="block text-sm font-bold text-gray-900 mb-2">
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>

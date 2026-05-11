@@ -63,11 +63,16 @@ export default function AdminPendingPropertiesPage() {
 
   const formatPrice = (property) => {
     if (!property.price) return 'Price on request'
-    if (property.listingType === 'sale' && property.price.sale) {
-      return `$${Number(property.price.sale).toLocaleString()}`
+    const toCurrency = (value) => {
+      const numeric = Number(value)
+      return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
     }
-    if (property.listingType === 'rent' && property.price.rent) {
-      return `$${Number(property.price.rent.amount).toLocaleString()}/${property.price.rent.period || 'month'}`
+    if (property.listingType === 'sale' && property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
+      return toCurrency(property.price.sale) || 'N/A'
+    }
+    if (property.listingType === 'rent' && property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
+      const rentAmount = toCurrency(property.price.rent.amount)
+      return rentAmount ? `${rentAmount}/${property.price.rent.period || 'month'}` : 'N/A'
     }
     return 'Price on request'
   }
@@ -233,7 +238,7 @@ export default function AdminPendingPropertiesPage() {
                 Are you sure you want to reject <strong>{selectedProperty.title}</strong>?
               </p>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Rejection Reason (Optional)
                 </label>
                 <textarea

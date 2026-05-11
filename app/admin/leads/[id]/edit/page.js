@@ -425,8 +425,8 @@ export default function AdminEditLeadPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -437,8 +437,8 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -449,9 +449,9 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Mail className="h-4 w-4" />
-                  Email *
+                  Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="email"
@@ -462,9 +462,9 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Phone className="h-4 w-4" />
-                  Phone *
+                  Phone<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <PhoneField
                   required
@@ -478,7 +478,7 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Alternate Phone
                 </label>
                 <PhoneField
@@ -502,7 +502,7 @@ export default function AdminEditLeadPage() {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Street
                   </label>
                   <input
@@ -513,29 +513,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contact.address.city}
-                    onChange={(e) => handleInputChange('contact.address.city', sanitizeAlphaText(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contact.address.state}
-                    onChange={(e) => handleInputChange('contact.address.state', sanitizeAlphaText(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Country
                   </label>
                   <input
@@ -546,7 +524,29 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.state}
+                    onChange={(e) => handleInputChange('contact.address.state', sanitizeAlphaText(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.contact.address.city}
+                    onChange={(e) => handleInputChange('contact.address.city', sanitizeAlphaText(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     ZIP Code
                   </label>
                   <input
@@ -568,7 +568,7 @@ export default function AdminEditLeadPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Building className="h-4 w-4" />
                   Agency
                 </label>
@@ -590,8 +590,8 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Source *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Source<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <SearchableSelect
                   required
@@ -599,12 +599,12 @@ export default function AdminEditLeadPage() {
                   onChange={(e) => handleInputChange('source', e.target.value)}
                   options={dropdowns.leadSources || []}
                   placeholder="Select source"
+                  searchable={false}
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-                  searchPlaceholder="Search source..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Campaign Name
                 </label>
                 <input
@@ -616,8 +616,8 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Status<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <SearchableSelect
                   required
@@ -631,7 +631,7 @@ export default function AdminEditLeadPage() {
               </div>
               {formData.status === 'lost' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Lost Reason
                   </label>
                   <SearchableSelect
@@ -653,8 +653,8 @@ export default function AdminEditLeadPage() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Priority<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <SearchableSelect
                   required
@@ -667,7 +667,7 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Building className="h-4 w-4" />
                   Property
                 </label>
@@ -684,7 +684,7 @@ export default function AdminEditLeadPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Assign to Agent
                 </label>
                 <SearchableSelect
@@ -704,7 +704,7 @@ export default function AdminEditLeadPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Inquiry Information</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Message
                 </label>
                 <textarea
@@ -717,7 +717,7 @@ export default function AdminEditLeadPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Budget Min
                   </label>
                   <input
@@ -729,7 +729,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Budget Max
                   </label>
                   <input
@@ -741,7 +741,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Currency
                   </label>
                   <SearchableSelect
@@ -755,7 +755,7 @@ export default function AdminEditLeadPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Timeline
                 </label>
                 <SearchableSelect
@@ -769,7 +769,7 @@ export default function AdminEditLeadPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Preferred Rooms
                   </label>
                   <input
@@ -781,7 +781,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Preferred Size
                   </label>
                   <input
@@ -793,7 +793,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Buyer Type
                   </label>
                   <input
@@ -805,7 +805,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Payment Method
                   </label>
                   <input
@@ -817,7 +817,7 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Nationality
                   </label>
                   <input
@@ -829,18 +829,19 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     DOB
                   </label>
                   <input
                     type="date"
                     value={formData.inquiry.dob}
+                    max={new Date().toISOString().split('T')[0]}
                     onChange={(e) => handleInputChange('inquiry.dob', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Spoken Languages
                   </label>
                   <input
@@ -854,12 +855,12 @@ export default function AdminEditLeadPage() {
                       handleInputChange('inquiry.spokenLanguages', next)
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="e.g. English, Arabic"
+                    placeholder="Enter languages"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Requirements
                 </label>
                 <textarea

@@ -86,12 +86,12 @@ export default function EntryPermissionModal({
 
                     <div className="border border-gray-200 rounded-xl overflow-hidden">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
+                            <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm border-b border-primary-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-sm font-semibold text-gray-900">Module / Role</th>
-                                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">View</th>
-                                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Edit</th>
-                                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Delete</th>
+                                    <th className="px-6 py-3 text-sm font-bold text-white">Module / Role</th>
+                                    <th className="px-4 py-3 text-center text-sm font-bold text-white">View</th>
+                                    <th className="px-4 py-3 text-center text-sm font-bold text-white">Edit</th>
+                                    <th className="px-4 py-3 text-center text-sm font-bold text-white">Delete</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">

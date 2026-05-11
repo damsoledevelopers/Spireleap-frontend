@@ -15,8 +15,7 @@ import {
     Briefcase,
     FileText,
     Globe,
-    Award,
-    Trash2
+    Award
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
@@ -44,7 +43,6 @@ export default function ProfilePage() {
     const [saving, setSaving] = useState(false)
     const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
     const [uploading, setUploading] = useState(false)
-    const [removingImage, setRemovingImage] = useState(false)
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -238,28 +236,6 @@ export default function ProfilePage() {
         }
     }
 
-    const handleRemoveProfileImage = async () => {
-        if (user?.role !== 'super_admin' || !formData.profileImage) return
-        if (!window.confirm('Remove this photo from your profile and delete it from Cloudinary?')) return
-
-        try {
-            setRemovingImage(true)
-            await api.delete('/upload/cloudinary/profile-image')
-            setFormData(prev => ({ ...prev, profileImage: '' }))
-            await refreshUser()
-            toast.success('Profile photo removed')
-        } catch (error) {
-            console.error('Remove profile image:', error)
-            toast.error(
-                error.response?.data?.message ||
-                    error.message ||
-                    'Failed to remove profile photo'
-            )
-        } finally {
-            setRemovingImage(false)
-        }
-    }
-
     const handleSubmit = async (e) => {
         e.preventDefault()
         setSaving(true)
@@ -362,7 +338,7 @@ export default function ProfilePage() {
                                                     <User className="h-16 w-16 sm:h-20 sm:w-20 text-gray-300" />
                                                 </div>
                                             )}
-                                            {(uploading || removingImage) && (
+                                            {uploading && (
                                                 <div className="absolute inset-0 bg-gray-900/55 flex items-center justify-center backdrop-blur-[1px]">
                                                     <Loader2 className="h-8 w-8 sm:h-9 sm:w-9 animate-spin text-white" />
                                                 </div>
@@ -377,7 +353,7 @@ export default function ProfilePage() {
                                             <label
                                                 htmlFor="profile-avatar-upload"
                                                 className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-white shadow-sm transition-all cursor-pointer
-                                                    ${uploading || removingImage ? 'bg-primary-400 cursor-not-allowed opacity-80' : 'bg-primary-600 hover:bg-primary-700 hover:shadow active:scale-[0.98]'}`}
+                                                    ${uploading ? 'bg-primary-400 cursor-not-allowed opacity-80' : 'bg-primary-600 hover:bg-primary-700 hover:shadow active:scale-[0.98]'}`}
                                             >
                                                 {uploading ? (
                                                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -391,24 +367,9 @@ export default function ProfilePage() {
                                                     className="sr-only"
                                                     accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
                                                     onChange={handleImageUpload}
-                                                    disabled={uploading || removingImage}
+                                                    disabled={uploading}
                                                 />
                                             </label>
-                                            {user?.role === 'super_admin' && formData.profileImage ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleRemoveProfileImage}
-                                                    disabled={uploading || removingImage}
-                                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium text-red-700 shadow-sm transition-all hover:bg-red-50 hover:border-red-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    {removingImage ? (
-                                                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-red-600" />
-                                                    ) : (
-                                                        <Trash2 className="h-4 w-4 shrink-0" />
-                                                    )}
-                                                    <span>{removingImage ? 'Removing…' : 'Remove'}</span>
-                                                </button>
-                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
@@ -444,7 +405,12 @@ export default function ProfilePage() {
                             </h3>
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">First Name</label>
+                                    <label className="block text-sm font-bold text-gray-900">
+                                        First Name
+                                        <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                            *
+                                        </span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="firstName"
@@ -455,7 +421,12 @@ export default function ProfilePage() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                                    <label className="block text-sm font-bold text-gray-900">
+                                        Last Name
+                                        <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                            *
+                                        </span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="lastName"
@@ -466,7 +437,12 @@ export default function ProfilePage() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                                    <label className="block text-sm font-bold text-gray-900">
+                                        Email Address
+                                        <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                            *
+                                        </span>
+                                    </label>
                                     <div className="mt-1 flex rounded-md shadow-sm">
                                         <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
                                             <Mail className="h-4 w-4" />
@@ -482,7 +458,7 @@ export default function ProfilePage() {
                                     <p className="mt-1 text-xs text-gray-400">Email cannot be changed contact admin.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                                    <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                                         <Phone className="h-4 w-4" />
                                         Phone Number
                                     </label>
@@ -510,7 +486,7 @@ export default function ProfilePage() {
                             </h3>
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Street Address</label>
+                                    <label className="block text-sm font-bold text-gray-900">Street Address</label>
                                     <input
                                         type="text"
                                         name="street"
@@ -521,7 +497,41 @@ export default function ProfilePage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">City</label>
+                                        <label className="block text-sm font-bold text-gray-900">State</label>
+                                        <input
+                                            type="text"
+                                            name="state"
+                                            value={formData.address.state}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, state: v }
+                                                }))
+                                            }}
+                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-900">Country</label>
+                                        <input
+                                            type="text"
+                                            name="country"
+                                            value={formData.address.country}
+                                            onChange={(e) => {
+                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, country: v }
+                                                }))
+                                            }}
+                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-900">City</label>
                                         <input
                                             type="text"
                                             name="city"
@@ -537,25 +547,7 @@ export default function ProfilePage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">State</label>
-                                        <input
-                                            type="text"
-                                            name="state"
-                                            value={formData.address.state}
-                                            onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    address: { ...prev.address, state: v }
-                                                }))
-                                            }}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700">Zip Code</label>
+                                        <label className="block text-sm font-bold text-gray-900">Zip Code</label>
                                         <input
                                             type="text"
                                             name="zipCode"
@@ -575,22 +567,6 @@ export default function ProfilePage() {
                                             </p>
                                         )}
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700">Country</label>
-                                        <input
-                                            type="text"
-                                            name="country"
-                                            value={formData.address.country}
-                                            onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    address: { ...prev.address, country: v }
-                                                }))
-                                            }}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
-                                        />
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -604,7 +580,7 @@ export default function ProfilePage() {
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">License Number</label>
+                                        <label className="block text-sm font-bold text-gray-900">License Number</label>
                                         <div className="mt-1 flex rounded-md shadow-sm">
                                             <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
                                                 <Award className="h-4 w-4" />
@@ -619,7 +595,7 @@ export default function ProfilePage() {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Years of Experience</label>
+                                        <label className="block text-sm font-bold text-gray-900">Years of Experience</label>
                                         <input
                                             type="number"
                                             name="agentInfo.yearsOfExperience"
@@ -629,7 +605,7 @@ export default function ProfilePage() {
                                         />
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-bold text-gray-900 mb-1">
                                             Professional Bio / Description
                                         </label>
                                         <div className="flex rounded-md shadow-sm">

@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Eye, EyeOff, Search, Mail, Code } from 'lucide-react'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 // Dynamically import react-quill to avoid SSR issues
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
@@ -13,6 +14,7 @@ import 'react-quill/dist/quill.snow.css'
 
 export default function EmailTemplateManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -162,7 +164,13 @@ export default function EmailTemplateManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this email template?')) return
+    const ok = await confirm({
+      title: 'Delete Email Template',
+      message: 'Are you sure you want to delete this email template?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       await api.delete(`/email-templates/${id}`)
@@ -369,8 +377,8 @@ export default function EmailTemplateManagement() {
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Template Name *
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Template Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -381,8 +389,8 @@ export default function EmailTemplateManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category *
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Category<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <select
                     required
@@ -401,8 +409,8 @@ export default function EmailTemplateManagement() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Subject *
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Email Subject<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -415,7 +423,7 @@ export default function EmailTemplateManagement() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Available Variables
                 </label>
                 <div className="bg-gray-50 p-4 rounded-lg max-h-40 overflow-y-auto">
@@ -438,8 +446,8 @@ export default function EmailTemplateManagement() {
 
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    HTML Content *
+                  <label className="block text-sm font-bold text-gray-900">
+                    HTML Content<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <button
                     type="button"
@@ -466,7 +474,7 @@ export default function EmailTemplateManagement() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Plain Text Content (Optional)
                 </label>
                 <textarea
@@ -514,6 +522,7 @@ export default function EmailTemplateManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

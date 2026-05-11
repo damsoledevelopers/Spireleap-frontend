@@ -7,9 +7,11 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
 import EntryPermissionModal from '../Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../lib/permissions'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function ContactMessagesManagement() {
   const { user, checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const isSuperAdmin = user?.role === 'super_admin'
   const canViewMessages = checkPermission('contact_messages', 'view')
   const canDeleteMessage = checkPermission('contact_messages', 'delete')
@@ -39,7 +41,13 @@ export default function ContactMessagesManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this message?')) return
+    const ok = await confirm({
+      title: 'Delete Message',
+      message: 'Are you sure you want to delete this message?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/cms/contact-messages/${id}`)
       toast.success('Message deleted successfully')
@@ -236,14 +244,14 @@ export default function ContactMessagesManagement() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Name</label>
                     <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                       <User className="h-5 w-5 text-gray-400 mr-2" />
                       <span className="text-gray-900">{selectedMessage.name}</span>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Phone</label>
                     <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                       <Phone className="h-5 w-5 text-gray-400 mr-2" />
                       <span className="text-gray-900">{selectedMessage.phone || 'N/A'}</span>
@@ -252,7 +260,7 @@ export default function ContactMessagesManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Email</label>
                   <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                     <Mail className="h-5 w-5 text-gray-400 mr-2" />
                     <a
@@ -265,21 +273,21 @@ export default function ContactMessagesManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Subject</label>
                   <div className="p-3 bg-gray-50 rounded-lg">
                     <span className="text-gray-900">{selectedMessage.subject || 'No Subject'}</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Message</label>
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <p className="text-gray-900 whitespace-pre-wrap">{selectedMessage.message}</p>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Submitted On</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Submitted On</label>
                   <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                     <Calendar className="h-5 w-5 text-gray-400 mr-2" />
                     <span className="text-gray-900">{formatDate(selectedMessage.createdAt)}</span>
@@ -328,6 +336,7 @@ export default function ContactMessagesManagement() {
         entryType="contact-messages"
         onSuccess={fetchMessages}
       />
+      <ConfirmDialog />
     </div>
   )
 }

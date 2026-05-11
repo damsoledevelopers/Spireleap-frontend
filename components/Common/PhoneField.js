@@ -29,9 +29,9 @@ export default function PhoneField({
   return (
     <div className="form-group">
       {label ? (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-bold text-gray-900 mb-2">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>}
         </label>
       ) : null}
 

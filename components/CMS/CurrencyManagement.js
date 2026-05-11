@@ -5,8 +5,18 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Coins } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
+import SearchableSelect from '../Common/SearchableSelect'
+import { ISO_4217_CURRENCIES, findCurrencyByCode } from '../../lib/currencyIso4217'
 
 const BASE_CURRENCY_CODE = 'AED'
+
+const CURRENCY_SELECT_OPTIONS = ISO_4217_CURRENCIES.map((c) => ({
+  value: c.code,
+  label: `${c.code} — ${c.name}`
+}))
+
+const normalizedCountryKey = (s) => String(s || '').trim().toLowerCase()
 
 const emptyForm = {
   countryName: '',
@@ -18,6 +28,7 @@ const emptyForm = {
 
 export default function CurrencyManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [currencies, setCurrencies] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -25,10 +36,60 @@ export default function CurrencyManagement() {
   const [searchTerm, setSearchTerm] = useState('')
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState(emptyForm)
+  const [countryList, setCountryList] = useState([])
+  const [countryListLoading, setCountryListLoading] = useState(false)
 
   useEffect(() => {
     fetchCurrencies()
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        setCountryListLoading(true)
+        const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+        const data = await res.json()
+        const countries = Array.isArray(data?.data)
+          ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean)
+          : []
+        countries.sort((a, b) => a.localeCompare(b))
+        if (!cancelled) setCountryList(countries)
+      } catch (e) {
+        console.error('Error loading countries:', e)
+        if (!cancelled) setCountryList([])
+      } finally {
+        if (!cancelled) setCountryListLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const countrySelectOptions = useMemo(() => {
+    const taken = new Set(
+      currencies
+        .filter((c) => !editingCurrency || String(c._id) !== String(editingCurrency._id))
+        .map((c) => normalizedCountryKey(c.countryName))
+    )
+    const currentKey = editingCurrency ? normalizedCountryKey(editingCurrency.countryName) : ''
+    return countryList
+      .filter((name) => {
+        const key = normalizedCountryKey(name)
+        if (currentKey && key === currentKey) return true
+        return !taken.has(key)
+      })
+      .map((name) => ({ value: name, label: name }))
+  }, [countryList, currencies, editingCurrency])
+
+  const currencyOptionsForSelect = useMemo(() => {
+    const code = String(formData.currencyCode || '').trim().toUpperCase()
+    if (!code) return CURRENCY_SELECT_OPTIONS
+    const exists = CURRENCY_SELECT_OPTIONS.some((o) => o.value === code)
+    if (exists) return CURRENCY_SELECT_OPTIONS
+    return [{ value: code, label: `${code} — (other)` }, ...CURRENCY_SELECT_OPTIONS]
+  }, [formData.currencyCode])
 
   const fetchCurrencies = async () => {
     try {
@@ -82,14 +143,18 @@ export default function CurrencyManagement() {
   }
 
   const validateForm = () => {
-    if (!formData.countryName?.trim()) return 'Country Name is required'
-    if (!formData.currencyName?.trim()) return 'Currency Name is required'
-    if (!formData.currencyCode?.trim()) return 'Currency Code is required'
-    if (formData.aedRate === '' || formData.aedRate === null || formData.aedRate === undefined) return `${BASE_CURRENCY_CODE} Rate is required`
+    if (!formData.countryName?.trim()) return 'Select a country'
     const code = String(formData.currencyCode).trim().toUpperCase()
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) return 'Currency Code must be 3-10 characters (A-Z/0-9)'
+    if (!code) return 'Enter a currency code'
+    if (!/^[A-Z0-9]{3,10}$/.test(code)) return 'Currency code must be 3–10 characters (A–Z / 0–9)'
+    const cur = findCurrencyByCode(code)
+    let name = (formData.currencyName?.trim() || cur?.name || '').trim()
+    if (!name && /^[A-Z0-9]{3,10}$/.test(code)) name = code
+    if (!name) return 'Select a currency or enter a valid currency code'
+    if (formData.aedRate === '' || formData.aedRate === null || formData.aedRate === undefined)
+      return `${BASE_CURRENCY_CODE} rate is required`
     const rate = Number(formData.aedRate)
-    if (Number.isNaN(rate) || rate < 0) return `${BASE_CURRENCY_CODE} Rate must be a number >= 0`
+    if (Number.isNaN(rate) || rate < 0) return `${BASE_CURRENCY_CODE} rate must be a number ≥ 0`
     return null
   }
 
@@ -101,10 +166,15 @@ export default function CurrencyManagement() {
       return
     }
 
+    const code = String(formData.currencyCode).trim().toUpperCase()
+    const cur = findCurrencyByCode(code)
+    let currencyName = (formData.currencyName?.trim() || cur?.name || '').trim()
+    if (!currencyName && /^[A-Z0-9]{3,10}$/.test(code)) currencyName = code
+
     const payload = {
       countryName: formData.countryName.trim(),
-      currencyName: formData.currencyName.trim(),
-      currencyCode: String(formData.currencyCode).trim().toUpperCase(),
+      currencyName,
+      currencyCode: code,
       aedRate: Number(formData.aedRate),
       status: !!formData.status
     }
@@ -136,7 +206,13 @@ export default function CurrencyManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this currency?')) return
+    const ok = await confirm({
+      title: 'Delete Currency',
+      message: 'Are you sure you want to delete this currency?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/currency/${id}`)
       toast.success('Currency deleted successfully')
@@ -286,47 +362,76 @@ export default function CurrencyManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingCurrency ? 'Edit Currency' : 'Create New Currency'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country Name *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Select country<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                  </label>
+                  <SearchableSelect
+                    value={formData.countryName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, countryName: e.target.value }))}
+                    options={countrySelectOptions}
+                    placeholder={countryListLoading ? 'Loading countries…' : 'Select country'}
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-left bg-white disabled:bg-gray-50"
+                    searchPlaceholder="Search country..."
+                    disabled={!!editingCurrency || countryListLoading}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Only one currency entry per country</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Select currency<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                  </label>
+                  <SearchableSelect
+                    value={formData.currencyCode}
+                    onChange={(e) => {
+                      const nextCode = e.target.value
+                      const cur = findCurrencyByCode(nextCode)
+                      setFormData((prev) => ({
+                        ...prev,
+                        currencyCode: nextCode,
+                        currencyName: cur ? cur.name : ''
+                      }))
+                    }}
+                    options={currencyOptionsForSelect}
+                    placeholder="Select currency"
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-left bg-white disabled:bg-gray-50"
+                    searchPlaceholder="Search currency..."
+                    disabled={!!editingCurrency}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Enter code<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     disabled={!!editingCurrency}
-                    value={formData.countryName}
-                    onChange={(e) => setFormData({ ...formData, countryName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
-                    placeholder="e.g., United States"
+                    value={formData.currencyCode}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                        .replace(/[^a-zA-Z0-9]/g, '')
+                        .toUpperCase()
+                        .slice(0, 10)
+                      const cur = findCurrencyByCode(raw)
+                      setFormData((prev) => ({
+                        ...prev,
+                        currencyCode: raw,
+                        currencyName: cur ? cur.name : ''
+                      }))
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 uppercase"
+                    placeholder="e.g. USD"
+                    autoComplete="off"
                   />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Currency Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.currencyName}
-                      onChange={(e) => setFormData({ ...formData, currencyName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                      placeholder="e.g., US Dollar"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Currency Code *</label>
-                    <input
-                      type="text"
-                      required
-                      disabled={!!editingCurrency}
-                      value={formData.currencyCode}
-                      onChange={(e) => setFormData({ ...formData, currencyCode: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
-                      placeholder="e.g., USD"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">ISO format (unique)</p>
-                  </div>
+                  <p className="text-xs text-gray-500 mt-1">ISO code (unique). Editable; updates from currency list when matched.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current {BASE_CURRENCY_CODE} Rate *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Current {BASE_CURRENCY_CODE} Rate<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="number"
                     step="0.0001"
@@ -354,7 +459,7 @@ export default function CurrencyManagement() {
                       onChange={(e) => setFormData({ ...formData, status: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
 
@@ -375,6 +480,7 @@ export default function CurrencyManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

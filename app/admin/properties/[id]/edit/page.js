@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { ArrowLeft, Save, Upload, X, MapPin, Building, User } from 'lucide-react'
+import { ArrowLeft, Save, Upload, X, MapPin, Building, User, ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -102,8 +102,8 @@ export default function AdminEditPropertyPage() {
         specifications: {
           bedrooms: property.specifications?.bedrooms || '',
           bathrooms: property.specifications?.bathrooms || '',
-          balconies: property.specifications?.balconies || 0,
-          livingRoom: property.specifications?.livingRoom || 0,
+          balconies: property.specifications?.balconies || '',
+          livingRoom: property.specifications?.livingRoom || '',
           unfurnished: property.specifications?.unfurnished || 0,
           semiFurnished: property.specifications?.semiFurnished || 0,
           fullyFurnished: property.specifications?.fullyFurnished || 0,
@@ -111,8 +111,8 @@ export default function AdminEditPropertyPage() {
             value: property.specifications?.area?.value || '',
             unit: property.specifications?.area?.unit || 'sqft'
           },
-          parking: property.specifications?.parking || 0,
-          floors: property.specifications?.floors || 1,
+          parking: property.specifications?.parking || '',
+          floors: property.specifications?.floors || '',
           yearBuilt: property.specifications?.yearBuilt || '',
           lotSize: {
             value: property.specifications?.lotSize?.value || '',
@@ -201,6 +201,60 @@ export default function AdminEditPropertyPage() {
         }
       })
     }
+  }
+
+  const renderSpecificationStepper = (label, field, value, maxLen = 2, placeholder = 'Add', min = 0, max) => {
+    const numericValue = parseInt(value, 10)
+    const current = Number.isNaN(numericValue) ? null : numericValue
+    const maxValue = typeof max === 'number' ? max : (10 ** maxLen) - 1
+    const isDecrementDisabled = current === null || current <= min
+    const isIncrementDisabled = current !== null && current >= maxValue
+
+    const clampValue = (next) => {
+      if (next <= min) {
+        handleInputChange(field, min === 0 ? '' : String(min))
+        return
+      }
+      const clamped = Math.min(next, maxValue)
+      handleInputChange(field, sanitizeDigits(String(clamped), maxLen))
+    }
+
+    return (
+      <div>
+        <label className="block text-sm font-bold text-gray-900 mb-1">{label}</label>
+        <div className="relative w-full">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => handleInputChange(field, sanitizeDigits(e.target.value, maxLen))}
+            className="w-full h-[42px] pr-10 pl-3 py-2 border border-gray-300 rounded-xl shadow-sm transition-all duration-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 hover:border-gray-400"
+            placeholder={placeholder}
+            aria-label={label}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-9 flex-col overflow-hidden rounded-r-xl border-l border-gray-200">
+            <button
+              type="button"
+              onClick={() => clampValue((current ?? min) + 1)}
+              disabled={isIncrementDisabled}
+              className="flex-1 inline-flex items-center justify-center text-gray-500 transition-colors duration-150 hover:bg-gray-50 hover:text-gray-700 disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+              aria-label={`Increase ${label}`}
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => clampValue((current ?? min) - 1)}
+              disabled={isDecrementDisabled}
+              className="flex-1 inline-flex items-center justify-center border-t border-gray-200 text-gray-500 transition-colors duration-150 hover:bg-gray-50 hover:text-gray-700 disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+              aria-label={`Decrease ${label}`}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const handleImageUpload = async (e) => {
@@ -381,7 +435,7 @@ export default function AdminEditPropertyPage() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agency *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Agency<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <SearchableSelect
                     required
                     value={formData.agency}
@@ -396,7 +450,7 @@ export default function AdminEditPropertyPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agent *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Agent<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <SearchableSelect
                     required
                     value={formData.agent}
@@ -419,7 +473,7 @@ export default function AdminEditPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
@@ -429,7 +483,7 @@ export default function AdminEditPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Property Type *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Property Type<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <SearchableSelect
                   required
                   value={formData.propertyType}
@@ -449,7 +503,7 @@ export default function AdminEditPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Type *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Listing Type<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <SearchableSelect
                   required
                   value={formData.listingType}
@@ -464,7 +518,7 @@ export default function AdminEditPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Status<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <SearchableSelect
                   required
                   value={formData.status}
@@ -490,7 +544,7 @@ export default function AdminEditPropertyPage() {
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Description<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
               <textarea
                 required
                 value={formData.description}
@@ -508,7 +562,7 @@ export default function AdminEditPropertyPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {formData.listingType === 'sale' ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Sale Price<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="number"
                     required
@@ -521,7 +575,7 @@ export default function AdminEditPropertyPage() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rent Amount *</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Rent Amount<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <input
                       type="number"
                       required
@@ -532,7 +586,7 @@ export default function AdminEditPropertyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rent Period *</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Rent Period<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                     <SearchableSelect
                       required
                       value={formData.price.rent.period}
@@ -551,7 +605,7 @@ export default function AdminEditPropertyPage() {
                 </>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Currency</label>
                 <SearchableSelect
                   value={formData.price.currency}
                   onChange={(e) => handleInputChange('price.currency', e.target.value)}
@@ -576,52 +630,57 @@ export default function AdminEditPropertyPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Address<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
                   value={formData.location.address}
                   onChange={(e) => handleInputChange('location.address', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter street address"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">City<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
                   value={formData.location.city}
                   onChange={(e) => handleInputChange('location.city', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter city"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">State<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
                   value={formData.location.state}
                   onChange={(e) => handleInputChange('location.state', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter state"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Country<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
                   value={formData.location.country}
                   onChange={(e) => handleInputChange('location.country', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter country"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Zip Code</label>
                 <input
                   type="text"
                   value={formData.location.zipCode}
                   onChange={(e) => handleInputChange('location.zipCode', sanitizeZip(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter ZIP code"
                 />
               </div>
             </div>
@@ -636,7 +695,7 @@ export default function AdminEditPropertyPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Images</h2>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Upload Images</label>
               <input
                 type="file"
                 multiple
@@ -682,54 +741,10 @@ export default function AdminEditPropertyPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms (BHK Type)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.bedrooms}
-                  onChange={(e) =>
-                    handleInputChange('specifications.bedrooms', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.bathrooms}
-                  onChange={(e) =>
-                    handleInputChange('specifications.bathrooms', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.balconies}
-                  onChange={(e) =>
-                    handleInputChange('specifications.balconies', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.livingRoom}
-                  onChange={(e) =>
-                    handleInputChange('specifications.livingRoom', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
+              {renderSpecificationStepper('Bedrooms (BHK Type)', 'specifications.bedrooms', formData.specifications.bedrooms)}
+              {renderSpecificationStepper('Bathrooms', 'specifications.bathrooms', formData.specifications.bathrooms)}
+              {renderSpecificationStepper('Balconies', 'specifications.balconies', formData.specifications.balconies)}
+              {renderSpecificationStepper('Living Room', 'specifications.livingRoom', formData.specifications.livingRoom)}
               <div className="flex items-center h-full pt-6">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -738,7 +753,7 @@ export default function AdminEditPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.unfurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
                   />
-                  <span className="text-sm font-medium text-gray-700">Unfurnished</span>
+                  <span className="text-sm font-bold text-gray-900">Unfurnished</span>
                 </label>
               </div>
               <div className="flex items-center h-full pt-6">
@@ -749,7 +764,7 @@ export default function AdminEditPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.semiFurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
                   />
-                  <span className="text-sm font-medium text-gray-700">Semi-Furnished</span>
+                  <span className="text-sm font-bold text-gray-900">Semi-Furnished</span>
                 </label>
               </div>
               <div className="flex items-center h-full pt-6">
@@ -760,11 +775,11 @@ export default function AdminEditPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.fullyFurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
                   />
-                  <span className="text-sm font-medium text-gray-700">Fully Furnished</span>
+                  <span className="text-sm font-bold text-gray-900">Fully Furnished</span>
                 </label>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Area</label>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -776,7 +791,7 @@ export default function AdminEditPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Unit</label>
                 <SearchableSelect
                   value={formData.specifications.area.unit}
                   onChange={(e) => handleInputChange('specifications.area.unit', e.target.value)}
@@ -789,18 +804,10 @@ export default function AdminEditPropertyPage() {
                   searchPlaceholder="Search unit..."
                 />
               </div>
+              {renderSpecificationStepper('Parking', 'specifications.parking', formData.specifications.parking)}
+              {renderSpecificationStepper('Floors', 'specifications.floors', formData.specifications.floors, 2, 'Add', 1)}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Parking</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.parking}
-                  onChange={(e) => handleInputChange('specifications.parking', sanitizeDigits(e.target.value, 2))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Year Built</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -817,7 +824,7 @@ export default function AdminEditPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Category & Amenities</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Category</label>
                 <SearchableSelect
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
@@ -830,7 +837,7 @@ export default function AdminEditPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amenities</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Amenities</label>
                 <SearchableSelect
                   value={formData.amenities?.[0] || ''}
                   onChange={(e) => {

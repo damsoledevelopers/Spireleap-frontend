@@ -5,9 +5,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Tag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function CategoryManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -72,7 +74,13 @@ export default function CategoryManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return
+    const ok = await confirm({
+      title: 'Delete Category',
+      message: 'Are you sure you want to delete this category?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/settings/categories/${id}`)
       toast.success('Category deleted successfully')
@@ -205,7 +213,7 @@ export default function CategoryManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingCategory ? 'Edit Category' : 'Create New Category'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -221,7 +229,7 @@ export default function CategoryManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Slug *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Slug<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -231,7 +239,7 @@ export default function CategoryManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -247,7 +255,7 @@ export default function CategoryManagement() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -271,6 +279,7 @@ export default function CategoryManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

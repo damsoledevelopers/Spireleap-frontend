@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { FileText, Upload, Download, Trash2, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function DocumentManager({ propertyId, documents = [], onUpdate }) {
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const { confirm, ConfirmDialog } = useConfirmDialog()
 
   const handleUpload = async (event) => {
     const files = event.target.files
@@ -49,7 +51,13 @@ export default function DocumentManager({ propertyId, documents = [], onUpdate }
   }
 
   const handleDelete = async (index) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) return
+    const ok = await confirm({
+      title: 'Delete Document',
+      message: 'Are you sure you want to delete this document?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       setDeleting(index)
@@ -140,6 +148,7 @@ export default function DocumentManager({ propertyId, documents = [], onUpdate }
           <p className="text-sm text-gray-500">No documents uploaded</p>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

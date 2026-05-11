@@ -203,7 +203,7 @@ export default function AgencySettingsPage() {
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agency Name *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Agency Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
@@ -213,7 +213,7 @@ export default function AgencySettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
                 <textarea
                   rows={4}
                   value={formData.description}
@@ -233,7 +233,7 @@ export default function AgencySettingsPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="email"
                   required
@@ -243,7 +243,7 @@ export default function AgencySettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Phone<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <PhoneField
                   required
                   label=""
@@ -256,17 +256,17 @@ export default function AgencySettingsPage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Website</label>
                 <input
                   type="url"
                   value={formData.contact.website}
                   onChange={(e) => handleInputChange('contact.website', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="https://example.com"
+                  placeholder="Enter website URL"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                <label className="block text-sm font-bold text-gray-900 mb-2">Address</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <input
@@ -318,7 +318,7 @@ export default function AgencySettingsPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Currency</label>
                 <select
                   value={formData.settings.currency}
                   onChange={(e) => handleInputChange('settings.currency', e.target.value)}
@@ -330,7 +330,7 @@ export default function AgencySettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Timezone</label>
                 <select
                   value={formData.settings.timezone}
                   onChange={(e) => handleInputChange('settings.timezone', e.target.value)}
@@ -350,7 +350,7 @@ export default function AgencySettingsPage() {
                     onChange={(e) => handleInputChange('settings.emailNotifications', e.target.checked)}
                     className="rounded"
                   />
-                  <span className="text-sm font-medium text-gray-700">Email Notifications</span>
+                  <span className="text-sm font-bold text-gray-900">Email Notifications</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -359,7 +359,7 @@ export default function AgencySettingsPage() {
                     onChange={(e) => handleInputChange('settings.smsNotifications', e.target.checked)}
                     className="rounded"
                   />
-                  <span className="text-sm font-medium text-gray-700">SMS Notifications</span>
+                  <span className="text-sm font-bold text-gray-900">SMS Notifications</span>
                 </label>
               </div>
             </div>

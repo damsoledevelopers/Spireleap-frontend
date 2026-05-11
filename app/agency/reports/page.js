@@ -17,6 +17,14 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAgentsForExport } from '../../../lib/exportUtils'
+import { formatPercentLabel } from '../../../lib/formatPercent'
+import {
+  REPORT_NA,
+  displayReportMetric,
+  displayReportLabel,
+  displayAgentConversionCell,
+  formatActivityDateTime
+} from '../../../lib/reportDisplay'
 import Link from 'next/link'
 
 export default function AgencyReports() {
@@ -38,7 +46,7 @@ export default function AgencyReports() {
     agentPerformance: [],
     propertiesByLocation: {}
   })
-  const [selectedPeriod, setSelectedPeriod] = useState('30d')
+  const [selectedPeriod, setSelectedPeriod] = useState('all')
   const [selectedReport, setSelectedReport] = useState('overview')
   const [exportData, setExportData] = useState({ leads: [], properties: [], agents: [] })
 
@@ -49,6 +57,7 @@ export default function AgencyReports() {
   }, [selectedPeriod, user])
 
   const getDateFilter = () => {
+    if (selectedPeriod === 'all') return null
     const now = new Date()
     const filters = {
       '7d': new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
@@ -67,157 +76,71 @@ export default function AgencyReports() {
 
     setLoading(true)
     try {
-      const dateFilter = getDateFilter()
-      const startDate = dateFilter.toISOString().split('T')[0]
-      const endDate = new Date().toISOString().split('T')[0]
+      const rangeStart = getDateFilter()
+      const statsUrl =
+        selectedPeriod === 'all' || !rangeStart
+          ? '/stats/reports'
+          : `/stats/reports?startDate=${rangeStart.toISOString().split('T')[0]}&endDate=${new Date().toISOString().split('T')[0]}`
 
-      // Use optimized stats endpoint with date filtering
-      const [statsResponse, agentsResponse] = await Promise.all([
-        api.get(`/stats/reports?startDate=${startDate}&endDate=${endDate}`).catch(() => ({ data: {} })),
-        api.get(`/users?role=agent`).catch(() => ({ data: { users: [] } }))
+      const [statsResponse, agentsCountRes] = await Promise.all([
+        api.get(statsUrl).catch(() => ({ data: {} })),
+        api.get('/users?role=agent&limit=1').catch(() => ({ data: { users: [] }, pagination: {} }))
       ])
 
       const stats = statsResponse.data || {}
-      const allAgents = agentsResponse.data.users || []
+      const totalAgents = agentsCountRes.data?.pagination?.total ?? 0
 
-      // Filter agents by agency
-      const agents = allAgents.filter(a =>
-        a.agency && (a.agency._id === user.agency || a.agency.toString() === user.agency)
-      )
+      const propertiesByStatus = stats.propertiesByStatus || {}
+      const leadsByStatus = stats.leadsByStatus || {}
+      const convertedLeads =
+        (leadsByStatus.booked || 0) +
+        (leadsByStatus.closed || 0) +
+        (leadsByStatus.converted || 0)
 
-      // For detailed analysis, fetch limited data
-      const [propertiesResponse, leadsResponse] = await Promise.all([
-        api.get(`/properties?limit=500`).catch(() => ({ data: { properties: [] } })),
-        api.get(`/leads?limit=500`).catch(() => ({ data: { leads: [] } }))
-      ])
+      const recentActivity = (stats.recentActivity || []).map((a) => ({
+        ...a,
+        link: a.link ? String(a.link).replace(/^\/admin\//, '/agency/') : a.link,
+        time:
+          a.time != null
+            ? new Date(a.time).toLocaleString()
+            : ''
+      }))
 
-      const allProperties = propertiesResponse.data.properties || []
-      const allLeads = leadsResponse.data.leads || []
+      const agentPerformance = (stats.agentPerformance || []).map((a) => ({
+        id: a._id || a.id,
+        name: a.name || a.email || 'Agent',
+        email: a.email || '',
+        totalProperties: a.totalProperties ?? 0,
+        activeProperties: a.activeProperties ?? 0,
+        totalLeads: a.totalLeads ?? 0,
+        activeLeads: a.activeLeads ?? 0,
+        convertedLeads: a.convertedLeads ?? 0,
+        conversionRate: a.conversionRate ?? 0
+      }))
 
-      // Filter by agency
-      const properties = allProperties.filter(p =>
-        p.agency && (p.agency._id === user.agency || p.agency.toString() === user.agency)
-      )
-      const leads = allLeads.filter(l =>
-        l.agency && (l.agency._id === user.agency || l.agency.toString() === user.agency)
-      )
-
-      // Use server-side calculated stats, fallback to client-side
-      const totalPropertyValue = stats.totalPropertyValue || properties.reduce((sum, prop) => {
-        if (prop.price?.sale) {
-          return sum + (prop.price.sale || 0)
-        }
-        return sum
-      }, 0)
-
-      const propertiesByStatus = stats.propertiesByStatus || properties.reduce((acc, prop) => {
-        acc[prop.status] = (acc[prop.status] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByType = stats.propertiesByType || properties.reduce((acc, prop) => {
-        acc[prop.propertyType] = (acc[prop.propertyType] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByListingType = stats.propertiesByListingType || properties.reduce((acc, prop) => {
-        acc[prop.listingType] = (acc[prop.listingType] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsByStatus = stats.leadsByStatus || leads.reduce((acc, lead) => {
-        acc[lead.status] = (acc[lead.status] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsBySource = stats.leadsBySource || leads.reduce((acc, lead) => {
-        acc[lead.source] = (acc[lead.source] || 0) + 1
-        return acc
-      }, {})
-
-      const leadsByPriority = stats.leadsByPriority || leads.reduce((acc, lead) => {
-        acc[lead.priority] = (acc[lead.priority] || 0) + 1
-        return acc
-      }, {})
-
-      const propertiesByLocation = stats.propertiesByLocation || properties.reduce((acc, prop) => {
-        const city = prop.location?.city || 'Unknown'
-        acc[city] = (acc[city] || 0) + 1
-        return acc
-      }, {})
-
-      // Agent performance
-      const agentPerformance = agents.map(agent => {
-        const agentProperties = properties.filter(p =>
-          p.agent && (p.agent._id === agent._id || p.agent.toString() === agent._id)
-        )
-        const agentLeads = leads.filter(l =>
-          l.assignedAgent && (l.assignedAgent._id === agent._id || l.assignedAgent.toString() === agent._id)
-        )
-        const activeLeads = agentLeads.filter(l => ['new', 'contacted', 'site_visit', 'negotiation'].includes(l.status)).length
-        const convertedLeads = agentLeads.filter(l => l.status === 'converted').length
-
-        return {
-          id: agent._id,
-          name: `${agent.firstName || ''} ${agent.lastName || ''}`.trim() || agent.email,
-          email: agent.email,
-          totalProperties: agentProperties.length,
-          activeProperties: agentProperties.filter(p => p.status === 'active').length,
-          totalLeads: agentLeads.length,
-          activeLeads,
-          convertedLeads,
-          conversionRate: agentLeads.length > 0 ? ((convertedLeads / agentLeads.length) * 100).toFixed(1) : 0
-        }
-      })
-        .sort((a, b) => b.totalLeads - a.totalLeads)
-
-      // Recent activity
-      const recentActivity = [
-        ...properties.slice(0, 5).map(p => ({
-          type: 'property_added',
-          message: `New property: ${p.title}`,
-          time: new Date(p.createdAt).toLocaleString(),
-          user: p.agent ? `${p.agent.firstName || ''} ${p.agent.lastName || ''}`.trim() : 'System',
-          link: `/agency/properties/${p._id}`
-        })),
-        ...leads.slice(0, 5).map(l => ({
-          type: 'lead_created',
-          message: `New lead: ${l.contact?.firstName || ''} ${l.contact?.lastName || ''}`.trim(),
-          time: new Date(l.createdAt).toLocaleString(),
-          user: l.source || 'Website',
-          link: `/agency/leads/${l._id}`
-        }))
-      ]
-        .sort((a, b) => new Date(b.time) - new Date(a.time))
-        .slice(0, 10)
-
-      setExportData({
-        leads,
-        properties,
-        agents
-      })
+      setExportData({ leads: [], properties: [], agents: [] })
 
       setReportData({
-        totalProperties: properties.length,
-        totalLeads: leads.length,
-        totalAgents: agents.length,
-        totalPropertyValue,
+        totalProperties: stats.totalProperties ?? 0,
+        totalLeads: stats.totalLeads ?? 0,
+        totalAgents,
+        totalPropertyValue: stats.totalPropertyValue ?? 0,
         propertiesByStatus,
-        propertiesByType,
-        propertiesByListingType,
+        propertiesByType: stats.propertiesByType || {},
+        propertiesByListingType: stats.propertiesByListingType || {},
         leadsByStatus,
-        leadsBySource,
-        leadsByPriority,
-        propertiesByLocation,
+        leadsBySource: stats.leadsBySource || {},
+        leadsByPriority: stats.leadsByPriority || {},
+        propertiesByLocation: stats.propertiesByLocation || {},
         agentPerformance,
         recentActivity,
         systemStats: {
-          activeProperties: properties.filter(p => p.status === 'active').length,
-          pendingProperties: properties.filter(p => p.status === 'pending').length,
-          soldProperties: properties.filter(p => p.status === 'sold').length,
-          rentedProperties: properties.filter(p => p.status === 'rented').length,
-          newLeads: leads.filter(l => l.status === 'new').length,
-          convertedLeads: leads.filter(l => l.status === 'converted').length
+          activeProperties: propertiesByStatus.active || 0,
+          pendingProperties: propertiesByStatus.pending || 0,
+          soldProperties: propertiesByStatus.sold || 0,
+          rentedProperties: propertiesByStatus.rented || 0,
+          newLeads: leadsByStatus.new || 0,
+          convertedLeads
         }
       })
     } catch (error) {
@@ -228,29 +151,59 @@ export default function AgencyReports() {
     }
   }
 
-  const handleExportReport = (reportType) => {
+  const fetchAllPaged = async (path, key, pageSize = 500, fixedQuery = {}) => {
+    const acc = []
+    let page = 1
+    let pages = 1
+    do {
+      const params = new URLSearchParams({
+        ...Object.fromEntries(
+          Object.entries(fixedQuery).map(([k, v]) => [k, String(v)])
+        ),
+        limit: String(pageSize),
+        page: String(page)
+      })
+      const r = await api.get(`${path}?${params.toString()}`)
+      const rows = r.data?.[key] || []
+      acc.push(...rows)
+      pages = r.data?.pagination?.pages ?? 1
+      page += 1
+    } while (page <= pages)
+    return acc
+  }
+
+  const handleExportReport = async (reportType) => {
     try {
+      let rows = []
       switch (reportType) {
         case 'leads':
-          if (exportData.leads.length === 0) {
+          rows = exportData.leads.length ? exportData.leads : await fetchAllPaged('/leads', 'leads')
+          if (rows.length === 0) {
             toast.error('No leads data to export')
             return
           }
-          exportToCSV(formatLeadsForExport(exportData.leads), `leads-export-${new Date().toISOString().split('T')[0]}.csv`)
+          setExportData((prev) => ({ ...prev, leads: rows }))
+          exportToCSV(formatLeadsForExport(rows), `leads-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         case 'properties':
-          if (exportData.properties.length === 0) {
+          rows = exportData.properties.length ? exportData.properties : await fetchAllPaged('/properties', 'properties')
+          if (rows.length === 0) {
             toast.error('No properties data to export')
             return
           }
-          exportToCSV(formatPropertiesForExport(exportData.properties), `properties-export-${new Date().toISOString().split('T')[0]}.csv`)
+          setExportData((prev) => ({ ...prev, properties: rows }))
+          exportToCSV(formatPropertiesForExport(rows), `properties-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         case 'agents':
-          if (exportData.agents.length === 0) {
+          rows = exportData.agents.length
+            ? exportData.agents
+            : await fetchAllPaged('/users', 'users', 200, { role: 'agent' })
+          if (rows.length === 0) {
             toast.error('No agents data to export')
             return
           }
-          exportToCSV(formatAgentsForExport(exportData.agents), `agents-export-${new Date().toISOString().split('T')[0]}.csv`)
+          setExportData((prev) => ({ ...prev, agents: rows }))
+          exportToCSV(formatAgentsForExport(rows), `agents-export-${new Date().toISOString().split('T')[0]}.csv`)
           break
         default:
           toast.error('Invalid report type')
@@ -272,6 +225,7 @@ export default function AgencyReports() {
   ]
 
   const periodOptions = [
+    { value: 'all', label: 'All time' },
     { value: '7d', label: 'Last 7 Days' },
     { value: '30d', label: 'Last 30 Days' },
     { value: '90d', label: 'Last 90 Days' },
@@ -527,8 +481,10 @@ export default function AgencyReports() {
                     <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                     <p className="text-2xl font-semibold text-gray-900">
                       {reportData.totalLeads > 0
-                        ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
-                        : 0}%
+                        ? `${formatPercentLabel(
+                            (reportData.systemStats.convertedLeads / reportData.totalLeads) * 100
+                          )}%`
+                        : '0%'}
                     </p>
                   </div>
                 </div>
@@ -563,7 +519,7 @@ export default function AgencyReports() {
                               <p className="text-sm text-gray-500">by {activity.user}</p>
                             </div>
                             <div className="flex-shrink-0">
-                              <span className="text-sm text-gray-500">{activity.time}</span>
+                              <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>
                             </div>
                           </div>
                         </li>
@@ -596,7 +552,8 @@ export default function AgencyReports() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.propertiesByStatus).map(([status, count]) => {
-                      const percentage = ((count / reportData.totalProperties) * 100).toFixed(1)
+                      const pctNum = reportData.totalProperties > 0 ? (count / reportData.totalProperties) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={status}>
                           <div className="flex items-center justify-between mb-1">
@@ -606,7 +563,7 @@ export default function AgencyReports() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-green-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -641,7 +598,8 @@ export default function AgencyReports() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.propertiesByListingType).map(([type, count]) => {
-                      const percentage = ((count / reportData.totalProperties) * 100).toFixed(1)
+                      const pctNum = reportData.totalProperties > 0 ? (count / reportData.totalProperties) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={type}>
                           <div className="flex items-center justify-between mb-1">
@@ -651,7 +609,7 @@ export default function AgencyReports() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -712,7 +670,8 @@ export default function AgencyReports() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.leadsByStatus).map(([status, count]) => {
-                      const percentage = ((count / reportData.totalLeads) * 100).toFixed(1)
+                      const pctNum = reportData.totalLeads > 0 ? (count / reportData.totalLeads) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={status}>
                           <div className="flex items-center justify-between mb-1">
@@ -722,7 +681,7 @@ export default function AgencyReports() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-purple-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -757,7 +716,8 @@ export default function AgencyReports() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.leadsByPriority).map(([priority, count]) => {
-                      const percentage = ((count / reportData.totalLeads) * 100).toFixed(1)
+                      const pctNum = reportData.totalLeads > 0 ? (count / reportData.totalLeads) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       const color = priority === 'high' ? 'bg-red-600' : priority === 'medium' ? 'bg-yellow-600' : 'bg-green-600'
                       return (
                         <div key={priority}>
@@ -768,7 +728,7 @@ export default function AgencyReports() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className={`${color} h-2 rounded-full`}
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -800,8 +760,10 @@ export default function AgencyReports() {
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-gray-900">
                         {reportData.totalLeads > 0
-                          ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              (reportData.systemStats.convertedLeads / reportData.totalLeads) * 100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                   </div>
@@ -841,25 +803,46 @@ export default function AgencyReports() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {reportData.agentPerformance.length > 0 ? (
-                        reportData.agentPerformance.map((agent) => (
+                        reportData.agentPerformance.map((agent) => {
+                          const conv = displayReportMetric(agent.convertedLeads)
+                          return (
                           <tr key={agent.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div>
-                                <div className="text-sm font-medium text-gray-900">{agent.name}</div>
-                                <div className="text-sm text-gray-500">{agent.email}</div>
+                                <div className="text-sm font-medium text-gray-900">{displayReportLabel(agent.name)}</div>
+                                <div className="text-sm text-gray-500">{displayReportLabel(agent.email)}</div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.totalProperties}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.activeProperties}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.totalLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.activeLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{agent.convertedLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.conversionRate}%</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.totalProperties)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.activeProperties)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.totalLeads)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.activeLeads)}
+                            </td>
+                            <td
+                              className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                                conv === REPORT_NA ? 'text-gray-500' : 'text-green-600'
+                              }`}
+                            >
+                              {conv}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayAgentConversionCell(agent)}
+                            </td>
                           </tr>
-                        ))
+                          )
+                        })
                       ) : (
                         <tr>
-                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">No agent data available</td>
+                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                            {REPORT_NA}
+                          </td>
                         </tr>
                       )}
                     </tbody>
@@ -904,7 +887,7 @@ export default function AgencyReports() {
                             <p className="text-sm text-gray-500">by {activity.user}</p>
                           </div>
                           <div className="flex-shrink-0">
-                            <span className="text-sm text-gray-500">{activity.time}</span>
+                            <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>
                           </div>
                         </div>
                       </li>

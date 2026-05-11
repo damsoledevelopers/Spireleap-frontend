@@ -6,9 +6,11 @@ import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Home } from 'lucide-react'
 import toast from 'react-hot-toast'
 import SearchableSelect from '../Common/SearchableSelect'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function AmenityManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [amenities, setAmenities] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -96,7 +98,13 @@ export default function AmenityManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this amenity?')) return
+    const ok = await confirm({
+      title: 'Delete Amenity',
+      message: 'Are you sure you want to delete this amenity?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/settings/amenities/${id}`)
       toast.success('Amenity deleted successfully')
@@ -224,7 +232,7 @@ export default function AmenityManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingAmenity ? 'Edit Amenity' : 'Create New Amenity'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
@@ -234,7 +242,7 @@ export default function AmenityManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Icon</label>
                   <input
                     type="text"
                     value={formData.icon}
@@ -245,7 +253,7 @@ export default function AmenityManagement() {
                   <p className="text-xs text-gray-500 mt-1">Enter an emoji or icon identifier. Base64 images are not supported.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Category</label>
                   <SearchableSelect
                     value={formData.category || 'other'}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -269,7 +277,7 @@ export default function AmenityManagement() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -293,6 +301,7 @@ export default function AmenityManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

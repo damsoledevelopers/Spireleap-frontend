@@ -22,6 +22,14 @@ import toast from 'react-hot-toast'
 import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAgentsForExport } from '../../../lib/exportUtils'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatPercentLabel } from '../../../lib/formatPercent'
+import {
+  REPORT_NA,
+  displayReportMetric,
+  displayReportLabel,
+  displayAgentConversionCell,
+  formatActivityDateTime
+} from '../../../lib/reportDisplay'
 import LeadFunnelChart from '../../../components/Reports/Charts/LeadFunnelChart'
 import LeadSourceChart from '../../../components/Reports/Charts/LeadSourceChart'
 import AgentPerformanceChart from '../../../components/Reports/Charts/AgentPerformanceChart'
@@ -66,7 +74,7 @@ export function AdminReportsContent() {
     siteVisitConversion: {},
     lostReasons: {}
   })
-  const [selectedPeriod, setSelectedPeriod] = useState('30d')
+  const [selectedPeriod, setSelectedPeriod] = useState('all')
   const [selectedReport, setSelectedReport] = useState('overview')
   const [exportData, setExportData] = useState({ leads: [], properties: [], agents: [] })
   const [allData, setAllData] = useState({ users: [], properties: [], leads: [], agencies: [] })
@@ -83,6 +91,7 @@ export function AdminReportsContent() {
   }
 
   const getDateFilter = () => {
+    if (selectedPeriod === 'all') return null
     const now = new Date()
     const filters = {
       '7d': new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
@@ -96,22 +105,19 @@ export function AdminReportsContent() {
   const fetchReportData = async () => {
     setLoading(true)
     try {
-      const dateFilter = getDateFilter()
-      const startDate = dateFilter.toISOString().split('T')[0]
-      const endDate = new Date().toISOString().split('T')[0]
+      // Dashboard uses all-time counts (no createdAt filter). Reports only narrow by
+      // date when a period is selected; "All time" matches dashboard totals.
+      const rangeStart = getDateFilter()
+      const statsUrl =
+        selectedPeriod === 'all' || !rangeStart
+          ? '/stats/reports'
+          : `/stats/reports?startDate=${rangeStart.toISOString().split('T')[0]}&endDate=${new Date().toISOString().split('T')[0]}`
 
-      // Use optimized stats endpoint with date filtering
-      const [statsResponse, agenciesResponse] = await Promise.all([
-        api.get(`/stats/reports?startDate=${startDate}&endDate=${endDate}`),
-        api.get('/agencies')
-      ])
+      const statsResponse = await api.get(statsUrl)
 
       const stats = statsResponse.data || {}
-      const agencies = agenciesResponse.data.agencies || []
 
-      // For export only, we'll still need some data, but we can fetch it lazily or with smaller limits
-      // For now, let's just use what we have in stats for the view
-      setAllData({ users: [], properties: [], leads: [], agencies })
+      setAllData({ users: [], properties: [], leads: [], agencies: [] })
 
       const nextUsersByRole = stats.usersByRole || {}
       const nextPropertiesByStatus = stats.propertiesByStatus || {}
@@ -126,7 +132,7 @@ export function AdminReportsContent() {
       setReportData(prev => ({
         ...prev,
         ...computedTotals,
-        totalAgencies: agencies.length,
+        totalAgencies: stats.totalAgencies ?? 0,
         totalPropertyValue: stats.totalPropertyValue || 0,
         usersByRole: nextUsersByRole,
         propertiesByStatus: nextPropertiesByStatus,
@@ -147,7 +153,10 @@ export function AdminReportsContent() {
           soldProperties: nextPropertiesByStatus?.sold || 0,
           rentedProperties: nextPropertiesByStatus?.rented || 0,
           newLeads: nextLeadsByStatus?.new || 0,
-          convertedLeads: nextLeadsByStatus?.converted || 0
+          convertedLeads:
+            (nextLeadsByStatus?.booked || 0) +
+            (nextLeadsByStatus?.closed || 0) +
+            (nextLeadsByStatus?.converted || 0)
         }
       }))
     } catch (error) {
@@ -158,21 +167,37 @@ export function AdminReportsContent() {
     }
   }
 
+  const fetchAllPaged = async (path, key, pageSize = 500, fixedQuery = {}) => {
+    const acc = []
+    let page = 1
+    let pages = 1
+    do {
+      const params = new URLSearchParams({
+        ...Object.fromEntries(
+          Object.entries(fixedQuery).map(([k, v]) => [k, String(v)])
+        ),
+        limit: String(pageSize),
+        page: String(page)
+      })
+      const r = await api.get(`${path}?${params.toString()}`)
+      acc.push(...(r.data?.[key] || []))
+      pages = r.data?.pagination?.pages ?? 1
+      page += 1
+    } while (page <= pages)
+    return acc
+  }
+
   const ensureExportDataLoaded = async (reportType) => {
     if (reportType === 'leads' && exportData.leads.length > 0) return exportData.leads
     if (reportType === 'properties' && exportData.properties.length > 0) return exportData.properties
     if (reportType === 'agents' && exportData.agents.length > 0) return exportData.agents
 
-    const fetchers = {
-      leads: () => api.get('/leads?limit=500').then(r => r.data?.leads || []),
-      properties: () => api.get('/properties?limit=500').then(r => r.data?.properties || []),
-      agents: () => api.get('/users?role=agent').then(r => r.data?.users || [])
-    }
+    let rows = []
+    if (reportType === 'leads') rows = await fetchAllPaged('/leads', 'leads')
+    else if (reportType === 'properties') rows = await fetchAllPaged('/properties', 'properties')
+    else if (reportType === 'agents') rows = await fetchAllPaged('/users', 'users', 200, { role: 'agent' })
+    else return []
 
-    const fetchFn = fetchers[reportType]
-    if (!fetchFn) return []
-
-    const rows = await fetchFn()
     setExportData(prev => ({
       ...prev,
       [reportType]: rows
@@ -232,6 +257,7 @@ export function AdminReportsContent() {
   ]
 
   const periodOptions = [
+    { value: 'all', label: 'All time' },
     { value: '7d', label: 'Last 7 Days' },
     { value: '30d', label: 'Last 30 Days' },
     { value: '90d', label: 'Last 90 Days' },
@@ -526,7 +552,7 @@ export function AdminReportsContent() {
                               <p className="text-sm text-gray-500">by {activity.user}</p>
                             </div>
                             <div className="flex-shrink-0">
-                              <span className="text-sm text-gray-500">{activity.time}</span>
+                              <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>
                             </div>
                           </div>
                         </li>
@@ -559,7 +585,8 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.usersByRole).map(([role, count]) => {
-                      const percentage = ((count / reportData.totalUsers) * 100).toFixed(1)
+                      const pctNum = reportData.totalUsers > 0 ? (count / reportData.totalUsers) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={role}>
                           <div className="flex items-center justify-between mb-1">
@@ -569,7 +596,7 @@ export function AdminReportsContent() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -626,7 +653,8 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.propertiesByStatus).map(([status, count]) => {
-                      const percentage = ((count / reportData.totalProperties) * 100).toFixed(1)
+                      const pctNum = reportData.totalProperties > 0 ? (count / reportData.totalProperties) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={status}>
                           <div className="flex items-center justify-between mb-1">
@@ -636,7 +664,7 @@ export function AdminReportsContent() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-green-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -671,7 +699,8 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.propertiesByListingType).map(([type, count]) => {
-                      const percentage = ((count / reportData.totalProperties) * 100).toFixed(1)
+                      const pctNum = reportData.totalProperties > 0 ? (count / reportData.totalProperties) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={type}>
                           <div className="flex items-center justify-between mb-1">
@@ -681,7 +710,7 @@ export function AdminReportsContent() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -742,7 +771,8 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.leadsByStatus).map(([status, count]) => {
-                      const percentage = ((count / reportData.totalLeads) * 100).toFixed(1)
+                      const pctNum = reportData.totalLeads > 0 ? (count / reportData.totalLeads) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={status}>
                           <div className="flex items-center justify-between mb-1">
@@ -752,7 +782,7 @@ export function AdminReportsContent() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-purple-600 h-2 rounded-full"
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -780,7 +810,8 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.leadsByPriority).map(([priority, count]) => {
-                      const percentage = ((count / reportData.totalLeads) * 100).toFixed(1)
+                      const pctNum = reportData.totalLeads > 0 ? (count / reportData.totalLeads) * 100 : 0
+                      const percentage = formatPercentLabel(pctNum)
                       const color = priority === 'high' ? 'bg-red-600' : priority === 'medium' ? 'bg-yellow-600' : 'bg-green-600'
                       return (
                         <div key={priority}>
@@ -791,7 +822,7 @@ export function AdminReportsContent() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className={`${color} h-2 rounded-full`}
-                              style={{ width: `${percentage}%` }}
+                              style={{ width: `${pctNum}%` }}
                             ></div>
                           </div>
                         </div>
@@ -823,8 +854,10 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-gray-900">
                         {reportData.totalLeads > 0
-                          ? ((reportData.systemStats.convertedLeads / reportData.totalLeads) * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              (reportData.systemStats.convertedLeads / reportData.totalLeads) * 100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                   </div>
@@ -859,38 +892,59 @@ export function AdminReportsContent() {
               <div className="card-body">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Agent</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Properties</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Active Properties</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Total Leads</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Active Leads</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Converted</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Conversion Rate</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Agent</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Properties</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Active Properties</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Total Leads</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Active Leads</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Converted</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Conversion Rate</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {reportData.agentPerformance.length > 0 ? (
-                        reportData.agentPerformance.map((agent) => (
-                          <tr key={agent.id} className="hover:bg-gray-50">
+                        reportData.agentPerformance.map((agent) => {
+                          const conv = displayReportMetric(agent.convertedLeads)
+                          return (
+                          <tr key={agent._id || agent.id || agent.email} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div>
-                                <div className="text-sm font-medium text-gray-900">{agent.name}</div>
-                                <div className="text-sm text-gray-500">{agent.email}</div>
+                                <div className="text-sm font-medium text-gray-900">{displayReportLabel(agent.name)}</div>
+                                <div className="text-sm text-gray-500">{displayReportLabel(agent.email)}</div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.totalProperties}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.activeProperties}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.totalLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.activeLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{agent.convertedLeads}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{agent.conversionRate}%</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.totalProperties)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.activeProperties)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.totalLeads)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayReportMetric(agent.activeLeads)}
+                            </td>
+                            <td
+                              className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                                conv === REPORT_NA ? 'text-gray-500' : 'text-green-600'
+                              }`}
+                            >
+                              {conv}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {displayAgentConversionCell(agent)}
+                            </td>
                           </tr>
-                        ))
+                          )
+                        })
                       ) : (
                         <tr>
-                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">No agent data available</td>
+                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                            {REPORT_NA}
+                          </td>
                         </tr>
                       )}
                     </tbody>
@@ -976,9 +1030,7 @@ export function AdminReportsContent() {
                       <div className="ml-5 w-0 flex-1">
                         <dl>
                           <dt className="text-sm font-medium text-gray-500 truncate">Active Agencies</dt>
-                          <dd className="text-2xl font-semibold text-gray-900">
-                            {activeAgencies} <span className="text-sm text-gray-500">/ {totalAgencies}</span>
-                          </dd>
+                          <dd className="text-2xl font-semibold text-gray-900">{activeAgencies}</dd>
                         </dl>
                       </div>
                     </div>
@@ -1219,22 +1271,22 @@ export function AdminReportsContent() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Logo</th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Agency Name</th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Email</th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Phone</th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Health Status</th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Logo</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Agency Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Email</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Phone</th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Health Status</th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
                             Agents
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
                             Properties
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
                             Leads
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Last Activity</th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">Status</th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Last Activity</th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Status</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -1390,24 +1442,34 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Conversion Rate</span>
                       <span className="text-2xl font-semibold text-green-600">
                         {reportData.totalLeads > 0
-                          ? ((reportData.leadsByStatus.booked || 0) / reportData.totalLeads * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              (((reportData.leadsByStatus.booked || 0) +
+                                (reportData.leadsByStatus.closed || 0) +
+                                (reportData.leadsByStatus.converted || 0)) /
+                                reportData.totalLeads) *
+                                100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Qualification Rate</span>
                       <span className="text-2xl font-semibold text-blue-600">
                         {reportData.totalLeads > 0
-                          ? ((reportData.leadsByStatus.qualified || 0) / reportData.totalLeads * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              ((reportData.leadsByStatus.qualified || 0) / reportData.totalLeads) * 100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Site Visit Rate</span>
                       <span className="text-2xl font-semibold text-yellow-600">
                         {reportData.totalLeads > 0
-                          ? ((reportData.leadsByStatus.site_visit_scheduled || 0) / reportData.totalLeads * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              ((reportData.leadsByStatus.site_visit_scheduled || 0) / reportData.totalLeads) * 100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                   </div>
@@ -1429,13 +1491,14 @@ export function AdminReportsContent() {
                   {reportData.campaignROI && reportData.campaignROI.length > 0 ? (
                     <div className="space-y-4">
                       {reportData.campaignROI.map((campaign, index) => {
-                        const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost * 100).toFixed(1) : 0
+                        const roiNum = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
+                        const roiLabel = formatPercentLabel(roiNum)
                         return (
                           <div key={index} className="border-b border-gray-200 pb-4 last:border-0 last:pb-0">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-semibold text-gray-900">{campaign.name}</span>
-                              <span className={`text-sm font-bold ${roi > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {roi > 0 ? '+' : ''}{roi}% ROI
+                              <span className={`text-sm font-bold ${roiNum > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {roiNum > 0 ? '+' : ''}{roiLabel}% ROI
                               </span>
                             </div>
                             <div className="space-y-1 text-xs text-gray-600">
@@ -1520,15 +1583,16 @@ export function AdminReportsContent() {
                         })
                         .slice(0, 5)
                         .map((campaign, index) => {
-                          const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost * 100).toFixed(1) : 0
+                          const roiNum = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
+                          const roiLabel = formatPercentLabel(roiNum)
                           return (
                             <div key={index} className="flex items-center justify-between">
                               <div>
                                 <p className="text-sm font-medium text-gray-900">{campaign.name}</p>
                                 <p className="text-xs text-gray-500">{campaign.convertedLeads} conversions</p>
                               </div>
-                              <span className={`text-sm font-bold ${roi > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {roi > 0 ? '+' : ''}{roi}%
+                              <span className={`text-sm font-bold ${roiNum > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {roiNum > 0 ? '+' : ''}{roiLabel}%
                               </span>
                             </div>
                           )
@@ -1615,8 +1679,12 @@ export function AdminReportsContent() {
                         <span className="text-sm font-medium text-gray-900">Completed</span>
                         <span className="text-sm text-gray-500">
                           {reportData.followUpCompliance?.totalLeadsWithFollowUp > 0
-                            ? ((reportData.followUpCompliance?.totalFollowUpsCompleted / reportData.followUpCompliance?.totalLeadsWithFollowUp) * 100).toFixed(1)
-                            : 0}%
+                            ? `${formatPercentLabel(
+                                (reportData.followUpCompliance.totalFollowUpsCompleted /
+                                  reportData.followUpCompliance.totalLeadsWithFollowUp) *
+                                  100
+                              )}%`
+                            : '0%'}
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
@@ -1635,8 +1703,12 @@ export function AdminReportsContent() {
                         <span className="text-sm font-medium text-gray-900">Overdue</span>
                         <span className="text-sm text-gray-500">
                           {reportData.followUpCompliance?.totalLeadsWithFollowUp > 0
-                            ? ((reportData.followUpCompliance?.overdueFollowUps / reportData.followUpCompliance?.totalLeadsWithFollowUp) * 100).toFixed(1)
-                            : 0}%
+                            ? `${formatPercentLabel(
+                                (reportData.followUpCompliance.overdueFollowUps /
+                                  reportData.followUpCompliance.totalLeadsWithFollowUp) *
+                                  100
+                              )}%`
+                            : '0%'}
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
@@ -1689,7 +1761,7 @@ export function AdminReportsContent() {
                 </div>
                 <div className="card-body">
                   <div className="text-3xl font-bold text-blue-600">
-                    {reportData.siteVisitConversion?.showUpRate || 0}%
+                    {formatPercentLabel(reportData.siteVisitConversion?.showUpRate)}%
                   </div>
                   <p className="text-sm text-gray-500 mt-2">Percentage who showed up</p>
                 </div>
@@ -1700,7 +1772,7 @@ export function AdminReportsContent() {
                 </div>
                 <div className="card-body">
                   <div className="text-3xl font-bold text-purple-600">
-                    {reportData.siteVisitConversion?.conversionRate || 0}%
+                    {formatPercentLabel(reportData.siteVisitConversion?.conversionRate)}%
                   </div>
                   <p className="text-sm text-gray-500 mt-2">Converted after visit</p>
                 </div>
@@ -1752,8 +1824,12 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Scheduled → Completed</span>
                       <span className="text-sm text-gray-500">
                         {reportData.siteVisitConversion?.totalScheduled > 0
-                          ? ((reportData.siteVisitConversion?.totalCompleted / reportData.siteVisitConversion?.totalScheduled) * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              (reportData.siteVisitConversion.totalCompleted /
+                                reportData.siteVisitConversion.totalScheduled) *
+                                100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
@@ -1772,8 +1848,12 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Completed → Converted</span>
                       <span className="text-sm text-gray-500">
                         {reportData.siteVisitConversion?.totalCompleted > 0
-                          ? ((reportData.siteVisitConversion?.convertedFromVisit / reportData.siteVisitConversion?.totalCompleted) * 100).toFixed(1)
-                          : 0}%
+                          ? `${formatPercentLabel(
+                              (reportData.siteVisitConversion.convertedFromVisit /
+                                reportData.siteVisitConversion.totalCompleted) *
+                                100
+                            )}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
@@ -1808,7 +1888,8 @@ export function AdminReportsContent() {
                         .sort(([, a], [, b]) => b - a)
                         .map(([reason, count]) => {
                           const totalLost = Object.values(reportData.lostReasons).reduce((sum, c) => sum + c, 0)
-                          const percentage = ((count / totalLost) * 100).toFixed(1)
+                          const pctNum = totalLost > 0 ? (count / totalLost) * 100 : 0
+                          const percentage = formatPercentLabel(pctNum)
                           return (
                             <div key={reason}>
                               <div className="flex items-center justify-between mb-1">
@@ -1818,7 +1899,7 @@ export function AdminReportsContent() {
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
                                   className="bg-red-600 h-2 rounded-full"
-                                  style={{ width: `${percentage}%` }}
+                                  style={{ width: `${pctNum}%` }}
                                 />
                               </div>
                             </div>
@@ -1920,7 +2001,7 @@ export function AdminReportsContent() {
                             <p className="text-sm text-gray-500">by {activity.user}</p>
                           </div>
                           <div className="flex-shrink-0">
-                            <span className="text-sm text-gray-500">{activity.time}</span>
+                            <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>
                           </div>
                         </div>
                       </li>

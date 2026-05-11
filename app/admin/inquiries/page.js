@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
+import { getAddressLabeledRows } from '../../../lib/formatAddress'
 import {
   Search,
   Filter,
@@ -47,8 +48,35 @@ import EntryPermissionModal from '../../../components/Permissions/EntryPermissio
 import { checkEntryPermission } from '../../../lib/permissions'
 import { getDropdownOptions } from '../../../lib/dropdownsApi'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
+
+/** Property.price may be a number or { sale, rent: { amount, period }, currency }. */
+function formatInquiryPropertyPrice(price) {
+  if (price === null || price === undefined) return 'N/A'
+  const toUsd = (value) => {
+    const numeric = Number(value)
+    return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
+  }
+  if (typeof price === 'object' && !Array.isArray(price)) {
+    if (price.sale !== undefined && price.sale !== null && price.sale !== '') {
+      return toUsd(price.sale) || 'N/A'
+    }
+    if (price.rent?.amount !== undefined && price.rent?.amount !== null && price.rent?.amount !== '') {
+      const rentAmount = toUsd(price.rent.amount)
+      return rentAmount ? `${rentAmount}/${price.rent.period || 'monthly'}` : 'N/A'
+    }
+    return 'N/A'
+  }
+  if (typeof price === 'number') return toUsd(price) || 'N/A'
+  if (typeof price === 'string' && price.trim() !== '') {
+    const n = Number(price)
+    return Number.isFinite(n) ? (toUsd(n) || 'N/A') : price
+  }
+  return 'N/A'
+}
 
 export default function AdminInquiriesPage() {
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
 
@@ -186,42 +214,6 @@ export default function AdminInquiriesPage() {
     })
 
     setStats(statsData)
-  }, [])
-
-  const setRange = useCallback((range) => {
-    const today = new Date()
-    let start = new Date()
-    let end = new Date()
-
-    switch (range) {
-      case 'today':
-        break
-      case 'yesterday':
-        start.setDate(today.getDate() - 1)
-        end.setDate(today.getDate() - 1)
-        break
-      case 'last7':
-        start.setDate(today.getDate() - 6)
-        break
-      case 'last30':
-        start.setDate(today.getDate() - 29)
-        break
-      case 'thisMonth':
-        start = new Date(today.getFullYear(), today.getMonth(), 1)
-        break
-      case 'lastMonth':
-        start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-        end = new Date(today.getFullYear(), today.getMonth(), 0)
-        break
-      default:
-        return
-    }
-
-    const startStr = start.toISOString().split('T')[0]
-    const endStr = end.toISOString().split('T')[0]
-    setFilters(prev => ({ ...prev, startDate: startStr, endDate: endStr }))
-    setShowDatePicker(false)
-    setCurrentPage(1)
   }, [])
 
   // Calculate stats when allInquiries changes
@@ -471,7 +463,13 @@ export default function AdminInquiriesPage() {
   }
 
   const handleDelete = async (inquiryId) => {
-    if (!window.confirm('Are you sure you want to delete this inquiry? This action cannot be undone.')) {
+    const ok = await confirm({
+      title: 'Delete Inquiry',
+      message: 'Are you sure you want to delete this inquiry? This action cannot be undone.',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) {
       return
     }
     try {
@@ -516,21 +514,6 @@ export default function AdminInquiriesPage() {
         {priority?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
       </span>
     )
-  }
-
-  const clearAllFilters = () => {
-    setFilters({
-      property: '',
-      assignedAgent: '',
-      agency: '',
-      status: '',
-      priority: '',
-      source: '',
-      search: '',
-      startDate: '',
-      endDate: ''
-    })
-    setCurrentPage(1)
   }
 
   // Server-side pagination - no client-side filtering needed
@@ -589,6 +572,8 @@ export default function AdminInquiriesPage() {
           </div>
         </div>
 
+        {/* Stats + filters + table share tighter vertical rhythm */}
+        <div className="space-y-4">
         {/* Analysis Cards */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -679,22 +664,8 @@ export default function AdminInquiriesPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* Clear Filters Button */}
-            {(filters.property || filters.assignedAgent || filters.agency || filters.status || filters.priority || filters.source || filters.search || filters.startDate || filters.endDate) && (
-              <button
-                onClick={clearAllFilters}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap flex items-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                Clear Filters
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
+        {/* Filters — left-aligned with stats + table */}
+        <div className="flex w-full flex-wrap items-center gap-3">
             {/* Date Range Filter */}
             <div className="relative">
               <button
@@ -732,38 +703,15 @@ export default function AdminInquiriesPage() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
-                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 min-w-[600px] overflow-hidden">
-                    <div className="flex flex-col md:flex-row">
-                      {/* Presets */}
-                      <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-2">
-                        <div className="flex flex-col gap-1">
-                          {[
-                            { label: 'Today', value: 'today' },
-                            { label: 'Yesterday', value: 'yesterday' },
-                            { label: 'Last 7 Days', value: 'last7' },
-                            { label: 'Last 30 Days', value: 'last30' },
-                            { label: 'This Month', value: 'thisMonth' },
-                            { label: 'Last Month', value: 'lastMonth' }
-                          ].map((preset) => (
-                            <button
-                              key={preset.value}
-                              onClick={() => setRange(preset.value)}
-                              className="text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors"
-                            >
-                              {preset.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Custom Range */}
-                      <div className="flex-1 p-4">
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 w-[min(420px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden">
+                    <div className="p-4">
                         <div className="flex items-center gap-4">
                           <div className="flex-1">
                             <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
                             <input
                               type="date"
                               value={filters.startDate}
+                              max={new Date().toISOString().split('T')[0]}
                               onChange={(e) => {
                                 const newStartDate = e.target.value
                                 setFilters(prev => ({ ...prev, startDate: newStartDate }))
@@ -790,6 +738,7 @@ export default function AdminInquiriesPage() {
                                 setCurrentPage(1)
                               }}
                               min={filters.startDate || undefined}
+                              max={new Date().toISOString().split('T')[0]}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                             />
                           </div>
@@ -812,7 +761,6 @@ export default function AdminInquiriesPage() {
                             Apply
                           </button>
                         </div>
-                      </div>
                     </div>
                   </div>
                 </>
@@ -916,8 +864,8 @@ export default function AdminInquiriesPage() {
               }}
               options={[{ value: '', label: 'All Status' }, ...(dropdowns.leadStatuses || [])]}
               placeholder="All Status"
+              searchable={false}
               buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
-              searchPlaceholder="Search status..."
             />
 
             {/* Priority Filter */}
@@ -932,7 +880,6 @@ export default function AdminInquiriesPage() {
               buttonClassName="px-4 h-[42px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[200px]"
               searchPlaceholder="Search priority..."
             />
-          </div>
         </div>
 
         {/* Inquiries Table */}
@@ -947,229 +894,189 @@ export default function AdminInquiriesPage() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Property
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Agency
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Agent
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Priority
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {inquiries.map((inquiry) => (
-                    <tr key={inquiry._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {inquiry.contact?.firstName} {inquiry.contact?.lastName}
-                          </div>
-                          <div className="text-sm text-gray-500">{inquiry.contact?.email}</div>
-                          <div className="text-sm text-gray-500">{inquiry.contact?.phone}</div>
+            <table className="w-full table-fixed divide-y divide-gray-200">
+              <colgroup>
+                <col className="w-[18%]" />
+                <col className="w-[22%]" />
+                <col className="w-32" />
+                <col className="w-44" />
+                <col className="w-32" />
+                <col className="w-24" />
+                <col className="w-28" />
+              </colgroup>
+              <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Contact
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Phone
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Assigned Agent
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Priority
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {inquiries.map((inquiry) => (
+                  <tr key={inquiry._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => checkEntryPermission(inquiry, user, 'view', canViewInquiries) && handleViewDetails(inquiry._id)}
+                        className="text-left w-full focus:outline-none"
+                        title="View details"
+                      >
+                        <div className="text-sm font-medium text-gray-900 hover:text-primary-700 truncate">
+                          {`${inquiry.contact?.firstName || ''} ${inquiry.contact?.lastName || ''}`.trim() || 'Inquiry'}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {inquiry.property ? (
-                            <div>
-                              <div className="font-medium">{inquiry.property.title || 'N/A'}</div>
-                              {inquiry.property.agent && (
-                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                  <UserCircle className="h-3 w-3" />
-                                  <span>Owner: {inquiry.property.agent.firstName} {inquiry.property.agent.lastName}</span>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">No Property</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {inquiry.agency?.logo ? (
-                            <img
-                              src={inquiry.agency.logo}
-                              alt={inquiry.agency.name}
-                              className="h-8 w-8 rounded-full mr-2 object-cover"
-                            />
-                          ) : (
-                            <Building className="h-8 w-8 text-gray-400 mr-2" />
-                          )}
-                          <div className="text-sm text-gray-900">
-                            {inquiry.agency?.name || 'Unassigned'}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {(user?.role === 'super_admin' || user?.role === 'agency_admin') && inquiry.agency ? (
-                          <div className="relative">
-                            <SearchableSelect
-                              value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
-                              onChange={async (e) => {
-                                const selectedAgentId = e.target.value
-                                if (selectedAgentId) {
-                                  await handleAssignAgent(inquiry._id, selectedAgentId)
-                                }
-                              }}
-                              disabled={assigningAgent === inquiry._id}
-                              buttonClassName="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
-                              onFocus={async () => {
-                                // Fetch agents when dropdown is opened
-                                const agencyId = inquiry.agency?._id || inquiry.agency
-                                if (agencyId && !agencyAgents[agencyId]) {
-                                  await fetchAgentsByAgency(agencyId)
-                                }
-                              }}
-                              options={(() => {
-                                const opts = [{ value: '', label: 'Assign Agent...' }]
-                                if (inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent)) {
-                                  opts.push({
-                                    value: inquiry.assignedAgent._id || inquiry.assignedAgent,
-                                    label: inquiry.assignedAgent.firstName
-                                      ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName}`.trim()
-                                      : 'Assigned Agent'
-                                  })
-                                }
-                                const agencyId = inquiry.agency?._id || inquiry.agency
-                                const availableAgents = agencyAgents[agencyId]
-                                if (!availableAgents) return opts
-                                const currentAgentId = inquiry.assignedAgent?._id || inquiry.assignedAgent
-                                availableAgents
-                                  .filter(agent => agent._id !== currentAgentId)
-                                  .forEach((a) => opts.push({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
-                                return opts
-                              })()}
-                              placeholder="Assign Agent..."
-                              searchPlaceholder="Search agent..."
-                            />
-                            {assigningAgent === inquiry._id && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            {inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent.firstName || inquiry.assignedAgent) ? (
-                              <>
-                                {inquiry.assignedAgent.profileImage ? (
-                                  <img
-                                    src={inquiry.assignedAgent.profileImage}
-                                    alt={`${inquiry.assignedAgent.firstName || ''} ${inquiry.assignedAgent.lastName || ''}`}
-                                    className="h-8 w-8 rounded-full mr-2 object-cover"
-                                  />
-                                ) : (
-                                  <UserCircle className="h-8 w-8 text-gray-400 mr-2" />
-                                )}
-                                <div className="text-sm text-gray-900">
-                                  {inquiry.assignedAgent.firstName || ''} {inquiry.assignedAgent.lastName || ''}
-                                </div>
-                              </>
-                            ) : (
-                              <span className="text-gray-400 text-sm">Unassigned</span>
-                            )}
+                        {inquiry.property?.title && (
+                          <div className="text-xs text-gray-500 truncate">
+                            {inquiry.property.title}
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {canEditInquiry ? (
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-900 truncate" title={inquiry.contact?.email || ''}>
+                      {inquiry.contact?.email || '—'}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-900 truncate" title={inquiry.contact?.phone || ''}>
+                      {inquiry.contact?.phone || '—'}
+                    </td>
+                    <td className="px-4 py-4 min-w-0">
+                      {(user?.role === 'super_admin' || user?.role === 'agency_admin') && inquiry.agency ? (
+                        <div className="relative">
                           <SearchableSelect
-                            value={inquiry.status || 'new'}
-                            onChange={(e) => handleUpdateStatus(inquiry._id, e.target.value)}
-                            buttonClassName={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white
-                              ${inquiry.status === 'new' ? 'text-blue-800 bg-blue-50' :
-                                inquiry.status === 'contacted' ? 'text-yellow-800 bg-yellow-50' :
-                                  inquiry.status === 'qualified' ? 'text-purple-800 bg-purple-50' :
-                                    inquiry.status === 'booked' ? 'text-green-800 bg-green-50' :
-                                      inquiry.status === 'lost' ? 'text-red-800 bg-red-50' :
-                                        'text-gray-800 bg-gray-50'}`}
-                            options={dropdowns.leadStatuses || []}
-                            placeholder="Status"
-                            searchPlaceholder="Search status..."
+                            value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
+                            onChange={async (e) => {
+                              const selectedAgentId = e.target.value
+                              if (selectedAgentId) {
+                                await handleAssignAgent(inquiry._id, selectedAgentId)
+                              }
+                            }}
+                            disabled={assigningAgent === inquiry._id}
+                            buttonClassName="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            onFocus={async () => {
+                              const agencyId = inquiry.agency?._id || inquiry.agency
+                              if (agencyId && !agencyAgents[agencyId]) {
+                                await fetchAgentsByAgency(agencyId)
+                              }
+                            }}
+                            options={(() => {
+                              const opts = [{ value: '', label: 'Assign Agent...' }]
+                              if (inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent)) {
+                                opts.push({
+                                  value: inquiry.assignedAgent._id || inquiry.assignedAgent,
+                                  label: inquiry.assignedAgent.firstName
+                                    ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName}`.trim()
+                                    : 'Assigned Agent'
+                                })
+                              }
+                              const agencyId = inquiry.agency?._id || inquiry.agency
+                              const availableAgents = agencyAgents[agencyId]
+                              if (!availableAgents) return opts
+                              const currentAgentId = inquiry.assignedAgent?._id || inquiry.assignedAgent
+                              availableAgents
+                                .filter(agent => agent._id !== currentAgentId)
+                                .forEach((a) => opts.push({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
+                              return opts
+                            })()}
+                            placeholder="Assign Agent..."
+                            searchPlaceholder="Search agent..."
                           />
-                        ) : (
-                          getStatusBadge(inquiry.status)
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getPriorityBadge(inquiry.priority)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {inquiry.createdAt
-                          ? new Date(inquiry.createdAt).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })
-                          : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                          {checkEntryPermission(inquiry, user, 'view', canViewInquiries) && (
-                            <button
-                              onClick={() => handleViewDetails(inquiry._id)}
-                              className="text-primary-600 hover:text-primary-900 transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="h-5 w-5" />
-                            </button>
-                          )}
-                          {checkEntryPermission(inquiry, user, 'edit', canEditInquiry) && (
-                            <Link
-                              href={`/admin/leads/${inquiry._id}/edit`}
-                              className="text-gray-600 hover:text-gray-900 transition-colors"
-                              title="Edit Inquiry"
-                            >
-                              <Edit className="h-5 w-5" />
-                            </Link>
-                          )}
-                          {canDeleteInquiry && (
-                            <button
-                              onClick={() => handleDelete(inquiry._id)}
-                              className="text-red-600 hover:text-red-900 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
-                          )}
-                          {user?.role === 'super_admin' && (
-                            <button
-                              onClick={() => handleOpenEntryPermissions(inquiry)}
-                              className="text-amber-600 hover:text-amber-900 transition-colors"
-                              title="Set Custom Permissions"
-                            >
-                              <ShieldCheck className="h-5 w-5" />
-                            </button>
+                          {assigningAgent === inquiry._id && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                            </div>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      ) : (
+                        <span className="text-sm text-gray-900 truncate">
+                          {inquiry.assignedAgent?.firstName
+                            ? `${inquiry.assignedAgent.firstName} ${inquiry.assignedAgent.lastName || ''}`.trim()
+                            : 'Unassigned'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      {canEditInquiry ? (
+                        <SearchableSelect
+                          value={inquiry.status || 'new'}
+                          onChange={(e) => handleUpdateStatus(inquiry._id, e.target.value)}
+                          buttonClassName={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white w-full
+                            ${inquiry.status === 'new' ? 'text-blue-800 bg-blue-50' :
+                              inquiry.status === 'contacted' ? 'text-yellow-800 bg-yellow-50' :
+                                inquiry.status === 'qualified' ? 'text-purple-800 bg-purple-50' :
+                                  inquiry.status === 'booked' ? 'text-green-800 bg-green-50' :
+                                    inquiry.status === 'lost' ? 'text-red-800 bg-red-50' :
+                                      'text-gray-800 bg-gray-50'}`}
+                          options={dropdowns.leadStatuses || []}
+                          placeholder="Status"
+                          searchable={false}
+                        />
+                      ) : (
+                        getStatusBadge(inquiry.status)
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      {getPriorityBadge(inquiry.priority)}
+                    </td>
+                    <td className="px-4 py-4 text-center text-sm font-medium">
+                      <div className="flex items-center justify-center gap-2">
+                        {checkEntryPermission(inquiry, user, 'view', canViewInquiries) && (
+                          <button
+                            onClick={() => handleViewDetails(inquiry._id)}
+                            className="text-primary-600 hover:text-primary-900 transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
+                        )}
+                        {checkEntryPermission(inquiry, user, 'edit', canEditInquiry) && (
+                          <Link
+                            href={`/admin/leads/${inquiry._id}/edit`}
+                            className="text-gray-600 hover:text-gray-900 transition-colors"
+                            title="Edit Inquiry"
+                          >
+                            <Edit className="h-5 w-5" />
+                          </Link>
+                        )}
+                        {canDeleteInquiry && (
+                          <button
+                            onClick={() => handleDelete(inquiry._id)}
+                            className="text-red-600 hover:text-red-900 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                        {user?.role === 'super_admin' && (
+                          <button
+                            onClick={() => handleOpenEntryPermissions(inquiry)}
+                            className="text-amber-600 hover:text-amber-900 transition-colors"
+                            title="Set Custom Permissions"
+                          >
+                            <ShieldCheck className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
             {/* Pagination */}
             {inquiries.length > 0 && (
@@ -1297,6 +1204,7 @@ export default function AdminInquiriesPage() {
             )}
           </div>
         )}
+        </div>
 
         {/* Detail Modal */}
         {showDetailModal && selectedInquiry && (
@@ -1345,20 +1253,17 @@ export default function AdminInquiriesPage() {
                         </p>
                       </div>
                     )}
-                    {selectedInquiry.contact?.address && (
+                    {selectedInquiry.contact?.address && getAddressLabeledRows(selectedInquiry.contact.address).length > 0 && (
                       <div className="col-span-2">
-                        <p className="text-sm text-gray-500">Address</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {[
-                            selectedInquiry.contact.address.street,
-                            selectedInquiry.contact.address.city,
-                            selectedInquiry.contact.address.state,
-                            selectedInquiry.contact.address.country,
-                            selectedInquiry.contact.address.zipCode
-                          ]
-                            .filter(Boolean)
-                            .join(', ')}
-                        </p>
+                        <p className="text-sm text-gray-500 mb-2">Address</p>
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                          {getAddressLabeledRows(selectedInquiry.contact.address).map(({ label, value }) => (
+                            <div key={label} className="min-w-0">
+                              <dt className="text-xs font-medium text-gray-500 uppercase">{label}</dt>
+                              <dd className="font-medium text-gray-900 leading-snug whitespace-pre-line break-words">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
                       </div>
                     )}
                   </div>
@@ -1378,16 +1283,12 @@ export default function AdminInquiriesPage() {
                           {selectedInquiry.property.title || 'N/A'}
                         </p>
                       </div>
-                      {selectedInquiry.property.price && (
-                        <div>
-                          <p className="text-sm text-gray-500">Price</p>
-                          <p className="text-sm font-medium text-gray-900">
-                            ${typeof selectedInquiry.property.price === 'number'
-                              ? selectedInquiry.property.price.toLocaleString()
-                              : String(selectedInquiry.property.price)}
-                          </p>
-                        </div>
-                      )}
+                      <div>
+                        <p className="text-sm text-gray-500">Price</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatInquiryPropertyPrice(selectedInquiry.property.price)}
+                        </p>
+                      </div>
                       {selectedInquiry.property.location && (
                         <div className="col-span-2">
                           <p className="text-sm text-gray-500">Location</p>
@@ -1612,6 +1513,7 @@ export default function AdminInquiriesPage() {
         entryType="inquiries"
         onSuccess={fetchInquiries}
       />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

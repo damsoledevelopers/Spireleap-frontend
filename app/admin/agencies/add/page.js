@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -23,6 +23,8 @@ export default function AddAgencyPage() {
   const fileInputRef = useRef(null)
   const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [errors, setErrors] = useState({})
+  const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+  const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -51,6 +53,128 @@ export default function AddAgencyPage() {
     const s = String(v || '').trim()
     if (!s) return true
     return s.length === 5 || s.length === 9
+  }
+
+  useEffect(() => {
+    fetchCountries()
+  }, [])
+
+  useEffect(() => {
+    fetchStates(formData.contact.address.country)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.contact.address.country])
+
+  useEffect(() => {
+    fetchCities(formData.contact.address.country, formData.contact.address.state)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.contact.address.country, formData.contact.address.state])
+
+  const fetchCountries = async () => {
+    try {
+      setGeoLoading((p) => ({ ...p, countries: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+      const countries = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean)
+        : []
+      countries.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, countries }))
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      setGeo((p) => ({ ...p, countries: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, countries: false }))
+    }
+  }
+
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+      setFormData((prev) => ({
+        ...prev,
+        contact: {
+          ...prev.contact,
+          address: { ...prev.contact.address, state: '', city: '' }
+        }
+      }))
+      return
+    }
+
+    try {
+      setGeoLoading((p) => ({ ...p, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean)
+        : []
+      states.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, states, cities: [] }))
+      setFormData((prev) => {
+        const currentState = prev.contact.address.state
+        if (!currentState || states.includes(currentState)) return prev
+        return {
+          ...prev,
+          contact: {
+            ...prev.contact,
+            address: { ...prev.contact.address, state: '', city: '' }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, states: false }))
+    }
+  }
+
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo((p) => ({ ...p, cities: [] }))
+      setFormData((prev) => ({
+        ...prev,
+        contact: {
+          ...prev.contact,
+          address: { ...prev.contact.address, city: '' }
+        }
+      }))
+      return
+    }
+
+    try {
+      setGeoLoading((p) => ({ ...p, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c || '').trim()).filter(Boolean)
+        : []
+      cities.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, cities }))
+      setFormData((prev) => {
+        const currentCity = prev.contact.address.city
+        if (!currentCity || cities.includes(currentCity)) return prev
+        return {
+          ...prev,
+          contact: {
+            ...prev.contact,
+            address: { ...prev.contact.address, city: '' }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo((p) => ({ ...p, cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, cities: false }))
+    }
   }
 
   if (authLoading) {
@@ -121,6 +245,26 @@ export default function AddAgencyPage() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
+  }
+
+  const sanitizeSlug = (value) => {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+/, '')
+  }
+
+  const handleSlugChange = (e) => {
+    const cleaned = sanitizeSlug(e.target.value)
+    setFormData((prev) => ({ ...prev, slug: cleaned }))
+    if (errors.slug) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.slug
+        return next
+      })
+    }
   }
 
   const handleNameChange = (e) => {
@@ -271,14 +415,14 @@ export default function AddAgencyPage() {
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm p-6 space-y-6">
           {/* Basic Information */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Building className="h-5 w-5" />
               Basic Information
             </h2>
 
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Agency Name *
+              <label htmlFor="name" className="block text-sm font-bold text-gray-900 mb-2">
+                Agency Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
               <input
                 id="name"
@@ -296,18 +440,20 @@ export default function AddAgencyPage() {
             </div>
 
             <div>
-              <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-2">
-                URL Slug *
+              <label htmlFor="slug" className="block text-sm font-bold text-gray-900 mb-2">
+                URL Slug<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
               <input
                 id="slug"
                 name="slug"
                 type="text"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.slug ? 'border-red-500' : 'border-gray-300'}`}
-                placeholder="agency-slug"
+                placeholder="Enter URL slug"
                 value={formData.slug}
-                onChange={handleChange}
+                onChange={handleSlugChange}
               />
               <p className="mt-1 text-xs text-gray-500">Used in URLs (e.g., /agencies/agency-slug)</p>
               {errors.slug && (
@@ -316,7 +462,7 @@ export default function AddAgencyPage() {
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="description" className="block text-sm font-bold text-gray-900 mb-2">
                 Description
               </label>
               <textarea
@@ -331,13 +477,21 @@ export default function AddAgencyPage() {
             </div>
 
             <div>
-              <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="logo" className="block text-sm font-bold text-gray-900 mb-2">
                 Logo
               </label>
               <div className="flex items-center gap-4">
                 {logoPreview ? (
-                  <div className="relative">
-                    <img src={logoPreview} alt="Logo preview" className="h-20 w-20 rounded-lg object-cover" />
+                  <div className="relative h-24 w-24 rounded-lg border border-gray-200 bg-gray-50 p-1 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={logoPreview}
+                      alt="Logo preview"
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null
+                        setLogoPreview(null)
+                      }}
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -353,7 +507,7 @@ export default function AddAgencyPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="h-20 w-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                  <div className="h-24 w-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
                     <Building className="h-8 w-8 text-gray-400" />
                   </div>
                 )}
@@ -380,16 +534,15 @@ export default function AddAgencyPage() {
 
           {/* Contact Information */}
           <div className="space-y-4 border-t pt-6">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              {/* <Phone className="h-5 w-5" /> */}
-              {/* Contact Information */}Login information
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              Login information
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="contact.email" className="block text-sm font-medium text-gray-700 mb-2">
-                  <Mail className="h-4 w-4 inline mr-1" />
-                  Email *
+                <label htmlFor="contact.email" className="block text-sm font-bold text-gray-900 mb-2">
+                  <Mail className="h-4 w-4 inline mr-1 align-text-bottom" />
+                  Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="contact.email"
@@ -397,7 +550,7 @@ export default function AddAgencyPage() {
                   type="email"
                   required
                   className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.email'] ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="info@agency.com"
+                  placeholder="Enter email"
                   value={formData.contact.email}
                   onChange={handleChange}
                 />
@@ -408,9 +561,9 @@ export default function AddAgencyPage() {
               </div>
 
               <div>
-                <label htmlFor="contact.phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  <Phone className="h-4 w-4 inline mr-1" />
-                  Phone *
+                <label htmlFor="contact.phone" className="block text-sm font-bold text-gray-900 mb-2">
+                  <Phone className="h-4 w-4 inline mr-1 align-text-bottom" />
+                  Phone<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <PhoneField
                   required
@@ -437,8 +590,8 @@ export default function AddAgencyPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Password *
+                <label htmlFor="password" className="block text-sm font-bold text-gray-900 mb-2">
+                  Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -448,7 +601,7 @@ export default function AddAgencyPage() {
                     required
                     minLength={6}
                     className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="Enter password for agency admin"
+                    placeholder="Enter password"
                     value={formData.password}
                     onChange={handleChange}
                   />
@@ -472,8 +625,8 @@ export default function AddAgencyPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password *
+                <label htmlFor="confirmPassword" className="block text-sm font-bold text-gray-900 mb-2">
+                  Confirm Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -506,7 +659,7 @@ export default function AddAgencyPage() {
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="contact.website" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="contact.website" className="block text-sm font-bold text-gray-900 mb-2">
                   Website
                 </label>
                 <input
@@ -514,7 +667,7 @@ export default function AddAgencyPage() {
                   name="contact.website"
                   type="url"
                   className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.website'] ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="https://www.agency.com"
+                  placeholder="Enter website URL"
                   value={formData.contact.website}
                   onChange={handleChange}
                 />
@@ -526,13 +679,13 @@ export default function AddAgencyPage() {
 
             {/* Address */}
             <div className="space-y-4 border-t pt-4">
-              <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
                 Address
               </h3>
 
               <div>
-                <label htmlFor="contact.address.street" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="contact.address.street" className="block text-sm font-bold text-gray-900 mb-2">
                   Street
                 </label>
                 <input
@@ -540,7 +693,7 @@ export default function AddAgencyPage() {
                   name="contact.address.street"
                   type="text"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="123 Main Street"
+                  placeholder="Enter street address"
                   value={formData.contact.address.street}
                   onChange={handleChange}
                 />
@@ -548,52 +701,63 @@ export default function AddAgencyPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="contact.address.city" className="block text-sm font-medium text-gray-700 mb-2">
-                    City
-                  </label>
-                  <input
-                    id="contact.address.city"
-                    name="contact.address.city"
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="Miami"
-                    value={formData.contact.address.city}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="contact.address.state" className="block text-sm font-medium text-gray-700 mb-2">
-                    State
-                  </label>
-                  <input
-                    id="contact.address.state"
-                    name="contact.address.state"
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="FL"
-                    value={formData.contact.address.state}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="contact.address.country" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="contact.address.country" className="block text-sm font-bold text-gray-900 mb-2">
                     Country
                   </label>
-                  <input
+                  <select
                     id="contact.address.country"
                     name="contact.address.country"
-                    type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="USA"
                     value={formData.contact.address.country}
                     onChange={handleChange}
-                  />
+                  >
+                    <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                    {geo.countries.map((country) => (
+                      <option key={country} value={country}>{country}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label htmlFor="contact.address.zipCode" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="contact.address.state" className="block text-sm font-bold text-gray-900 mb-2">
+                    State
+                  </label>
+                  <select
+                    id="contact.address.state"
+                    name="contact.address.state"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                    value={formData.contact.address.state}
+                    onChange={handleChange}
+                    disabled={!formData.contact.address.country || geoLoading.states}
+                  >
+                    <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                    {geo.states.map((state) => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="contact.address.city" className="block text-sm font-bold text-gray-900 mb-2">
+                    City
+                  </label>
+                  <select
+                    id="contact.address.city"
+                    name="contact.address.city"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                    value={formData.contact.address.city}
+                    onChange={handleChange}
+                    disabled={!formData.contact.address.state || geoLoading.cities}
+                  >
+                    <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                    {geo.cities.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="contact.address.zipCode" className="block text-sm font-bold text-gray-900 mb-2">
                     ZIP Code
                   </label>
                   <input
@@ -601,7 +765,7 @@ export default function AddAgencyPage() {
                     name="contact.address.zipCode"
                     type="text"
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${errors['contact.address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="33101"
+                    placeholder="Enter ZIP code"
                     value={formData.contact.address.zipCode}
                     onChange={handleChange}
                   />
@@ -625,7 +789,7 @@ export default function AddAgencyPage() {
               onChange={handleChange}
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
             />
-            <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
+            <label htmlFor="isActive" className="text-sm font-bold text-gray-900">
               Active Agency
             </label>
           </div>

@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Building, Plus, Edit, Trash2, Users, Package, TrendingUp, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
+import { Building, Plus, Edit, Trash2, Users, UserPlus, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import DetailsModal from '../../../components/Common/DetailsModal'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
 export function AgenciesPageContent() {
   const { user, checkPermission } = useAuth()
@@ -52,6 +54,22 @@ export function AgenciesPageContent() {
     total: 0,
     limit: 20
   })
+  const [detailsAgency, setDetailsAgency] = useState(null)
+  const { confirm, ConfirmDialog } = useConfirmDialog()
+
+  const formatDate = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const formatDateTime = (value) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return '—'
+    return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+  }
 
   useEffect(() => {
     // Reset pagination when filters change
@@ -154,48 +172,30 @@ export function AgenciesPageContent() {
     }
   }
 
-  const clearFilters = () => {
-    setStatusFilter('')
-    setSearchTerm('')
-    setStartDate('')
-    setEndDate('')
-    fetchAgencies()
-  }
-
-  const hasActiveFilters = () => {
-    return statusFilter !== '' || searchTerm.trim() !== '' || startDate !== '' || endDate !== ''
-  }
-
   const fetchMetrics = async () => {
     try {
-      // Fetch all agencies for metrics
-      const [agenciesRes, propertiesRes, leadsRes, agentsRes] = await Promise.all([
-        api.get('/agencies').catch(() => ({ data: { agencies: [] } })),
-        api.get('/properties?limit=100').catch(() => ({ data: { properties: [] } })),
-        api.get('/leads?limit=100').catch(() => ({ data: { leads: [] } })),
-        api.get('/users?role=agent&limit=100').catch(() => ({ data: { users: [] } }))
-      ])
+      // High limit so totals match Reports (same live stats as list rows)
+      const agenciesRes = await api
+        .get('/agencies?page=1&limit=5000&includeAgencyTotals=true')
+        .catch(() => ({ data: { agencies: [], pagination: {}, agencyTotals: null } }))
 
       const allAgenciesData = agenciesRes.data?.agencies || []
-      const allProperties = propertiesRes.data?.properties || []
-      const allLeads = leadsRes.data?.leads || []
-      const allAgents = agentsRes.data?.users || []
-
+      const totalFromPagination = agenciesRes.data?.pagination?.total
+      const totals = agenciesRes.data?.agencyTotals
       setAllAgencies(allAgenciesData)
 
-      // Calculate metrics
-      const activeAgencies = allAgenciesData.filter(a => a.isActive === true).length
-      const totalProperties = allProperties.length
-      const totalLeads = allLeads.length
-      const totalAgents = allAgents.length
+      const totalAgents = allAgenciesData.reduce((s, a) => s + (a.stats?.totalAgents || 0), 0)
+      const totalProperties = allAgenciesData.reduce((s, a) => s + (a.stats?.totalProperties || 0), 0)
+      const totalLeads = allAgenciesData.reduce((s, a) => s + (a.stats?.totalLeads || 0), 0)
 
       setAgencyMetrics({
-        totalAgencies: allAgenciesData.length,
-        activeAgencies: activeAgencies,
-        inactiveAgencies: allAgenciesData.length - activeAgencies,
-        totalAgents: totalAgents,
-        totalProperties: totalProperties,
-        totalLeads: totalLeads
+        totalAgencies:
+          typeof totalFromPagination === 'number' ? totalFromPagination : allAgenciesData.length,
+        activeAgencies: typeof totals?.active === 'number' ? totals.active : 0,
+        inactiveAgencies: typeof totals?.inactive === 'number' ? totals.inactive : 0,
+        totalAgents,
+        totalProperties,
+        totalLeads
       })
     } catch (error) {
       console.error('Error fetching metrics:', error)
@@ -203,7 +203,13 @@ export function AgenciesPageContent() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this agency?')) return
+    const ok = await confirm({
+      title: 'Delete Agency',
+      message: 'Are you sure you want to delete this agency?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       await api.delete(`/agencies/${id}`)
@@ -220,7 +226,7 @@ export function AgenciesPageContent() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Agency Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
@@ -257,33 +263,28 @@ export function AgenciesPageContent() {
               <Users className="h-10 w-10 text-purple-500 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-sm p-4 border-l-4 border-orange-500">
+          <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg shadow-sm p-4 border-l-4 border-teal-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 font-medium">Total Properties</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{agencyMetrics.totalProperties}</p>
               </div>
-              <Package className="h-10 w-10 text-orange-500 opacity-80" />
+              <Building className="h-10 w-10 text-teal-600 opacity-80" />
             </div>
           </div>
-          <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg shadow-sm p-4 border-l-4 border-teal-500">
+          <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg shadow-sm p-4 border-l-4 border-amber-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 font-medium">Total Leads</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{agencyMetrics.totalLeads}</p>
               </div>
-              <TrendingUp className="h-10 w-10 text-teal-500 opacity-80" />
+              <UserPlus className="h-10 w-10 text-amber-600 opacity-80" />
             </div>
           </div>
         </div>
 
         {/* Filter Section */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Agencies</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage all real estate agencies</p>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 flex-wrap">
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -312,19 +313,19 @@ export function AgenciesPageContent() {
               <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 ${startDate || endDate
+                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
                   ? 'border-primary-500 text-gray-900'
                   : 'border-gray-300 text-gray-700'
                   }`}
               >
-                <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                <span>
+                <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                <span className="whitespace-nowrap">
                   {startDate && endDate
-                    ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                     : startDate
-                      ? `Date: ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} - ...`
+                      ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                       : endDate
-                        ? `Date: ... - ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
                         : 'Date Range'}
                 </span>
                 {startDate || endDate ? (
@@ -352,6 +353,7 @@ export function AgenciesPageContent() {
                         <input
                           type="date"
                           value={startDate}
+                          max={new Date().toISOString().split('T')[0]}
                           onChange={(e) => {
                             const newStartDate = e.target.value
                             setStartDate(newStartDate)
@@ -372,6 +374,7 @@ export function AgenciesPageContent() {
                             setEndDate(newEndDate)
                           }}
                           min={startDate || undefined}
+                          max={new Date().toISOString().split('T')[0]}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
@@ -403,12 +406,11 @@ export function AgenciesPageContent() {
               )}
             </div>
             {canCreateAgency && (
-              <Link href="/admin/agencies/add" className="btn btn-primary">
+              <Link href="/admin/agencies/add" className="btn btn-primary whitespace-nowrap flex-shrink-0">
                 <Plus className="h-5 w-5 mr-2" />
                 Add Agency
               </Link>
             )}
-          </div>
         </div>
 
         {loading ? (
@@ -419,78 +421,63 @@ export function AgenciesPageContent() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No agencies found</p>
-            {canCreateAgency && (
-              <Link href="/admin/agencies/add" className="btn btn-primary mt-4">
-                <Plus className="h-5 w-5 mr-2" />
-                Add Your First Agency
-              </Link>
-            )}
           </div>
         ) : (
           <>
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Logo
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Agency Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Description
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Phone
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Agents
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Properties
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Leads
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Status
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                        onClick={() => handleSort('createdAt')}
-                      >
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          Created Date
-                          {sortColumn === 'createdAt' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                        onClick={() => handleSort('updatedAt')}
-                      >
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          Last Updated
-                          {sortColumn === 'updatedAt' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {agencies.map((agency) => (
-                      <tr key={String(agency._id)} className="hover:bg-logo-beige transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+              <table className="w-full table-fixed divide-y divide-gray-200">
+                <colgroup>
+                  <col className="w-16" />
+                  <col className="w-[16%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-28" />
+                  <col className="w-16" />
+                  <col className="w-16" />
+                  <col className="w-16" />
+                  <col className="w-20" />
+                  <col className="w-28" />
+                </colgroup>
+                <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Logo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Agency
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Phone
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Agents
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Properties
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Leads
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {agencies.map((agency) => (
+                    <tr key={String(agency._id)} className="hover:bg-logo-beige transition-colors">
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsAgency(agency)}
+                          className="block focus:outline-none"
+                          title="View details"
+                        >
                           {agency.logo ? (
                             <img
                               src={agency.logo}
@@ -502,103 +489,90 @@ export function AgenciesPageContent() {
                               <Building className="h-5 w-5 text-white" />
                             </div>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-gray-900">{agency.name}</div>
+                        </button>
+                      </td>
+                      <td className="px-4 py-4 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsAgency(agency)}
+                          className="text-left w-full focus:outline-none"
+                          title="View details"
+                        >
+                          <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 truncate">
+                            {agency.name}
+                          </div>
                           {agency.slug && (
-                            <div className="text-xs text-gray-500">/{agency.slug}</div>
+                            <div className="text-xs text-gray-500 truncate">/{agency.slug}</div>
                           )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-600 max-w-xs line-clamp-2">
-                            {agency.description || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{agency.contact?.email || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{agency.contact?.phone || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {agency.stats?.totalAgents || 0}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                        </button>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agency.contact?.email || ''}>
+                        {agency.contact?.email || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agency.contact?.phone || ''}>
+                        {agency.contact?.phone || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {agency.stats?.totalAgents || 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {agency.stats?.totalProperties ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900">
+                          {agency.stats?.totalLeads ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {agency.isActive ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            {agency.stats?.activeProperties || 0}
+                            Active
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            {agency.stats?.totalLeads || 0}
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Inactive
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {agency.isActive ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Inactive
-                            </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm font-medium">
+                        <div className="flex items-center justify-center gap-2">
+                          {isSuperAdmin && (
+                            <Link
+                              href={`/admin/permissions?type=agency&id=${String(agency._id)}`}
+                              className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                              title="Permissions (this agency only)"
+                            >
+                              <Shield className="h-5 w-5" />
+                            </Link>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {agency.createdAt || agency.created_at ? (
-                            new Date(agency.createdAt || agency.created_at).toLocaleDateString()
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                          {canEditAgency && (
+                            <Link
+                              href={`/admin/agencies/${String(agency._id)}/edit`}
+                              className="text-primary-600 hover:text-primary-900 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="h-5 w-5" />
+                            </Link>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {agency.updatedAt || agency.updated_at ? (
-                            <div className="flex flex-col">
-                              <span>{new Date(agency.updatedAt || agency.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                              <span className="text-xs text-gray-500">{new Date(agency.updatedAt || agency.updated_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                          {canDeleteAgency && (
+                            <button
+                              onClick={() => handleDelete(agency._id)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                          <div className="flex items-center justify-center gap-3">
-                            {isSuperAdmin && (
-                              <Link
-                                href={`/admin/permissions?type=agency&id=${String(agency._id)}`}
-                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                                title="Permissions (this agency only)"
-                              >
-                                <Shield className="h-5 w-5" />
-                              </Link>
-                            )}
-                            {canEditAgency && (
-                              <Link
-                                href={`/admin/agencies/${String(agency._id)}/edit`}
-                                className="text-primary-600 hover:text-primary-900 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit className="h-5 w-5" />
-                              </Link>
-                            )}
-                            {canDeleteAgency && (
-                              <button
-                                onClick={() => handleDelete(agency._id)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-5 w-5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             {/* Pagination */}
@@ -675,6 +649,87 @@ export function AgenciesPageContent() {
           </>
         )}
       </div>
+
+      <DetailsModal
+        isOpen={!!detailsAgency}
+        onClose={() => setDetailsAgency(null)}
+        title={detailsAgency?.name || ''}
+        subtitle={detailsAgency?.slug ? `/${detailsAgency.slug}` : detailsAgency?.contact?.email}
+        avatar={
+          detailsAgency ? (
+            detailsAgency.logo ? (
+              <img
+                src={detailsAgency.logo}
+                alt={detailsAgency.name}
+                className="h-14 w-14 rounded-lg object-cover"
+              />
+            ) : (
+              <div className="h-14 w-14 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
+                <Building className="h-7 w-7 text-white" />
+              </div>
+            )
+          ) : null
+        }
+        sections={detailsAgency ? [
+          {
+            title: 'Overview',
+            items: [
+              { label: 'Description', value: detailsAgency.description },
+              {
+                label: 'Status',
+                value: detailsAgency.isActive ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>
+                ),
+              },
+            ],
+          },
+          {
+            title: 'Contact',
+            items: [
+              { label: 'Email', value: detailsAgency.contact?.email },
+              { label: 'Phone', value: detailsAgency.contact?.phone },
+            ],
+          },
+          {
+            title: 'Stats',
+            items: [
+              { label: 'Agents', value: detailsAgency.stats?.totalAgents ?? 0 },
+              { label: 'Total properties', value: detailsAgency.stats?.totalProperties ?? 0 },
+              { label: 'Active properties', value: detailsAgency.stats?.activeProperties ?? 0 },
+              { label: 'Leads', value: detailsAgency.stats?.totalLeads ?? 0 },
+            ],
+          },
+          {
+            title: 'Timeline',
+            items: [
+              { label: 'Created', value: formatDate(detailsAgency.createdAt || detailsAgency.created_at) },
+              { label: 'Last updated', value: formatDateTime(detailsAgency.updatedAt || detailsAgency.updated_at) },
+            ],
+          },
+        ] : []}
+        actions={detailsAgency ? (
+          <>
+            {canEditAgency && (
+              <Link
+                href={`/admin/agencies/${String(detailsAgency._id)}/edit`}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              >
+                Edit
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setDetailsAgency(null)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

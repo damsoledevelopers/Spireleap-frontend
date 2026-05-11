@@ -147,27 +147,44 @@ export default function CustomerProfile() {
                         </div>
                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">First Name</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    First Name
+                                    <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                        *
+                                    </span>
+                                </label>
                                 <input
                                     type="text"
                                     name="firstName"
                                     value={formData.firstName}
                                     onChange={handleChange}
+                                    required
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Last Name</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Last Name
+                                    <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                        *
+                                    </span>
+                                </label>
                                 <input
                                     type="text"
                                     name="lastName"
                                     value={formData.lastName}
                                     onChange={handleChange}
+                                    required
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email Address</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Email Address
+                                    <span className="text-red-500 ml-0.5" aria-hidden="true">
+                                        *
+                                    </span>
+                                </label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <input

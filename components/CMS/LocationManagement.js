@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { clearDropdownOptionsCache } from '../../lib/dropdownsApi'
-import { Plus, Edit, Trash2, Search, MapPin, X } from 'lucide-react'
+import { Plus, Edit, Trash2, MapPin, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import SearchableSelect from '../Common/SearchableSelect'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 const emptyForm = {
   country: '',
@@ -18,11 +19,11 @@ const emptyForm = {
 
 export default function LocationManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingLocation, setEditingLocation] = useState(null)
-  const [searchTerm, setSearchTerm] = useState('')
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState(emptyForm)
   const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
@@ -115,18 +116,6 @@ export default function LocationManagement() {
     }
   }
 
-  const filteredLocations = useMemo(() => {
-    const t = searchTerm.toLowerCase().trim()
-    if (!t) return locations
-    return locations.filter((loc) => {
-      return (
-        String(loc.country || '').toLowerCase().includes(t) ||
-        String(loc.state || '').toLowerCase().includes(t) ||
-        String(loc.city || '').toLowerCase().includes(t)
-      )
-    })
-  }, [locations, searchTerm])
-
   const resetForm = () => setFormData(emptyForm)
 
   const openCreate = () => {
@@ -214,7 +203,13 @@ export default function LocationManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this location?')) return
+    const ok = await confirm({
+      title: 'Delete Location',
+      message: 'Are you sure you want to delete this location?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/settings/locations/${id}`)
       toast.success('Location deleted successfully')
@@ -240,19 +235,7 @@ export default function LocationManagement() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <input
-              type="text"
-              placeholder="Search locations..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-        </div>
+      <div className="flex justify-end items-center mb-6">
         {checkPermission('settings', 'create') && (
           <button
             onClick={openCreate}
@@ -282,20 +265,18 @@ export default function LocationManagement() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredLocations.length === 0 ? (
+                {locations.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
                       <div className="text-gray-500">
                         <MapPin className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                         <p className="text-lg font-medium">No locations found</p>
-                        <p className="text-sm mt-1">
-                          {searchTerm ? 'Try adjusting your search terms' : 'Add locations to power filters and forms'}
-                        </p>
+                        <p className="text-sm mt-1">Add locations to power filters and forms</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredLocations.map((loc) => {
+                  locations.map((loc) => {
                     const isActive = loc.isActive !== false
                     return (
                       <tr key={loc._id}>
@@ -360,7 +341,7 @@ export default function LocationManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingLocation ? 'Edit Location' : 'Create Location'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Country<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <SearchableSelect
                     id="location-country"
                     name="country"
@@ -382,12 +363,12 @@ export default function LocationManagement() {
                     disabled={geoLoading.countries}
                     clearOnBackspace
                     placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
-                    searchPlaceholder="Search country..."
+                    searchable={false}
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400 text-left"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State / Region</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">State / Region</label>
                   <SearchableSelect
                     id="location-state"
                     name="state"
@@ -407,14 +388,14 @@ export default function LocationManagement() {
                         ? 'Select country first'
                         : geoLoading.states
                           ? 'Loading states...'
-                          : 'Select state'
+                            : 'Select state'
                     }
-                    searchPlaceholder="Search state..."
+                    searchable={false}
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400 text-left"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">City<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <SearchableSelect
                     id="location-city"
                     name="city"
@@ -432,7 +413,7 @@ export default function LocationManagement() {
                             ? 'Loading cities...'
                             : 'Select city'
                     }
-                    searchPlaceholder="Search city..."
+                    searchable={false}
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400 text-left"
                   />
                   {!editingLocation && (
@@ -522,6 +503,7 @@ export default function LocationManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

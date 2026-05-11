@@ -27,7 +27,11 @@ export default function SearchableSelect({
   className = '',
   buttonClassName = '',
   menuClassName = '',
-  searchPlaceholder = 'Search...'
+  searchPlaceholder = 'Search...',
+  /** Show the search box. `true`/`false` to force, `'auto'` (default) shows it only when options exceed `searchThreshold`. */
+  searchable = 'auto',
+  /** When `searchable === 'auto'`, only show the search input when option count is greater than this. */
+  searchThreshold = 5
 }) {
   const containerRef = useRef(null)
   const inputRef = useRef(null)
@@ -40,6 +44,10 @@ export default function SearchableSelect({
   const [highlightIndex, setHighlightIndex] = useState(-1)
 
   const normalizedOptions = useMemo(() => options.map(toOption), [options])
+
+  const showSearch =
+    searchable === true ||
+    (searchable === 'auto' && normalizedOptions.length > searchThreshold)
 
   const selected = useMemo(() => {
     const v = value ?? ''
@@ -105,10 +113,15 @@ export default function SearchableSelect({
   }, [open])
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 0)
-    }
-  }, [open])
+    if (!open) return
+    setTimeout(() => {
+      if (showSearch) {
+        inputRef.current?.focus()
+      } else {
+        listRef.current?.focus()
+      }
+    }, 0)
+  }, [open, showSearch])
 
   const emitChange = useCallback(
     (newValue) => {
@@ -207,22 +220,30 @@ export default function SearchableSelect({
           role="listbox"
           aria-activedescendant={highlightIndex >= 0 ? `${baseId}-option-${highlightIndex}` : undefined}
         >
-          <div className="p-2 border-b border-gray-100">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder={searchPlaceholder}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                aria-controls={`${baseId}-listbox`}
-              />
+          {showSearch && (
+            <div className="p-2 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder={searchPlaceholder}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  aria-controls={`${baseId}-listbox`}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          <div ref={listRef} id={`${baseId}-listbox`} className="max-h-64 overflow-auto py-1">
+          <div
+            ref={listRef}
+            id={`${baseId}-listbox`}
+            className="max-h-64 overflow-auto py-1"
+            tabIndex={showSearch ? -1 : 0}
+            onKeyDown={showSearch ? undefined : handleSearchKeyDown}
+          >
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-gray-500">No results</div>
             ) : (

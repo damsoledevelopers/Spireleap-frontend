@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { CheckSquare, Square, Trash2, Edit, Download, MoreVertical } from 'lucide-react'
+import { useConfirmDialog } from './useConfirmDialog'
 
 export default function BulkActions({ 
   items = [], 
@@ -14,6 +15,7 @@ export default function BulkActions({
   actions = []
 }) {
   const [showActions, setShowActions] = useState(false)
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const allSelected = selectedItems.length === items.length && items.length > 0
   const someSelected = selectedItems.length > 0 && selectedItems.length < items.length
 
@@ -70,10 +72,14 @@ export default function BulkActions({
           )}
           {onBulkDelete && (
             <button
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
-                  onBulkDelete(selectedItems)
-                }
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Delete Items',
+                  message: `Are you sure you want to delete ${selectedItems.length} item(s)?`,
+                  confirmText: 'Delete',
+                  tone: 'danger'
+                })
+                if (ok) onBulkDelete(selectedItems)
               }}
               className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-2"
             >
@@ -93,6 +99,7 @@ export default function BulkActions({
           ))}
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }

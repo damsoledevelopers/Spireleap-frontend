@@ -19,11 +19,11 @@ import {
     ArrowUpRight,
     BadgeDollarSign,
     X,
-    XCircle,
     ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import DetailsModal from '../../../components/Common/DetailsModal'
 
 export default function AdminTransactionsPage() {
     const { user, loading: authLoading, checkPermission } = useAuth()
@@ -43,6 +43,7 @@ export default function AdminTransactionsPage() {
     const [showDatePicker, setShowDatePicker] = useState(false)
     const [showPricePicker, setShowPricePicker] = useState(false)
     const [summary, setSummary] = useState(null)
+    const [detailsTransaction, setDetailsTransaction] = useState(null)
 
     useEffect(() => {
         if (!authLoading && user) {
@@ -336,6 +337,7 @@ export default function AdminTransactionsPage() {
                                                         <input
                                                             type="date"
                                                             value={filters.startDate}
+                                                            max={new Date().toISOString().split('T')[0]}
                                                             onChange={(e) => {
                                                                 const newStartDate = e.target.value
                                                                 setFilters(prev => ({ ...prev, startDate: newStartDate }))
@@ -353,6 +355,7 @@ export default function AdminTransactionsPage() {
                                                             value={filters.endDate}
                                                             onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
                                                             min={filters.startDate || undefined}
+                                                            max={new Date().toISOString().split('T')[0]}
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                                                         />
                                                     </div>
@@ -463,105 +466,147 @@ export default function AdminTransactionsPage() {
                                 </>
                             )}
                         </div>
-
-                        {/* Global Clear Filters */}
-                        {(filters.status || filters.type || filters.startDate || filters.endDate || filters.minAmount || filters.maxAmount || filters.search) && (
-                            <button
-                                onClick={() => {
-                                    setFilters({
-                                        status: '',
-                                        type: '',
-                                        startDate: '',
-                                        endDate: '',
-                                        minAmount: '',
-                                        maxAmount: '',
-                                        search: ''
-                                    })
-                                }}
-                                className="flex items-center gap-2 px-4 h-[42px] border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors whitespace-nowrap"
-                                title="Clear all filters"
-                            >
-                                <XCircle className="h-4 w-4" />
-                                Clear All
-                            </button>
-                        )}
                     </div>
                 </div>
 
                 {/* Transactions Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Property</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Client</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Agent</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Type</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Amount</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700">Date</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700 text-center">Status</th>
-                                    <th className="px-6 py-4 font-semibold text-gray-700 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {filteredTransactions.length > 0 ? (
-                                    filteredTransactions.map((t) => (
-                                        <tr key={t._id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="font-medium text-gray-900">{t.property?.title}</div>
-                                                <div className="text-xs text-gray-500">#{t._id.slice(-6).toUpperCase()}</div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <User className="h-4 w-4 text-gray-400" />
-                                                    <span>{t.lead?.contact?.firstName} {t.lead?.contact?.lastName}</span>
+                    <table className="w-full table-fixed text-sm text-left">
+                        <colgroup>
+                            <col />
+                            <col className="w-32" />
+                            <col className="w-32" />
+                            <col className="w-28" />
+                            <col className="w-28" />
+                        </colgroup>
+                        <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm border-b border-primary-700">
+                            <tr>
+                                <th className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Property</th>
+                                <th className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Amount</th>
+                                <th className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Date</th>
+                                <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Status</th>
+                                <th className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filteredTransactions.length > 0 ? (
+                                filteredTransactions.map((t) => (
+                                    <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-4 py-4 min-w-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDetailsTransaction(t)}
+                                                className="text-left w-full focus:outline-none"
+                                                title="View details"
+                                            >
+                                                <div className="font-medium text-gray-900 hover:text-primary-700 truncate">
+                                                    {t.property?.title || 'Transaction'}
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Building className="h-4 w-4 text-gray-400" />
-                                                    <span>{t.agent?.firstName} {t.agent?.lastName}</span>
+                                                <div className="text-xs text-gray-500 truncate">
+                                                    #{t._id.slice(-6).toUpperCase()}
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4 capitalize">
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${t.type === 'sale' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
-                                                    {t.type}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 font-bold text-gray-900">
-                                                {formatCurrency(t.amount)}
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-600">
-                                                {new Date(t.transactionDate).toLocaleDateString()}
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(t.status)}`}>
-                                                    {t.status.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                                                    <Eye className="h-5 w-5 text-gray-500" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
-                                            <div className="flex flex-col items-center">
-                                                <DollarSign className="h-12 w-12 text-gray-200 mb-2" />
-                                                <p>No transactions found</p>
-                                            </div>
+                                            </button>
+                                        </td>
+                                        <td className="px-4 py-4 font-bold text-gray-900 truncate">
+                                            {formatCurrency(t.amount)}
+                                        </td>
+                                        <td className="px-4 py-4 text-gray-600 truncate">
+                                            {t.transactionDate ? new Date(t.transactionDate).toLocaleDateString() : '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(t.status)}`}>
+                                                {t.status?.toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDetailsTransaction(t)}
+                                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                                title="View details"
+                                            >
+                                                <Eye className="h-5 w-5 text-gray-500" />
+                                            </button>
                                         </td>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="5" className="px-4 py-12 text-center text-gray-500">
+                                        <div className="flex flex-col items-center">
+                                            <DollarSign className="h-12 w-12 text-gray-200 mb-2" />
+                                            <p>No transactions found</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+
+            <DetailsModal
+                isOpen={!!detailsTransaction}
+                onClose={() => setDetailsTransaction(null)}
+                title={detailsTransaction?.property?.title || 'Transaction'}
+                subtitle={detailsTransaction ? `#${detailsTransaction._id.slice(-6).toUpperCase()}` : ''}
+                sections={detailsTransaction ? [
+                    {
+                        title: 'Overview',
+                        items: [
+                            { label: 'Amount', value: <span className="font-semibold">{formatCurrency(detailsTransaction.amount)}</span> },
+                            {
+                                label: 'Type',
+                                value: detailsTransaction.type ? (
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${detailsTransaction.type === 'sale' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
+                                        {detailsTransaction.type}
+                                    </span>
+                                ) : null,
+                            },
+                            {
+                                label: 'Status',
+                                value: detailsTransaction.status ? (
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(detailsTransaction.status)}`}>
+                                        {detailsTransaction.status.toUpperCase()}
+                                    </span>
+                                ) : null,
+                            },
+                            {
+                                label: 'Date',
+                                value: detailsTransaction.transactionDate ? new Date(detailsTransaction.transactionDate).toLocaleString() : null,
+                            },
+                        ],
+                    },
+                    {
+                        title: 'Parties',
+                        items: [
+                            {
+                                label: 'Client',
+                                value: detailsTransaction.lead?.contact
+                                    ? `${detailsTransaction.lead.contact.firstName || ''} ${detailsTransaction.lead.contact.lastName || ''}`.trim()
+                                    : null,
+                            },
+                            {
+                                label: 'Agent',
+                                value: detailsTransaction.agent
+                                    ? `${detailsTransaction.agent.firstName || ''} ${detailsTransaction.agent.lastName || ''}`.trim()
+                                    : null,
+                            },
+                            { label: 'Agency', value: detailsTransaction.agency?.name },
+                            { label: 'Property', value: detailsTransaction.property?.title },
+                        ],
+                    },
+                ] : []}
+                actions={detailsTransaction ? (
+                    <button
+                        type="button"
+                        onClick={() => setDetailsTransaction(null)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                        Close
+                    </button>
+                ) : null}
+            />
         </DashboardLayout >
     )
 }

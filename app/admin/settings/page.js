@@ -5,14 +5,12 @@ import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
 import {
-  Settings,
   Save,
   RefreshCw,
   Database,
   Shield,
   Bell,
   Globe,
-  Key,
   User,
   Server,
   Eye,
@@ -193,7 +191,11 @@ export function SettingsPageContent() {
       // Clear localStorage since we're using API as source of truth
       localStorage.removeItem('adminSettings')
 
-      toast.success(`${section === 'all' ? 'All' : section.charAt(0).toUpperCase() + section.slice(1)} settings saved successfully`)
+      toast.success(
+        section === 'all'
+          ? 'Settings saved successfully'
+          : `${section.charAt(0).toUpperCase() + section.slice(1)} settings saved successfully`
+      )
 
       // Refresh settings after save
       await fetchSettings()
@@ -306,29 +308,14 @@ export function SettingsPageContent() {
               Configure system-wide settings and preferences
             </p>
           </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="btn btn-secondary"
-            >
-              <RefreshCw className="h-5 w-5 mr-2" />
-              Reset
-            </button>
-            {canEditSettings && (
-              <button
-                onClick={() => handleSave('all')}
-                disabled={saving || loading}
-                className="btn btn-primary"
-              >
-                {saving ? (
-                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-5 w-5 mr-2" />
-                )}
-                Save All
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="btn btn-secondary"
+          >
+            <RefreshCw className="h-5 w-5 mr-2" />
+            Reset
+          </button>
         </div>
 
         {/* Settings Sections */}
@@ -347,28 +334,16 @@ export function SettingsPageContent() {
                     </p>
                   </div>
                 </div>
-                {canEditSettings && (
-                  <button
-                    onClick={() => handleSave(section.id)}
-                    disabled={saving || loading}
-                    className="btn btn-primary btn-sm"
-                  >
-                    {saving ? (
-                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-1" />
-                    )}
-                    Save
-                  </button>
-                )}
               </div>
               <div className="card-body">
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   {section.fields.map((field) => (
                     <div key={field.name} className="form-group">
-                      <label className="form-label">
-                        {field.label}
-                      </label>
+                      {field.type !== 'checkbox' && (
+                        <label className="form-label">
+                          {field.label}
+                        </label>
+                      )}
                       {field.type === 'text' && (
                         <input
                           type="text"
@@ -529,6 +504,24 @@ export function SettingsPageContent() {
             </div>
           </div>
         </div>
+
+        {canEditSettings && (
+          <div className="flex justify-end border-t border-gray-200 pt-6">
+            <button
+              type="button"
+              onClick={() => handleSave('all')}
+              disabled={saving || loading}
+              className="btn btn-primary"
+            >
+              {saving ? (
+                <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-5 w-5 mr-2" />
+              )}
+              Save
+            </button>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )

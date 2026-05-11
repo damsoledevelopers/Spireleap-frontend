@@ -5,15 +5,18 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Search, Filter, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, Printer, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck, DollarSign, XCircle } from 'lucide-react'
+import { Search, Phone, Mail, MapPin, Calendar, User, Plus, Edit, Eye, Trash2, Upload, X, Users, UserCheck, TrendingUp, CheckCircle, UserX, AlertCircle, ArrowUp, FileText, RefreshCw, ChevronUp, ChevronDown, MoreHorizontal, Clock, Package, BarChart3, Bell, Target, Zap, Shield, Activity, ShieldCheck, DollarSign, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
+import DetailsModal from '../../../components/Common/DetailsModal'
 import { checkEntryPermission } from '../../../lib/permissions'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 import { getDropdownOptions } from '../../../lib/dropdownsApi'
 import { getToken } from '../../../lib/tokenStorage'
+import { formatPercentLabel } from '../../../lib/formatPercent'
 
 /**
  * Helper: resolve entry-level permission with safe fallback to module-level permission.
@@ -42,6 +45,7 @@ function resolveEntryPermission(req, entry, moduleName, action) {
 }
 
 export default function AdminLeadsPage() {
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
 
@@ -96,6 +100,7 @@ export default function AdminLeadsPage() {
     maxPrice: ''
   })
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 })
+  const [detailsLead, setDetailsLead] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadedData, setUploadedData] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -119,6 +124,7 @@ export default function AdminLeadsPage() {
   const isUploadingRef = useRef(false)
   const [selectedLeads, setSelectedLeads] = useState([])
   const [showBulkActions, setShowBulkActions] = useState(false)
+  const [convertingToClientId, setConvertingToClientId] = useState(null)
   const [bulkAction, setBulkAction] = useState('')
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkPriority, setBulkPriority] = useState('')
@@ -685,30 +691,6 @@ export default function AdminLeadsPage() {
     }
   }
 
-  const clearAllFilters = () => {
-    setFilters({
-      owner: '',
-      source: '',
-      search: '',
-      startDate: '',
-      endDate: '',
-      campaign: '',
-      agency: '',
-      property: '',
-      reportingManager: '',
-      team: '',
-      priority: '',
-      minPrice: '',
-      maxPrice: ''
-    })
-    setPagination(prev => ({ ...prev, page: 1 }))
-    toast.success('All filters cleared')
-  }
-
-  const hasActiveFilters = () => {
-    return Object.values(filters).some(value => value !== '' && value !== null)
-  }
-
   const handleAutoAssign = async (leadId, method) => {
     try {
       // Get lead data first
@@ -755,7 +737,11 @@ export default function AdminLeadsPage() {
       } else {
         const errorMessages = failedResults.map(r => r.error).filter(Boolean)
         const uniqueErrors = [...new Set(errorMessages)]
-        toast.warning(`${successCount} of ${selectedLeads.length} lead(s) auto-assigned. ${failedResults.length} failed.${uniqueErrors.length > 0 ? ' Error: ' + uniqueErrors[0] : ''}`)
+        const detail = uniqueErrors.length > 0 ? ` ${uniqueErrors[0]}` : ''
+        toast(
+          `${successCount} of ${selectedLeads.length} lead(s) auto-assigned. ${failedResults.length} failed.${detail}`,
+          { icon: '⚠️', duration: 6000 }
+        )
       }
 
       setSelectedLeads([])
@@ -1018,97 +1004,6 @@ export default function AdminLeadsPage() {
     }
   }
 
-  const handleQuickPriorityChange = async (leadId, priority) => {
-    // Send empty string as null for proper backend handling
-    const priorityValue = priority === '' ? null : priority
-
-    // Check if the value actually changed to avoid unnecessary updates
-    const currentLead = leads.find(lead => String(getLeadId(lead)) === String(leadId))
-    const currentPriority = currentLead?.priority || null
-    const normalizedCurrentPriority = currentPriority ? String(currentPriority).toLowerCase() : null
-    const normalizedNewPriority = priorityValue ? String(priorityValue).toLowerCase() : null
-
-    if (normalizedCurrentPriority === normalizedNewPriority) {
-      // Value hasn't changed, skip update
-      return
-    }
-
-    // Store previous state references for rollback BEFORE functional update
-    const previousLeadsState = [...leads]
-    const previousAllLeadsState = [...allLeads]
-
-    // Optimistic update - update UI immediately using functional updates
-    setLeads(prevLeads => {
-      return prevLeads.map(lead => {
-        const id = getLeadId(lead)
-        if (String(id) === String(leadId)) {
-          return { ...lead, priority: priorityValue }
-        }
-        return lead
-      })
-    })
-
-    // Also update allLeads for Kanban view
-    setAllLeads(prevLeads => {
-      return prevLeads.map(lead => {
-        const id = getLeadId(lead)
-        if (String(id) === String(leadId)) {
-          return { ...lead, priority: priorityValue }
-        }
-        return lead
-      })
-    })
-
-    console.log(`🚀 Initiating priority update for lead ${leadId} to ${priorityValue}`)
-
-    try {
-      const response = await api.put(`/leads/${leadId}`, { priority: priorityValue })
-      console.log('✅ Server response received:', response.data)
-
-      // Always update with server response to ensure consistency
-      if (response.data?.lead) {
-        const serverPriority = response.data.lead.priority
-        console.log(`✨ Server confirmed priority: ${serverPriority}`)
-        toast.success(`Priority updated to ${serverPriority === 'not_interested' ? 'Not Interested' : serverPriority.charAt(0).toUpperCase() + serverPriority.slice(1)}`)
-
-        setLeads(prevLeads =>
-          prevLeads.map(lead => {
-            const id = getLeadId(lead)
-            if (String(id) === String(leadId)) {
-              console.log('Updating lead priority from', lead.priority, 'to', serverPriority)
-              return { ...lead, priority: serverPriority }
-            }
-            return lead
-          })
-        )
-        setAllLeads(prevLeads =>
-          prevLeads.map(lead => {
-            const id = getLeadId(lead)
-            if (String(id) === String(leadId)) {
-              return { ...lead, priority: serverPriority }
-            }
-            return lead
-          })
-        )
-      } else {
-        // If no lead in response, ensure optimistic update is maintained
-        console.log('No lead in server response, keeping optimistic update')
-      }
-
-      toast.success('Lead priority updated successfully')
-    } catch (error) {
-      // Rollback on error - restore previous state
-      if (previousLeadsState) {
-        setLeads(previousLeadsState)
-      }
-      if (previousAllLeadsState) {
-        setAllLeads(previousAllLeadsState)
-      }
-      console.error('Error updating lead priority:', error)
-      toast.error('Failed to update lead priority')
-    }
-  }
-
   const handleQuickStatusChange = async (leadId, status) => {
     const statusValue = status || null
 
@@ -1302,7 +1197,13 @@ export default function AdminLeadsPage() {
   }
 
   const handleDelete = async (leadId) => {
-    if (!window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) return
+    const ok = await confirm({
+      title: 'Delete Lead',
+      message: 'Are you sure you want to delete this lead? This action cannot be undone.',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/leads/${leadId}`)
       toast.success('Lead deleted successfully')
@@ -1323,22 +1224,35 @@ export default function AdminLeadsPage() {
     }
   }
 
-  const handleConvertToClient = async (leadId) => {
-    try {
-      const password = window.prompt('Set a password for this client (min 6 characters):')
-      if (!password) return
-      if (String(password).trim().length < 6) {
-        toast.error('Password must be at least 6 characters')
-        return
-      }
+  const convertLeadToClient = async (leadId) => {
+    if (!leadId) return
+    const ok = await confirm({
+      title: 'Convert lead to client',
+      message:
+        'This creates a client account from this lead and removes the lead. The client can use Forgot password on the login page to set their password.',
+      confirmText: 'Convert to client',
+      cancelText: 'Cancel',
+      tone: 'primary'
+    })
+    if (!ok) return
 
-      await api.post(`/leads/${leadId}/convert-to-client`, { password: String(password).trim() })
-      toast.success('Lead converted to client. They can now log in with that email/password.')
+    try {
+      setConvertingToClientId(leadId)
+      await api.post(`/leads/${leadId}/convert-to-client`, {})
+      toast.success('Lead converted to client successfully.')
+      setDetailsLead(null)
       fetchLeads()
       fetchDashboardMetrics()
+      fetchMissedFollowUps()
     } catch (error) {
       console.error('Convert to client error:', error)
-      toast.error(error?.response?.data?.message || 'Failed to convert lead to client')
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.[0]?.msg ||
+        'Failed to convert lead to client'
+      toast.error(msg)
+    } finally {
+      setConvertingToClientId(null)
     }
   }
 
@@ -1363,7 +1277,13 @@ export default function AdminLeadsPage() {
       toast.error('Please select leads to delete')
       return
     }
-    if (!window.confirm(`Are you sure you want to delete ${selectedLeads.length} lead(s)? This action cannot be undone.`)) return
+    const ok = await confirm({
+      title: 'Delete Leads',
+      message: `Are you sure you want to delete ${selectedLeads.length} lead(s)? This action cannot be undone.`,
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       const deletePromises = selectedLeads.map(id => api.delete(`/leads/${id}`))
@@ -1527,80 +1447,132 @@ export default function AdminLeadsPage() {
     }
   }
 
-  const sortedLeads = [...leads].sort((a, b) => {
-    let aValue, bValue
+  const getSortedLeads = (arr) => {
+    return [...arr].sort((a, b) => {
+      let aValue, bValue
 
-    switch (sortColumn) {
-      case 'contactName':
-        aValue = `${a.contact?.firstName || ''} ${a.contact?.lastName || ''}`.trim()
-        bValue = `${b.contact?.firstName || ''} ${b.contact?.lastName || ''}`.trim()
-        break
-      case 'email':
-        aValue = a.contact?.email || ''
-        bValue = b.contact?.email || ''
-        break
-      case 'phone':
-        aValue = a.contact?.phone || ''
-        bValue = b.contact?.phone || ''
-        break
-      case 'source':
-        aValue = a.source || ''
-        bValue = b.source || ''
-        break
-      case 'status':
-        aValue = a.status || ''
-        bValue = b.status || ''
-        break
-      case 'createdDate':
-        aValue = new Date(a.createdAt)
-        bValue = new Date(b.createdAt)
-        break
-      case 'updatedAt':
-        aValue = new Date(a.updatedAt || a.createdAt)
-        bValue = new Date(b.updatedAt || b.createdAt)
-        break
-      default:
-        return 0
+      switch (sortColumn) {
+        case 'contactName':
+          aValue = `${a.contact?.firstName || ''} ${a.contact?.lastName || ''}`.trim()
+          bValue = `${b.contact?.firstName || ''} ${b.contact?.lastName || ''}`.trim()
+          break
+        case 'email':
+          aValue = a.contact?.email || ''
+          bValue = b.contact?.email || ''
+          break
+        case 'phone':
+          aValue = a.contact?.phone || ''
+          bValue = b.contact?.phone || ''
+          break
+        case 'source':
+          aValue = a.source || ''
+          bValue = b.source || ''
+          break
+        case 'status':
+          aValue = a.status || ''
+          bValue = b.status || ''
+          break
+        case 'createdDate':
+          aValue = new Date(a.createdAt)
+          bValue = new Date(b.createdAt)
+          break
+        case 'updatedAt':
+          aValue = new Date(a.updatedAt || a.createdAt)
+          bValue = new Date(b.updatedAt || b.createdAt)
+          break
+        default:
+          return 0
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
+  const sortedLeads = getSortedLeads(leads)
+
+  /** Same filters as list view; walks all pages so Excel matches the full result set (not current page). */
+  const fetchAllLeadsForExport = async () => {
+    const { startDate, endDate, minPrice, maxPrice, ...otherFilters } = filters
+    const filteredFilters = Object.entries(otherFilters)
+      .filter(([key, value]) => {
+        if (!value || value === '') return false
+        if (key === 'search') return String(value).trim() !== ''
+        return true
+      })
+      .map(([key, value]) => (key === 'search' ? [key, String(value).trim()] : [key, value]))
+
+    const acc = []
+    let page = 1
+    let totalPages = 1
+    const pageSize = 2000
+
+    do {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pageSize),
+        ...Object.fromEntries(filteredFilters)
+      })
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+      if (minPrice) params.append('minPrice', minPrice)
+      if (maxPrice) params.append('maxPrice', maxPrice)
+
+      const response = await api.get(`/leads?${params}`)
+      const batch = response.data?.leads || []
+      totalPages = response.data?.pagination?.pages ?? 1
+      acc.push(
+        ...batch.filter((lead) => checkEntryPermission(lead, user, 'view', canViewLeads))
+      )
+      if (batch.length === 0) break
+      page += 1
+    } while (page <= totalPages)
+
+    return acc
+  }
+
+  const handleExportExcel = async () => {
+    const getSourceLabel = (source) => {
+      const labels = {
+        website: 'Website',
+        phone: 'Phone',
+        email: 'Email',
+        walk_in: 'Walk In',
+        referral: 'Referral',
+        social_media: 'Social Media',
+        other: 'Other'
+      }
+      return labels[source] || source || 'Other'
     }
 
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
-    return 0
-  })
+    const getStatusLabel = (status) => {
+      if (!status) return 'New Lead'
+      const statusLabels = {
+        new: 'New Lead',
+        contacted: 'Contacted',
+        qualified: 'Qualified',
+        site_visit_scheduled: 'Site Visit Scheduled',
+        site_visit_completed: 'Site Visit Completed',
+        negotiation: 'Negotiation',
+        booked: 'Booked',
+        lost: 'Lost',
+        closed: 'Closed',
+        converted: 'Converted',
+        junk: 'Junk / Invalid'
+      }
+      return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
+    }
 
-  const handleExportExcel = () => {
+    const exportToast = toast.loading('Fetching all leads for export…')
     try {
-      const getSourceLabel = (source) => {
-        const labels = {
-          website: 'Website',
-          phone: 'Phone',
-          email: 'Email',
-          walk_in: 'Walk In',
-          referral: 'Referral',
-          social_media: 'Social Media',
-          other: 'Other'
-        }
-        return labels[source] || source || 'Other'
+      const allRows = await fetchAllLeadsForExport()
+      toast.dismiss(exportToast)
+      if (!allRows.length) {
+        toast.error('No leads to export')
+        return
       }
-
-      const getStatusLabel = (status) => {
-        if (!status) return 'New Lead'
-        const statusLabels = {
-          new: 'New Lead',
-          contacted: 'Contacted',
-          qualified: 'Qualified',
-          site_visit_scheduled: 'Site Visit Scheduled',
-          site_visit_completed: 'Site Visit Completed',
-          negotiation: 'Negotiation',
-          booked: 'Booked',
-          lost: 'Lost',
-          closed: 'Closed',
-          junk: 'Junk / Invalid'
-        }
-        return statusLabels[status?.toLowerCase()] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
-      }
-
-      const data = sortedLeads.map(lead => ({
+      const data = getSortedLeads(allRows).map(lead => ({
         'Lead ID': lead.leadId || `LEAD-${String(lead._id).slice(-6)}`,
         'Contact Name': `${lead.contact?.firstName || ''} ${lead.contact?.lastName || ''}`.trim() || 'N/A',
         'Email': lead.contact?.email || '-',
@@ -1617,15 +1589,12 @@ export default function AdminLeadsPage() {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Leads')
       XLSX.writeFile(wb, `leads_${new Date().toISOString().split('T')[0]}.xlsx`)
-      toast.success('Excel file exported successfully')
+      toast.success(`Exported ${data.length} lead(s)`)
     } catch (error) {
+      toast.dismiss(exportToast)
       console.error('Error exporting to Excel:', error)
       toast.error('Failed to export to Excel')
     }
-  }
-
-  const handlePrint = () => {
-    window.print()
   }
 
   // Group leads by status for Kanban view
@@ -1874,8 +1843,8 @@ export default function AdminLeadsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 font-medium">Conversion Rate</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardMetrics.conversionRate || 0}%</p>
-                    <p className="text-xs text-gray-600 mt-1">Booked/Closed leads</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{formatPercentLabel(dashboardMetrics.conversionRate)}%</p>
+                    <p className="text-xs text-gray-600 mt-1">Booked / closed / converted</p>
                   </div>
                   <Target className="h-10 w-10 text-purple-500 opacity-80" />
                 </div>
@@ -1891,7 +1860,7 @@ export default function AdminLeadsPage() {
                         <p className="text-xs text-gray-600">Completed: <span className="font-semibold text-green-600">{dashboardMetrics.todaysFollowUps?.completed || 0}</span></p>
                       )}
                       {dashboardMetrics.todaysFollowUps?.total > 0 && (
-                        <p className="text-xs text-gray-600">Completion: <span className="font-semibold">{dashboardMetrics.todaysFollowUps?.completionRate || 0}%</span></p>
+                        <p className="text-xs text-gray-600">Completion: <span className="font-semibold">{formatPercentLabel(dashboardMetrics.todaysFollowUps?.completionRate)}%</span></p>
                       )}
                     </div>
                   </div>
@@ -2016,13 +1985,6 @@ export default function AdminLeadsPage() {
                 <FileText className="h-4 w-4 mr-2" />
                 Excel
               </button>
-              <button
-                onClick={handlePrint}
-                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
-              </button>
               {(isSuperAdmin || isAgencyAdmin) && (
                 <Link
                   href="/admin/reports"
@@ -2065,15 +2027,13 @@ export default function AdminLeadsPage() {
                 searchPlaceholder="Search..."
               />
 
-              <Filter className="h-5 w-5 text-gray-400" />
-
               {/* Owner/Agent Filter - Only for Super Admin and Agency Admin */}
               {(isSuperAdmin || isAgencyAdmin) && (
                 <SearchableSelect
                   value={filters.owner}
                   onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
                   options={owners.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))}
-                  placeholder="- Agent -"
+                  placeholder="Agent"
                   buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
                   searchPlaceholder="Search agent..."
                 />
@@ -2091,9 +2051,9 @@ export default function AdminLeadsPage() {
                     .filter(source => !(dropdowns.leadSources || []).some(s => s.value === source))
                     .map((source) => ({ value: source, label: source }))
                 ]}
-                placeholder="- Source -"
+                placeholder="Source"
+                searchable={false}
                 buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
-                searchPlaceholder="Search source..."
               />
 
 
@@ -2102,7 +2062,7 @@ export default function AdminLeadsPage() {
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
                 options={dropdowns.leadPriorities || []}
-                placeholder="- Priority -"
+                placeholder="Priority"
                 buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
                 searchPlaceholder="Search priority..."
               />
@@ -2113,7 +2073,7 @@ export default function AdminLeadsPage() {
                   value={filters.team}
                   onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
                   options={teams.map((t) => ({ value: t, label: t }))}
-                  placeholder="- Team -"
+                  placeholder="Team"
                   buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[160px]"
                   searchPlaceholder="Search team..."
                 />
@@ -2128,7 +2088,7 @@ export default function AdminLeadsPage() {
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
                   options={campaigns.map((c) => ({ value: c, label: c }))}
-                  placeholder="- Campaign -"
+                  placeholder="Campaign"
                   buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
                   searchPlaceholder="Search campaign..."
                 />
@@ -2144,7 +2104,7 @@ export default function AdminLeadsPage() {
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
                   options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
-                  placeholder="- Agency -"
+                  placeholder="Agency"
                   buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
                   searchPlaceholder="Search agency..."
                 />
@@ -2158,7 +2118,7 @@ export default function AdminLeadsPage() {
                   setPagination(prev => ({ ...prev, page: 1 }))
                 }}
                 options={properties.map((p) => ({ value: p._id ? String(p._id) : '', label: p.title }))}
-                placeholder="- Property -"
+                placeholder="property"
                 buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
                 searchPlaceholder="Search property..."
               />
@@ -2229,10 +2189,11 @@ export default function AdminLeadsPage() {
                         <div className="flex-1 p-4">
                           <div className="flex items-center gap-4">
                             <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                              <label className="block text-xs font-bold text-gray-900 mb-2">From Date</label>
                               <input
                                 type="date"
                                 value={filters.startDate}
+                                max={new Date().toISOString().split('T')[0]}
                                 onChange={(e) => {
                                   const newStartDate = e.target.value
                                   setFilters(prev => ({ ...prev, startDate: newStartDate }))
@@ -2244,7 +2205,7 @@ export default function AdminLeadsPage() {
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                              <label className="block text-xs font-bold text-gray-900 mb-2">To Date</label>
                               <input
                                 type="date"
                                 value={filters.endDate}
@@ -2253,6 +2214,7 @@ export default function AdminLeadsPage() {
                                   setFilters(prev => ({ ...prev, endDate: newEndDate }))
                                 }}
                                 min={filters.startDate || undefined}
+                                max={new Date().toISOString().split('T')[0]}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                               />
                             </div>
@@ -2338,19 +2300,6 @@ export default function AdminLeadsPage() {
                   </button>
                 )}
               </div>
-
-              <button
-                onClick={clearAllFilters}
-                disabled={!hasActiveFilters()}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${hasActiveFilters()
-                  ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 focus:ring-2 focus:ring-red-500 cursor-pointer'
-                  : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                  }`}
-                title={hasActiveFilters() ? 'Clear all filters' : 'No filters to clear'}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </button>
             </div>
           </div>
         </div>
@@ -2447,113 +2396,56 @@ export default function AdminLeadsPage() {
                   </div>
                 )}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
-                    <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1600px' }}>
-                      <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
-                        <tr>
-                          {canBulkActions && (
-                            <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider w-12">
-                              <input
-                                type="checkbox"
-                                checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
-                                onChange={handleSelectAll}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                            </th>
-                          )}
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Lead ID
+                  <table className="w-full table-fixed divide-y divide-gray-200">
+                    <colgroup>
+                      {canBulkActions && <col className="w-12" />}
+                      <col className="w-[18%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-32" />
+                      <col className="w-44" />
+                      <col className="w-32" />
+                      <col className="w-28" />
+                    </colgroup>
+                    <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+                      <tr>
+                        {canBulkActions && (
+                          <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                            <input
+                              type="checkbox"
+                              checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
+                              onChange={handleSelectAll}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Score
-                          </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('contactName')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Contact Name
-                              {sortColumn === 'contactName' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('email')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Email
-                              {sortColumn === 'email' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('phone')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Phone
-                              {sortColumn === 'phone' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('source')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Source
-                              {sortColumn === 'source' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Campaign
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Agency
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Assigned Agent
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Priority
-                          </th>
-
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('createdDate')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Created Date
-                              {sortColumn === 'createdDate' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th
-                            className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer whitespace-nowrap"
-                            onClick={() => handleSort('updatedAt')}
-                          >
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              Last Updated
-                              {sortColumn === 'updatedAt' && (
-                                sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Follow-Up
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
+                        )}
+                        <th
+                          className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('contactName')}
+                        >
+                          <div className="flex items-center gap-2">
+                            Contact
+                            {sortColumn === 'contactName' && (
+                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                          Email
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                          Phone
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                          Assigned Agent
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                          Priority
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {sortedLeads.map((lead) => {
                           const leadId = getLeadId(lead)
@@ -2602,7 +2494,7 @@ export default function AdminLeadsPage() {
                           return (
                             <tr key={leadId} className="hover:bg-logo-beige transition-colors">
                               {canBulkActions && (
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <td className="px-3 py-4 text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedLeads.includes(leadId)}
@@ -2611,190 +2503,69 @@ export default function AdminLeadsPage() {
                                   />
                                 </td>
                               )}
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="text-sm font-mono text-gray-600">
-                                  {lead.leadId || `LEAD-${String(lead._id).slice(-6)}`}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center">
-                                {lead.score !== undefined ? (
-                                  <div className="flex items-center justify-center gap-2">
-                                    <div className="w-16 bg-gray-200 rounded-full h-2">
-                                      <div
-                                        className={`h-2 rounded-full ${lead.score >= 70 ? 'bg-red-500' :
-                                          lead.score >= 40 ? 'bg-orange-500' :
-                                            lead.score >= 20 ? 'bg-yellow-500' : 'bg-gray-400'
-                                          }`}
-                                        style={{ width: `${Math.min(lead.score, 100)}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-xs font-semibold text-gray-700 min-w-[35px]">{lead.score}</span>
-                                    <button
-                                      onClick={() => handleReScoreLead(leadId)}
-                                      disabled={rescoring === leadId}
-                                      className="text-primary-600 hover:text-primary-800 disabled:opacity-50"
-                                      title="Re-score lead"
-                                    >
-                                      <Zap className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => handleReScoreLead(leadId)}
-                                    disabled={rescoring === leadId}
-                                    className="text-xs text-primary-600 hover:text-primary-800 disabled:opacity-50"
-                                    title="Calculate score"
-                                  >
-                                    {rescoring === leadId ? 'Scoring...' : 'Score'}
-                                  </button>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className="text-sm font-medium text-gray-900"
+                              <td className="px-4 py-4 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailsLead(lead)}
+                                  className="text-left w-full focus:outline-none"
+                                  title="View details"
                                 >
-                                  {contactName}
-                                </span>
+                                  <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 truncate">
+                                    {contactName}
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {lead.leadId || `LEAD-${String(lead._id).slice(-6)}`}
+                                  </div>
+                                </button>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <Mail className="h-4 w-4 text-gray-400" />
-                                  <span className="text-sm text-gray-900">{lead.contact?.email || '-'}</span>
-                                </div>
+                              <td className="px-4 py-4 text-sm text-gray-900 truncate" title={lead.contact?.email || ''}>
+                                {lead.contact?.email || '—'}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4 text-gray-400" />
-                                  <span className="text-sm text-gray-900">{lead.contact?.phone || '-'}</span>
-                                </div>
+                              <td className="px-4 py-4 text-sm text-gray-900 truncate" title={lead.contact?.phone || ''}>
+                                {lead.contact?.phone || '—'}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="text-sm text-gray-900 capitalize">
-                                  {getSourceLabel(lead.source)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="text-sm text-gray-600">
-                                  {lead.campaignName || '-'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                {isSuperAdmin ? (
+                              <td className="px-4 py-4 min-w-0">
+                                {(isSuperAdmin || isAgencyAdmin) ? (
                                   <SearchableSelect
-                                    value={lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')}
-                                    onChange={(e) => handleQuickAgencyChange(leadId, e.target.value)}
-                                    options={agencies.map((a) => ({ value: a._id, label: a.name }))}
+                                    value={lead.assignedAgent?._id || lead.assignedAgent || ''}
+                                    onChange={(e) => handleQuickAssign(leadId, e.target.value)}
+                                    options={(() => {
+                                      let filteredAgents = allAgents.length > 0 ? allAgents : owners
+                                      if (lead.agency) {
+                                        const leadAgencyId = lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')
+                                        if (leadAgencyId) {
+                                          filteredAgents = filteredAgents.filter(owner => {
+                                            const ownerAgencyId = owner.agency?._id ? owner.agency._id.toString() : (owner.agency?.toString() || owner.agency || '')
+                                            return ownerAgencyId === leadAgencyId
+                                          })
+                                        }
+                                      }
+                                      return filteredAgents.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
+                                    })()}
                                     placeholder="Unassigned"
-                                    buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[150px] flex-1 bg-white"
-                                    searchPlaceholder="Search agency..."
+                                    buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full bg-white"
+                                    searchPlaceholder="Search agent..."
                                   />
                                 ) : (
-                                  <span className="text-sm text-gray-900">
-                                    {lead.agency?.name || 'Unassigned'}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                {(isSuperAdmin || isAgencyAdmin) ? (
-                                  <div className="flex items-center gap-2">
-                                    <SearchableSelect
-                                      value={lead.assignedAgent?._id || lead.assignedAgent || ''}
-                                      onChange={(e) => handleQuickAssign(leadId, e.target.value)}
-                                      options={(() => {
-                                        let filteredAgents = allAgents.length > 0 ? allAgents : owners
-                                        if (lead.agency) {
-                                          const leadAgencyId = lead.agency?._id ? lead.agency._id.toString() : (lead.agency?.toString() || lead.agency || '')
-                                          if (leadAgencyId) {
-                                            filteredAgents = filteredAgents.filter(owner => {
-                                              const ownerAgencyId = owner.agency?._id ? owner.agency._id.toString() : (owner.agency?.toString() || owner.agency || '')
-                                              return ownerAgencyId === leadAgencyId
-                                            })
-                                          }
-                                        }
-                                        return filteredAgents.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
-                                      })()}
-                                      placeholder="Unassigned"
-                                      buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[120px] flex-1 bg-white"
-                                      searchPlaceholder="Search agent..."
-                                    />
-                                    {canAutoAssign && (
-                                      <button
-                                        onClick={() => {
-                                          setShowAutoAssignModal(true)
-                                          setSelectedLeads([leadId])
-                                        }}
-                                        className="text-primary-600 hover:text-primary-800 p-1"
-                                        title="Auto Assign"
-                                      >
-                                        <Zap className="h-4 w-4" />
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-sm text-gray-900">
+                                  <span className="text-sm text-gray-900 truncate">
                                     {lead.assignedAgent
                                       ? `${lead.assignedAgent.firstName || ''} ${lead.assignedAgent.lastName || ''}`.trim() || 'Assigned'
                                       : 'Unassigned'}
                                   </span>
                                 )}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                {canEditLead ? (
-                                  <SearchableSelect
-                                    value={lead.priority ? String(lead.priority).charAt(0).toUpperCase() + String(lead.priority).slice(1).toLowerCase() : ''}
-                                    onChange={(e) => {
-                                      handleQuickPriorityChange(leadId, e.target.value)
-                                    }}
-                                    options={dropdowns.leadPriorities || []}
-                                    placeholder="Select Priority"
-                                    buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px] bg-white"
-                                    searchPlaceholder="Search priority..."
-                                  />
-                                ) : (
-                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${String(lead.priority).toLowerCase() === 'hot' ? 'bg-red-100 text-red-800' :
-                                    String(lead.priority).toLowerCase() === 'Warm' ? 'bg-yellow-100 text-yellow-800' :
-                                      String(lead.priority).toLowerCase() === 'Cold' ? 'bg-blue-100 text-blue-800' :
-                                        'bg-gray-100 text-gray-800'
-                                    }`}>
-                                    {lead.priority ? lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1).replace('_', ' ') : '-'}
-                                  </span>
-                                )}
+                              <td className="px-4 py-4 text-center text-sm font-medium">
+                                <span className={`inline-flex items-center justify-center px-2 py-1 rounded text-xs font-semibold border ${getPriorityColor(lead.priority)}`}>
+                                  {getPriorityLabel(lead.priority)}
+                                </span>
                               </td>
-
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {new Date(lead.createdAt).toLocaleDateString()}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {lead.updatedAt ? (
-                                  <div className="flex flex-col">
-                                    <span>{new Date(lead.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                    <span className="text-xs text-gray-500">{new Date(lead.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {lead.followUpDate ? (
-                                  <div className="flex flex-col">
-                                    <span className={new Date(lead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
-                                      {new Date(lead.followUpDate).toLocaleDateString()}
-                                    </span>
-                                    {new Date(lead.followUpDate) < new Date() && (
-                                      <span className="text-xs text-red-500">Overdue</span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                              <td className="px-4 py-4 text-center text-sm font-medium">
                                 <div className="flex items-center justify-center gap-2">
                                   {checkEntryPermission(lead, user, 'view', canViewLeads) && (
                                     <Link
                                       href={`/admin/leads/${leadId}`}
                                       className="text-primary-600 hover:text-primary-900 transition-colors"
-                                      title="View"
+                                      title="Open page"
                                     >
                                       <Eye className="h-5 w-5" />
                                     </Link>
@@ -2808,18 +2579,6 @@ export default function AdminLeadsPage() {
                                       <Edit className="h-5 w-5" />
                                     </Link>
                                   )}
-                                  {canCreateUser && checkEntryPermission(lead, user, 'edit', canEditLead) && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleConvertToClient(leadId)
-                                      }}
-                                      className="text-emerald-600 hover:text-emerald-900 transition-colors"
-                                      title="Convert to Client"
-                                    >
-                                      <UserCheck className="h-5 w-5" />
-                                    </button>
-                                  )}
                                   {canDeleteLead && (
                                     <button
                                       onClick={() => handleDelete(leadId)}
@@ -2829,18 +2588,6 @@ export default function AdminLeadsPage() {
                                       <Trash2 className="h-5 w-5" />
                                     </button>
                                   )}
-                                  {isSuperAdmin && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPermissionModalEntry(lead)
-                                      }}
-                                      className="text-amber-600 hover:text-amber-900 transition-colors"
-                                      title="Set Custom Permissions"
-                                    >
-                                      <ShieldCheck className="h-5 w-5" />
-                                    </button>
-                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -2848,7 +2595,6 @@ export default function AdminLeadsPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
 
                   {/* Pagination */}
                   <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
@@ -3081,12 +2827,12 @@ export default function AdminLeadsPage() {
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Phone</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -3207,7 +2953,7 @@ export default function AdminLeadsPage() {
                 </p>
                 {bulkAction === 'status' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">New Status</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">New Status</label>
                     <SearchableSelect
                       value={bulkStatus}
                       onChange={(e) => setBulkStatus(e.target.value)}
@@ -3219,7 +2965,7 @@ export default function AdminLeadsPage() {
                   </div>
                 ) : bulkAction === 'priority' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Update Priority</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Update Priority</label>
                     <SearchableSelect
                       value={bulkPriority}
                       onChange={(e) => setBulkPriority(e.target.value)}
@@ -3231,7 +2977,7 @@ export default function AdminLeadsPage() {
                   </div>
                 ) : bulkAction === 'agency' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Agency</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Assign to Agency</label>
                     <SearchableSelect
                       value={bulkAgency}
                       onChange={(e) => setBulkAgency(e.target.value)}
@@ -3243,7 +2989,7 @@ export default function AdminLeadsPage() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Agent</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">Assign to Agent</label>
                     <SearchableSelect
                       value={bulkAgent}
                       onChange={(e) => setBulkAgent(e.target.value)}
@@ -3310,7 +3056,7 @@ export default function AdminLeadsPage() {
                   Select assignment method for {selectedLeads.length} lead(s):
                 </p>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Method</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Assignment Method</label>
                   <SearchableSelect
                     value={autoAssignMethod}
                     onChange={(e) => setAutoAssignMethod(e.target.value)}
@@ -3379,7 +3125,7 @@ export default function AdminLeadsPage() {
                       <div key={source} className="border border-gray-200 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-700 capitalize">{source.replace('_', ' ')}</span>
-                          <span className="text-xs text-gray-500">{data.conversionRate}% conversion</span>
+                          <span className="text-xs text-gray-500">{formatPercentLabel(data.conversionRate)}% conversion</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-600">
                           <span>Total: {data.total}</span>
@@ -3417,7 +3163,7 @@ export default function AdminLeadsPage() {
                             <span className="text-sm font-medium text-gray-700">
                               {agentData ? `${agentData.firstName} ${agentData.lastName}` : `Agent ${agent.agentId.slice(-6)}`}
                             </span>
-                            <span className="text-xs text-gray-500">{agent.conversionRate}% conversion</span>
+                            <span className="text-xs text-gray-500">{formatPercentLabel(agent.conversionRate)}% conversion</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-gray-600">
                             <span>Total: {agent.totalLeads}</span>
@@ -3447,6 +3193,105 @@ export default function AdminLeadsPage() {
         entryType="leads"
         onSuccess={fetchLeads}
       />
+
+      <DetailsModal
+        isOpen={!!detailsLead}
+        onClose={() => setDetailsLead(null)}
+        title={detailsLead ? `${detailsLead.contact?.firstName || ''} ${detailsLead.contact?.lastName || ''}`.trim() || 'Lead' : ''}
+        subtitle={detailsLead ? (detailsLead.leadId || `LEAD-${String(detailsLead._id).slice(-6)}`) : ''}
+        sections={detailsLead ? [
+          {
+            title: 'Contact',
+            items: [
+              { label: 'Email', value: detailsLead.contact?.email },
+              { label: 'Phone', value: detailsLead.contact?.phone },
+              { label: 'Source', value: detailsLead.source },
+              { label: 'Campaign', value: detailsLead.campaignName },
+            ],
+          },
+          {
+            title: 'Assignment',
+            items: [
+              { label: 'Agency', value: detailsLead.agency?.name },
+              {
+                label: 'Assigned agent',
+                value: detailsLead.assignedAgent
+                  ? `${detailsLead.assignedAgent.firstName || ''} ${detailsLead.assignedAgent.lastName || ''}`.trim()
+                  : null,
+              },
+              {
+                label: 'Priority',
+                value: detailsLead.priority
+                  ? detailsLead.priority.charAt(0).toUpperCase() + detailsLead.priority.slice(1).replace('_', ' ')
+                  : null,
+              },
+              { label: 'Score', value: detailsLead.score },
+            ],
+          },
+          {
+            title: 'Timeline',
+            items: [
+              {
+                label: 'Created',
+                value: detailsLead.createdAt ? new Date(detailsLead.createdAt).toLocaleString() : null,
+              },
+              {
+                label: 'Last updated',
+                value: detailsLead.updatedAt ? new Date(detailsLead.updatedAt).toLocaleString() : null,
+              },
+              {
+                label: 'Follow-up',
+                value: detailsLead.followUpDate ? (
+                  <span className={new Date(detailsLead.followUpDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                    {new Date(detailsLead.followUpDate).toLocaleString()}
+                    {new Date(detailsLead.followUpDate) < new Date() ? ' · Overdue' : ''}
+                  </span>
+                ) : null,
+              },
+            ],
+          },
+        ] : []}
+        actions={detailsLead ? (
+          <>
+            {checkEntryPermission(detailsLead, user, 'view', canViewLeads) && (
+              <Link
+                href={`/admin/leads/${getLeadId(detailsLead)}`}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Open page
+              </Link>
+            )}
+            {checkEntryPermission(detailsLead, user, 'edit', canEditLead) && (
+              <Link
+                href={`/admin/leads/${getLeadId(detailsLead)}/edit`}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              >
+                Edit
+              </Link>
+            )}
+            {checkEntryPermission(detailsLead, user, 'edit', canEditLead) &&
+              canCreateUser &&
+              detailsLead?.contact?.email && (
+                <button
+                  type="button"
+                  onClick={() => convertLeadToClient(getLeadId(detailsLead))}
+                  disabled={convertingToClientId === getLeadId(detailsLead)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50"
+                >
+                  {convertingToClientId === getLeadId(detailsLead) ? 'Converting…' : 'Convert to client'}
+                </button>
+              )}
+            <button
+              type="button"
+              onClick={() => setDetailsLead(null)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

@@ -11,8 +11,11 @@ import Link from 'next/link'
 import EntryPermissionModal from '../../../components/Permissions/EntryPermissionModal'
 import { checkEntryPermission } from '../../../lib/permissions'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
+import DetailsModal from '../../../components/Common/DetailsModal'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
 export default function AdminPropertiesPage() {
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const { user, loading: authLoading, checkPermission } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -87,6 +90,7 @@ export default function AdminPropertiesPage() {
     total: 0,
     limit: 12
   })
+  const [detailsProperty, setDetailsProperty] = useState(null)
   const [propertyMetrics, setPropertyMetrics] = useState({
     totalProperties: 0,
     activeProperties: 0,
@@ -323,43 +327,14 @@ export default function AdminPropertiesPage() {
     }
   }
 
-  const handleUpdateStatus = async (id, status, rejectionReason = '') => {
-    try {
-      const response = await api.put(`/properties/${id}/approve`, { status, rejectionReason })
-      toast.success(response.data.message || `Property ${status === 'active' ? 'approved' : 'rejected'} successfully`)
-      fetchProperties()
-      fetchMetrics()
-    } catch (error) {
-      console.error('Error updating property status:', error)
-      toast.error(error.response?.data?.message || 'Failed to update property status')
-    }
-  }
-
-  const handleQuickStatusUpdate = async (id, newStatus) => {
-    try {
-      // If moving to active, use the approve endpoint for better tracking/notifications
-      if (newStatus === 'active') {
-        await handleUpdateStatus(id, 'active')
-        return
-      }
-
-      const response = await api.put(`/properties/${id}`, { status: newStatus })
-      toast.success('Property status updated successfully')
-
-      // Update local state
-      setProperties(prev => prev.map(p =>
-        getPropertyId(p) === id ? { ...p, status: newStatus } : p
-      ))
-
-      fetchMetrics()
-    } catch (error) {
-      console.error('Error updating property status:', error)
-      toast.error(error.response?.data?.message || 'Failed to update status')
-    }
-  }
-
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this property?')) return
+    const ok = await confirm({
+      title: 'Delete Property',
+      message: 'Are you sure you want to delete this property?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
 
     try {
       await api.delete(`/properties/${id}`)
@@ -373,11 +348,22 @@ export default function AdminPropertiesPage() {
 
   const formatPrice = (price) => {
     if (!price) return 'N/A'
-    if (typeof price === 'object') {
-      if (price.sale) return `$${Number(price.sale).toLocaleString()}`
-      if (price.rent) return `$${Number(price.rent.amount).toLocaleString()}/${price.rent.period}`
+    const toCurrency = (value) => {
+      const numeric = Number(value)
+      return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
     }
-    return `$${Number(price).toLocaleString()}`
+
+    if (typeof price === 'object') {
+      if (price.sale !== undefined && price.sale !== null && price.sale !== '') {
+        return toCurrency(price.sale) || 'N/A'
+      }
+      if (price.rent?.amount !== undefined && price.rent?.amount !== null && price.rent?.amount !== '') {
+        const rentAmount = toCurrency(price.rent.amount)
+        return rentAmount ? `${rentAmount}/${price.rent.period || 'monthly'}` : 'N/A'
+      }
+      return 'N/A'
+    }
+    return toCurrency(price) || 'N/A'
   }
 
   const fetchAgencies = async () => {
@@ -396,59 +382,6 @@ export default function AdminPropertiesPage() {
     if (!uniqueLocations.cities.length) {
       fetchMetrics()
     }
-  }
-
-  const clearFilters = () => {
-    setFilters({
-      status: '',
-      propertyType: '',
-      listingType: '',
-      agency: '',
-      city: '',
-      state: '',
-      country: '',
-      area: '',
-      minPrice: '',
-      maxPrice: '',
-      bedrooms: '',
-      bathrooms: '',
-      minArea: '',
-      maxArea: '',
-      balconies: '',
-      livingRoom: '',
-      unfurnished: '',
-      semiFurnished: '',
-      fullyFurnished: ''
-    })
-    setSearchTerm('')
-    setStartDate('')
-    setEndDate('')
-    setPagination(prev => ({ ...prev, current: 1 }))
-  }
-
-  const hasActiveFilters = () => {
-    return filters.status !== '' ||
-      filters.propertyType !== '' ||
-      filters.listingType !== '' ||
-      filters.agency !== '' ||
-      filters.city !== '' ||
-      filters.state !== '' ||
-      filters.country !== '' ||
-      filters.area !== '' ||
-      filters.minPrice !== '' ||
-      filters.maxPrice !== '' ||
-      filters.bedrooms !== '' ||
-      filters.bathrooms !== '' ||
-      filters.minArea !== '' ||
-      filters.maxArea !== '' ||
-      filters.balconies !== '' ||
-      filters.livingRoom !== '' ||
-      filters.unfurnished !== '' ||
-      filters.semiFurnished !== '' ||
-      filters.fullyFurnished !== '' ||
-      searchTerm.trim() !== '' ||
-      startDate !== '' ||
-      endDate !== ''
   }
 
   const getPropertyId = (property) => {
@@ -554,7 +487,7 @@ export default function AdminPropertiesPage() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search properties by any field..."
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-64"
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-80"
               />
             </div>
             {canCreateProperty && (
@@ -586,10 +519,10 @@ export default function AdminPropertiesPage() {
               { value: 'draft', label: 'Draft' }
             ]}
             placeholder="All Status"
+            searchable={false}
             buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[160px] ${
               filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
             }`}
-            searchPlaceholder="Search status..."
           />
 
           {/* Property Type Filter - Direct Dropdown */}
@@ -656,7 +589,7 @@ export default function AdminPropertiesPage() {
                   <div className="space-y-4">
                     <div className="flex gap-3">
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Min Price</label>
+                        <label className="block text-xs font-bold text-gray-900 mb-1">Min Price</label>
                         <input
                           type="number"
                           value={filters.minPrice}
@@ -669,7 +602,7 @@ export default function AdminPropertiesPage() {
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Max Price</label>
+                        <label className="block text-xs font-bold text-gray-900 mb-1">Max Price</label>
                         <input
                           type="number"
                           value={filters.maxPrice}
@@ -729,7 +662,7 @@ export default function AdminPropertiesPage() {
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Bedrooms</label>
                       <SearchableSelect
                         value={filters.bedrooms}
                         onChange={(e) => {
@@ -751,7 +684,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Bathrooms</label>
                       <SearchableSelect
                         value={filters.bathrooms}
                         onChange={(e) => {
@@ -772,7 +705,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Min Area (sqft)</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Min Area (sqft)</label>
                       <input
                         type="number"
                         value={filters.minArea}
@@ -785,7 +718,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Area (sqft)</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Max Area (sqft)</label>
                       <input
                         type="number"
                         value={filters.maxArea}
@@ -798,7 +731,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Balconies</label>
                       <input
                         type="number"
                         min="0"
@@ -812,7 +745,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-1">Living Room</label>
                       <input
                         type="number"
                         min="0"
@@ -826,7 +759,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div className="space-y-2 pt-2">
-                      <label className="block text-sm font-medium text-gray-700">Furnishing</label>
+                      <label className="block text-sm font-bold text-gray-900">Furnishing</label>
                       <div className="flex flex-col gap-2">
                         <label className="flex items-center gap-2 text-sm text-gray-600">
                           <input
@@ -993,7 +926,7 @@ export default function AdminPropertiesPage() {
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'area' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'area' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+              <div className="absolute top-full right-0 left-auto mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-w-[min(320px,calc(100vw-2rem))] w-max">
                 <div className="p-4 max-h-[300px] overflow-y-auto">
                   <div className="space-y-1">
                     <button
@@ -1055,7 +988,7 @@ export default function AdminPropertiesPage() {
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'location' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'location' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
+              <div className="absolute top-full right-0 left-auto mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-w-[min(320px,calc(100vw-2rem))] w-max">
                 <div className="p-4 max-h-[300px] overflow-y-auto">
                   <div className="space-y-1">
                     <button
@@ -1149,10 +1082,11 @@ export default function AdminPropertiesPage() {
                 <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">From Date</label>
                       <input
                         type="date"
                         value={startDate}
+                        max={new Date().toISOString().split('T')[0]}
                         onChange={(e) => {
                           const newStartDate = e.target.value
                           setStartDate(newStartDate)
@@ -1165,7 +1099,7 @@ export default function AdminPropertiesPage() {
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">To Date</label>
                       <input
                         type="date"
                         value={endDate}
@@ -1174,6 +1108,7 @@ export default function AdminPropertiesPage() {
                           setPagination(prev => ({ ...prev, current: 1 }))
                         }}
                         min={startDate || undefined}
+                        max={new Date().toISOString().split('T')[0]}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
@@ -1203,18 +1138,6 @@ export default function AdminPropertiesPage() {
               </>
             )}
           </div>
-
-          {/* Clear All Filters Button */}
-          {hasActiveFilters() && (
-            <button
-              onClick={clearFilters}
-              className="inline-flex items-center px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors whitespace-nowrap"
-              title="Clear all filters"
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              Clear All
-            </button>
-          )}
         </div>
 
         {/* Click outside to close dropdowns */}
@@ -1234,260 +1157,148 @@ export default function AdminPropertiesPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No properties found</p>
-            {canCreateProperty && (
-              <Link href="/admin/properties/add" className="btn btn-primary mt-4">
-                <Plus className="h-5 w-5 mr-2" />
-                Add Your First Property
-              </Link>
-            )}
           </div>
         ) : (
           <>
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Image
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Property Title
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Agency
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Location
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Price
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Details
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Agent
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider whitespace-nowrap">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {properties.map((property) => {
-                      const propertyId = getPropertyId(property)
-                      return (
-                        <tr key={propertyId} className="hover:bg-logo-beige transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
+              <table className="w-full table-fixed divide-y divide-gray-200">
+                <colgroup>
+                  <col className="w-20" />
+                  <col className="w-[44%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-36" />
+                  <col className="w-28" />
+                </colgroup>
+                <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Image
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Property
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Price
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {properties.map((property) => {
+                    const propertyId = getPropertyId(property)
+                    return (
+                      <tr key={propertyId} className="hover:bg-logo-beige transition-colors">
+                        <td className="px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={() => setDetailsProperty(property)}
+                            className="block focus:outline-none"
+                            title="View details"
+                          >
                             {property.images && property.images.length > 0 ? (
                               <img
                                 src={typeof property.images[0] === 'string' ? property.images[0] : (property.images[0]?.url || property.images[0])}
                                 alt={property.title}
-                                className="h-16 w-16 rounded-lg object-cover"
+                                className="h-14 w-14 rounded-lg object-cover"
                                 onError={(e) => {
                                   e.target.style.display = 'none'
                                   e.target.nextSibling.style.display = 'flex'
                                 }}
                               />
                             ) : null}
-                            <div className="h-16 w-16 bg-gray-200 rounded-lg flex items-center justify-center" style={{ display: (property.images && property.images.length > 0) ? 'none' : 'flex' }}>
+                            <div className="h-14 w-14 bg-gray-200 rounded-lg flex items-center justify-center" style={{ display: (property.images && property.images.length > 0) ? 'none' : 'flex' }}>
                               <Package className="h-6 w-6 text-gray-400" />
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{property.title}</div>
-                            <div className="text-xs text-gray-500 capitalize">{property.propertyType || '-'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <Building className="h-4 w-4 text-gray-400" />
-                              <div className="text-sm text-gray-900">
-                                {property.agency?.name || 'No Agency'}
-                              </div>
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setDetailsProperty(property)}
+                            className="text-left w-full focus:outline-none"
+                            title="View details"
+                          >
+                            <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 truncate">
+                              {property.title}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3 text-gray-400" />
-                              <div className="text-sm text-gray-900">
-                                {property.location?.city || '-'}, {property.location?.state || ''}
-                              </div>
+                            <div className="text-xs text-gray-500 capitalize truncate">
+                              {[property.propertyType, property.agency?.name].filter(Boolean).join(' · ')}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-primary-600">
-                              {formatPrice(property.price)}
-                            </div>
-                            <div className="text-xs text-gray-500 capitalize">
-                              {property.listingType || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900 capitalize">
-                              {property.propertyType || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3 text-sm text-gray-600">
-                              <div className="flex items-center gap-1">
-                                <Bed className="h-3 w-3" />
-                                <span>{property.specifications?.bedrooms || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Bath className="h-3 w-3" />
-                                <span>{property.specifications?.bathrooms || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Square className="h-3 w-3" />
-                                <span>{property.specifications?.area?.value || 0} {property.specifications?.area?.unit || 'sqft'}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {property.agent ? (
-                                `${property.agent.firstName || ''} ${property.agent.lastName || ''}`
-                              ) : (
-                                <span className="text-gray-400 italic text-xs">Unassigned</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            {canEditProperty ? (
-                              <SearchableSelect
-                                value={property.status || 'inactive'}
-                                onChange={(e) => handleQuickStatusUpdate(propertyId, e.target.value)}
-                                options={[
-                                  { value: 'active', label: 'Active' },
-                                  { value: 'pending', label: 'Pending' },
-                                  { value: 'booked', label: 'Booked' },
-                                  { value: 'sold', label: 'Sold' },
-                                  { value: 'rented', label: 'Rented' },
-                                  { value: 'inactive', label: 'Inactive' },
-                                  { value: 'unavailable', label: 'Unavailable' },
-                                  { value: 'draft', label: 'Draft' }
-                                ]}
-                                placeholder="Status"
-                                buttonClassName={`text-xs font-medium px-2 py-1 rounded-full border border-gray-300 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[140px]
-                                  ${property.status === 'active' ? 'text-green-800 bg-green-50' :
-                                    property.status === 'booked' ? 'text-orange-800 bg-orange-50' :
-                                      property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
-                                        property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
-                                          property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
-                                            'text-gray-800 bg-gray-50'}`}
-                                searchPlaceholder="Search..."
-                              />
-                            ) : (
-                              property.status === 'active' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  Active
-                                </span>
-                              ) : property.status === 'sold' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  Sold
-                                </span>
-                              ) : property.status === 'rented' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                  Rented
-                                </span>
-                              ) : property.status === 'booked' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                  Booked
-                                </span>
-                              ) : property.status === 'pending' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                  Pending
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                  {property.status || 'Inactive'}
-                                </span>
-                              )
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 min-w-0">
+                          <div className="text-sm font-semibold text-primary-600 truncate">
+                            {formatPrice(property.price)}
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize truncate">
+                            {property.listingType || '—'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                            ${property.status === 'active' ? 'text-green-800 bg-green-50' :
+                              property.status === 'booked' ? 'text-orange-800 bg-orange-50' :
+                                property.status === 'sold' ? 'text-blue-800 bg-blue-50' :
+                                  property.status === 'rented' ? 'text-purple-800 bg-purple-50' :
+                                    property.status === 'pending' ? 'text-yellow-800 bg-yellow-50' :
+                                      'text-gray-800 bg-gray-50'}`}
+                          >
+                            {property.status || 'inactive'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center text-sm font-medium">
+                          <div className="flex items-center justify-center gap-2">
+                            {checkEntryPermission(property, user, 'view', canViewProperties) && (
+                              <Link
+                                href={`/admin/properties/${propertyId}`}
+                                className="text-primary-600 hover:text-primary-900 transition-colors"
+                                title="Open page"
+                              >
+                                <Eye className="h-5 w-5" />
+                              </Link>
                             )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                            <div className="flex items-center justify-center gap-3">
-                              {checkEntryPermission(property, user, 'view', canViewProperties) && (
-                                <Link
-                                  href={`/admin/properties/${propertyId}`}
-                                  className="text-primary-600 hover:text-primary-900 transition-colors"
-                                  title="View"
-                                >
-                                  <Eye className="h-5 w-5" />
-                                </Link>
-                              )}
-
-                              {/* Approval Actions for Admins */}
-                              {checkEntryPermission(property, user, 'edit', canEditProperty) && property.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleUpdateStatus(propertyId, 'active')}
-                                    className="text-green-600 hover:text-green-900 transition-colors"
-                                    title="Approve"
-                                  >
-                                    <CheckCircle className="h-5 w-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const reason = prompt('Please enter rejection reason (optional):')
-                                      if (reason !== null) handleUpdateStatus(propertyId, 'inactive', reason)
-                                    }}
-                                    className="text-orange-600 hover:text-orange-900 transition-colors"
-                                    title="Reject"
-                                  >
-                                    <XCircle className="h-5 w-5" />
-                                  </button>
-                                </>
-                              )}
-
-                              {/* Edit access based on permission and ownership */}
-                              {checkEntryPermission(property, user, 'edit', canEditProperty) && (
-                                <Link
-                                  href={`/admin/properties/${propertyId}/edit`}
-                                  className="text-primary-600 hover:text-primary-900 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-5 w-5" />
-                                </Link>
-                              )}
-
-                              {canDeleteProperty && (
-                                <button
-                                  onClick={() => handleDelete(propertyId)}
-                                  className="text-red-600 hover:text-red-900 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              )}
-
-                              {isSuperAdmin && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setPermissionModalEntry(property)
-                                  }}
-                                  className="text-amber-600 hover:text-amber-900 transition-colors"
-                                  title="Set Custom Permissions"
-                                >
-                                  <ShieldCheck className="h-5 w-5" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {checkEntryPermission(property, user, 'edit', canEditProperty) && (
+                              <Link
+                                href={`/admin/properties/${propertyId}/edit`}
+                                className="text-primary-600 hover:text-primary-900 transition-colors"
+                                title="Edit"
+                              >
+                                <Edit className="h-5 w-5" />
+                              </Link>
+                            )}
+                            {canDeleteProperty && (
+                              <button
+                                onClick={() => handleDelete(propertyId)}
+                                className="text-red-600 hover:text-red-900 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setPermissionModalEntry(property)
+                                }}
+                                className="text-amber-600 hover:text-amber-900 transition-colors"
+                                title="Set Custom Permissions"
+                              >
+                                <ShieldCheck className="h-5 w-5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
 
             {/* Pagination */}
@@ -1572,6 +1383,102 @@ export default function AdminPropertiesPage() {
         entryType="properties"
         onSuccess={fetchProperties}
       />
+
+      <DetailsModal
+        isOpen={!!detailsProperty}
+        onClose={() => setDetailsProperty(null)}
+        title={detailsProperty?.title || 'Property'}
+        subtitle={[detailsProperty?.propertyType, detailsProperty?.listingType].filter(Boolean).join(' · ')}
+        avatar={
+          detailsProperty ? (
+            detailsProperty.images && detailsProperty.images.length > 0 ? (
+              <img
+                src={typeof detailsProperty.images[0] === 'string' ? detailsProperty.images[0] : (detailsProperty.images[0]?.url || detailsProperty.images[0])}
+                alt={detailsProperty.title}
+                className="h-14 w-14 rounded-lg object-cover"
+              />
+            ) : (
+              <div className="h-14 w-14 bg-gray-200 rounded-lg flex items-center justify-center">
+                <Package className="h-7 w-7 text-gray-400" />
+              </div>
+            )
+          ) : null
+        }
+        sections={detailsProperty ? [
+          {
+            title: 'Overview',
+            items: [
+              { label: 'Price', value: <span className="font-semibold text-primary-600">{formatPrice(detailsProperty.price)}</span> },
+              { label: 'Listing type', value: detailsProperty.listingType ? <span className="capitalize">{detailsProperty.listingType}</span> : null },
+              { label: 'Property type', value: detailsProperty.propertyType ? <span className="capitalize">{detailsProperty.propertyType}</span> : null },
+              { label: 'Status', value: <span className="capitalize">{detailsProperty.status || 'inactive'}</span> },
+            ],
+          },
+          {
+            title: 'Location',
+            items: [
+              { label: 'City', value: detailsProperty.location?.city },
+              { label: 'State', value: detailsProperty.location?.state },
+              { label: 'Country', value: detailsProperty.location?.country },
+              { label: 'Area', value: detailsProperty.location?.area },
+            ],
+          },
+          {
+            title: 'Specifications',
+            items: [
+              { label: 'Bedrooms', value: detailsProperty.specifications?.bedrooms ?? 0 },
+              { label: 'Bathrooms', value: detailsProperty.specifications?.bathrooms ?? 0 },
+              {
+                label: 'Area',
+                value: detailsProperty.specifications?.area?.value
+                  ? `${detailsProperty.specifications.area.value} ${detailsProperty.specifications.area.unit || 'sqft'}`
+                  : null,
+              },
+              { label: 'Balconies', value: detailsProperty.specifications?.balconies },
+            ],
+          },
+          {
+            title: 'Ownership',
+            items: [
+              { label: 'Agency', value: detailsProperty.agency?.name || 'No Agency' },
+              {
+                label: 'Agent',
+                value: detailsProperty.agent
+                  ? `${detailsProperty.agent.firstName || ''} ${detailsProperty.agent.lastName || ''}`.trim()
+                  : null,
+              },
+            ],
+          },
+        ] : []}
+        actions={detailsProperty ? (
+          <>
+            {checkEntryPermission(detailsProperty, user, 'view', canViewProperties) && (
+              <Link
+                href={`/admin/properties/${getPropertyId(detailsProperty)}`}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Open page
+              </Link>
+            )}
+            {checkEntryPermission(detailsProperty, user, 'edit', canEditProperty) && (
+              <Link
+                href={`/admin/properties/${getPropertyId(detailsProperty)}/edit`}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              >
+                Edit
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setDetailsProperty(null)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      />
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

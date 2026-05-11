@@ -30,6 +30,7 @@ import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
+import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
 export default function MyInvoices() {
     const router = useRouter()
@@ -44,6 +45,7 @@ export default function MyInvoices() {
     const [showDetailsModal, setShowDetailsModal] = useState(false)
     const [selectedInvoice, setSelectedInvoice] = useState(null)
     const [fetchingDetails, setFetchingDetails] = useState(false)
+    const { confirm, ConfirmDialog } = useConfirmDialog()
 
     useEffect(() => {
         fetchInvoices()
@@ -124,7 +126,13 @@ export default function MyInvoices() {
     const handleConfirmProperty = async (transaction) => {
         if (!transaction) return
 
-        if (!window.confirm(`Are you sure you want to confirm the booking for ${transaction.property?.title || 'this property'}?`)) {
+        const ok = await confirm({
+            title: 'Confirm Booking',
+            message: `Are you sure you want to confirm the booking for ${transaction.property?.title || 'this property'}?`,
+            confirmText: 'Confirm',
+            tone: 'primary'
+        })
+        if (!ok) {
             return
         }
 
@@ -892,6 +900,7 @@ export default function MyInvoices() {
                     </div>
                 </div>
             )}
+            <ConfirmDialog />
         </DashboardLayout>
     )
 }

@@ -147,7 +147,7 @@ export default function AboutUsManagement() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 required
@@ -158,7 +158,7 @@ export default function AboutUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Subtitle</label>
               <input
                 type="text"
                 value={formData.subtitle}
@@ -168,7 +168,7 @@ export default function AboutUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Short Description</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Short Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -178,7 +178,7 @@ export default function AboutUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Content (Rich Text) *</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Full Content (Rich Text)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
               <ReactQuill
                 value={formData.content}
                 onChange={(value) => setFormData({ ...formData, content: value })}
@@ -194,7 +194,7 @@ export default function AboutUsManagement() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">SEO Settings</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meta Title</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Meta Title</label>
               <input
                 type="text"
                 value={formData.seo.metaTitle}
@@ -206,7 +206,7 @@ export default function AboutUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meta Description</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Meta Description</label>
               <textarea
                 value={formData.seo.metaDescription}
                 onChange={(e) => setFormData({
@@ -218,7 +218,7 @@ export default function AboutUsManagement() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Keywords (comma-separated)</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Keywords (comma-separated)</label>
               <input
                 type="text"
                 value={formData.seo.keywords}

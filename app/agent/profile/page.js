@@ -230,7 +230,7 @@ export default function AgentProfilePage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
@@ -240,7 +240,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   required
@@ -250,7 +250,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                 <input
                   type="email"
                   required
@@ -260,7 +260,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Phone</label>
                 <PhoneField
                   label=""
                   countryCodeName="phoneCountryCode"
@@ -288,7 +288,7 @@ export default function AgentProfilePage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Agent Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">License Number</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">License Number</label>
                 <input
                   type="text"
                   value={formData.agentInfo.licenseNumber}
@@ -297,7 +297,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Years of Experience</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Years of Experience</label>
                 <input
                   type="number"
                   min="0"
@@ -307,7 +307,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Commission Rate (%)</label>
                 <input
                   type="number"
                   min="0"
@@ -318,7 +318,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Bio</label>
                 <textarea
                   rows={4}
                   value={formData.agentInfo.bio}
@@ -335,7 +335,7 @@ export default function AgentProfilePage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Address</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Street</label>
                 <input
                   type="text"
                   value={formData.address.street}
@@ -344,16 +344,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                <input
-                  type="text"
-                  value={formData.address.city}
-                  onChange={(e) => handleInputChange('address.city', sanitizeAlpha(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
                 <input
                   type="text"
                   value={formData.address.state}
@@ -362,7 +353,7 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
                 <input
                   type="text"
                   value={formData.address.country}
@@ -371,7 +362,16 @@ export default function AgentProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
+                <input
+                  type="text"
+                  value={formData.address.city}
+                  onChange={(e) => handleInputChange('address.city', sanitizeAlpha(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Zip Code</label>
                 <input
                   type="text"
                   value={formData.address.zipCode}

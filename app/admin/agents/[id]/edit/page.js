@@ -24,6 +24,8 @@ export default function EditAgentPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [errors, setErrors] = useState({})
+  const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+  const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -58,6 +60,20 @@ export default function EditAgentPage() {
     fetchAgent()
     fetchAgencies()
   }, [params.id])
+
+  useEffect(() => {
+    fetchCountries()
+  }, [])
+
+  useEffect(() => {
+    fetchStates(formData.address.country)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.country])
+
+  useEffect(() => {
+    fetchCities(formData.address.country, formData.address.state)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.address.country, formData.address.state])
 
   const fetchAgent = async () => {
     try {
@@ -110,6 +126,88 @@ export default function EditAgentPage() {
       setAgencies(response.data.agencies || [])
     } catch (error) {
       console.error('Error fetching agencies:', error)
+    }
+  }
+
+  const fetchCountries = async () => {
+    try {
+      setGeoLoading((p) => ({ ...p, countries: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+      const countries = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean)
+        : []
+      countries.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, countries }))
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      setGeo((p) => ({ ...p, countries: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, countries: false }))
+    }
+  }
+
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+      setFormData((prev) => ({ ...prev, address: { ...prev.address, state: '', city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading((p) => ({ ...p, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean)
+        : []
+      states.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, states, cities: [] }))
+      setFormData((prev) => {
+        const currentState = prev.address.state
+        if (!currentState || states.includes(currentState)) return prev
+        return { ...prev, address: { ...prev.address, state: '', city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, states: false }))
+    }
+  }
+
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo((p) => ({ ...p, cities: [] }))
+      setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading((p) => ({ ...p, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c || '').trim()).filter(Boolean)
+        : []
+      cities.sort((a, b) => a.localeCompare(b))
+      setGeo((p) => ({ ...p, cities }))
+      setFormData((prev) => {
+        const currentCity = prev.address.city
+        if (!currentCity || cities.includes(currentCity)) return prev
+        return { ...prev, address: { ...prev.address, city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo((p) => ({ ...p, cities: [] }))
+    } finally {
+      setGeoLoading((p) => ({ ...p, cities: false }))
     }
   }
 
@@ -275,8 +373,8 @@ export default function EditAgentPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -285,14 +383,15 @@ export default function EditAgentPage() {
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`}
+                  placeholder="Enter first name"
                 />
                 {errors.firstName && (
                   <p className="mt-1 text-xs font-semibold text-red-600">{errors.firstName}</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name *
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -301,15 +400,16 @@ export default function EditAgentPage() {
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`}
+                  placeholder="Enter last name"
                 />
                 {errors.lastName && (
                   <p className="mt-1 text-xs font-semibold text-red-600">{errors.lastName}</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Mail className="h-4 w-4" />
-                  Email *
+                  Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="email"
@@ -318,13 +418,14 @@ export default function EditAgentPage() {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
+                  placeholder="Enter email"
                 />
                 {errors.email && (
                   <p className="mt-1 text-xs font-semibold text-red-600">{errors.email}</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Phone className="h-4 w-4" />
                   Phone
                 </label>
@@ -343,7 +444,7 @@ export default function EditAgentPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Building className="h-4 w-4" />
                   Agency
                 </label>
@@ -360,7 +461,7 @@ export default function EditAgentPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Password (leave blank to keep current)
                 </label>
                 <div className="relative">
@@ -388,7 +489,7 @@ export default function EditAgentPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Status
                 </label>
                 <SearchableSelect
@@ -414,7 +515,7 @@ export default function EditAgentPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Street
                 </label>
                 <input
@@ -422,43 +523,58 @@ export default function EditAgentPage() {
                   value={formData.address.street}
                   onChange={(e) => handleInputChange('address.street', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Enter street address"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={formData.address.city}
-                  onChange={(e) => handleInputChange('address.city', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State
-                </label>
-                <input
-                  type="text"
-                  value={formData.address.state}
-                  onChange={(e) => handleInputChange('address.state', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Country
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.address.country}
                   onChange={(e) => handleInputChange('address.country', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
+                >
+                  <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                  {geo.countries.map((country) => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  State
+                </label>
+                <select
+                  value={formData.address.state}
+                  onChange={(e) => handleInputChange('address.state', e.target.value)}
+                  disabled={!formData.address.country || geoLoading.states}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+                >
+                  <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                  {geo.states.map((state) => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  City
+                </label>
+                <select
+                  value={formData.address.city}
+                  onChange={(e) => handleInputChange('address.city', e.target.value)}
+                  disabled={!formData.address.state || geoLoading.cities}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+                >
+                  <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                  {geo.cities.map((city) => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   ZIP Code
                 </label>
                 <input
@@ -467,6 +583,7 @@ export default function EditAgentPage() {
                   value={formData.address.zipCode}
                   onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors['address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
+                  placeholder="Enter ZIP code"
                 />
                 {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || errors['address.zipCode'] ? (
                   <p className="mt-1 text-xs font-semibold text-red-600">
@@ -482,7 +599,7 @@ export default function EditAgentPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Agent Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   License Number
                 </label>
                 <input
@@ -490,10 +607,11 @@ export default function EditAgentPage() {
                   value={formData.agentInfo.licenseNumber}
                   onChange={(e) => handleInputChange('agentInfo.licenseNumber', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Enter license number"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Years of Experience
                 </label>
                 <input
@@ -502,10 +620,11 @@ export default function EditAgentPage() {
                   value={formData.agentInfo.yearsOfExperience}
                   onChange={(e) => handleInputChange('agentInfo.yearsOfExperience', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Enter years"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Commission Rate (%)
                 </label>
                 <input
@@ -516,10 +635,11 @@ export default function EditAgentPage() {
                   value={formData.agentInfo.commissionRate}
                   onChange={(e) => handleInputChange('agentInfo.commissionRate', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Enter commission rate"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
                   Bio
                 </label>
                 <textarea

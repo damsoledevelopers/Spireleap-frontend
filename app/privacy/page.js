@@ -13,6 +13,8 @@ export default function PrivacyPage() {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
   useEffect(() => {
     fetchConsent()
@@ -56,8 +58,7 @@ export default function PrivacyPage() {
   }
 
   const handleDeleteData = async () => {
-    const confirmText = prompt('Type "DELETE" to confirm permanent deletion of your data:')
-    if (confirmText !== 'DELETE') {
+    if (deleteConfirmText !== 'DELETE') {
       toast.error('Deletion cancelled')
       return
     }
@@ -68,6 +69,8 @@ export default function PrivacyPage() {
         data: { confirm: 'DELETE' }
       })
       toast.success('Your data has been deleted. You will be logged out.')
+      setShowDeleteConfirmModal(false)
+      setDeleteConfirmText('')
       setTimeout(() => {
         window.location.href = '/auth/login'
       }, 2000)
@@ -172,7 +175,10 @@ export default function PrivacyPage() {
               <Trash2 className="h-6 w-6 text-red-500" />
             </div>
             <button
-              onClick={handleDeleteData}
+              onClick={() => {
+                setDeleteConfirmText('')
+                setShowDeleteConfirmModal(true)
+              }}
               disabled={deleting}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
             >
@@ -191,6 +197,41 @@ export default function PrivacyPage() {
             </p>
           </div>
         </div>
+        {showDeleteConfirmModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirmModal(false)} />
+            <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900">Delete Personal Data</h3>
+              <p className="mt-2 text-sm text-gray-600">Type <span className="font-semibold">DELETE</span> to confirm permanent deletion of your data.</p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="mt-4 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="Type DELETE"
+                autoFocus
+              />
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirmModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteData}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )

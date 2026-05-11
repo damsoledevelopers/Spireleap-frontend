@@ -48,11 +48,11 @@ export default function DataTable({
 
   const getSortIcon = (columnKey) => {
     if (sortConfig.key !== columnKey) {
-      return <ChevronUp className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+      return <ChevronUp className="h-4 w-4 text-white/50 opacity-0 group-hover:opacity-100" />
     }
     return sortConfig.direction === 'asc' 
-      ? <ChevronUp className="h-4 w-4 text-primary-600" />
-      : <ChevronDown className="h-4 w-4 text-primary-600" />
+      ? <ChevronUp className="h-4 w-4 text-white" />
+      : <ChevronDown className="h-4 w-4 text-white" />
   }
 
   if (loading) {
@@ -79,13 +79,13 @@ export default function DataTable({
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
             <tr>
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                    column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
+                  className={`px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider ${
+                    column.sortable !== false ? 'cursor-pointer hover:bg-white/10' : ''
                   }`}
                   onClick={() => column.sortable !== false && handleSort(column.key)}
                 >
@@ -96,7 +96,7 @@ export default function DataTable({
                 </th>
               ))}
               {actions && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-bold text-white uppercase tracking-wider">
                   Actions
                 </th>
               )}

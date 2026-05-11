@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
-import { ArrowLeft, Save, Upload, X, MapPin, Building, User } from 'lucide-react'
+import { ArrowLeft, Save, Upload, X, MapPin, Building, User, ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -67,14 +67,14 @@ export default function AdminAddPropertyPage() {
     specifications: {
       bedrooms: '',
       bathrooms: '',
-      balconies: 0,
-      livingRoom: 0,
+      balconies: '',
+      livingRoom: '',
       unfurnished: 0,
       semiFurnished: 0,
       fullyFurnished: 0,
       area: { value: '', unit: 'sqft' },
-      parking: 0,
-      floors: 1,
+      parking: '',
+      floors: '',
       yearBuilt: '',
       lotSize: { value: '', unit: 'sqft' }
     },
@@ -181,6 +181,60 @@ export default function AdminAddPropertyPage() {
         }
       })
     }
+  }
+
+  const renderSpecificationStepper = (label, field, value, maxLen = 2, placeholder = 'Add', min = 0, max) => {
+    const numericValue = parseInt(value, 10)
+    const current = Number.isNaN(numericValue) ? null : numericValue
+    const maxValue = typeof max === 'number' ? max : (10 ** maxLen) - 1
+    const isDecrementDisabled = current === null || current <= min
+    const isIncrementDisabled = current !== null && current >= maxValue
+
+    const clampValue = (next) => {
+      if (next <= min) {
+        handleInputChange(field, min === 0 ? '' : String(min))
+        return
+      }
+      const clamped = Math.min(next, maxValue)
+      handleInputChange(field, sanitizeDigits(String(clamped), maxLen))
+    }
+
+    return (
+      <div>
+        <label className="block text-sm font-bold text-gray-900 mb-1">{label}</label>
+        <div className="relative w-full">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => handleInputChange(field, sanitizeDigits(e.target.value, maxLen))}
+            className="w-full h-[42px] pr-10 pl-3 py-2 border border-gray-300 rounded-xl shadow-sm transition-all duration-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 hover:border-gray-400"
+            placeholder={placeholder}
+            aria-label={label}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-9 flex-col overflow-hidden rounded-r-xl border-l border-gray-200">
+            <button
+              type="button"
+              onClick={() => clampValue((current ?? min) + 1)}
+              disabled={isIncrementDisabled}
+              className="flex-1 inline-flex items-center justify-center text-gray-500 transition-colors duration-150 hover:bg-gray-50 hover:text-gray-700 disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+              aria-label={`Increase ${label}`}
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => clampValue((current ?? min) - 1)}
+              disabled={isDecrementDisabled}
+              className="flex-1 inline-flex items-center justify-center border-t border-gray-200 text-gray-500 transition-colors duration-150 hover:bg-gray-50 hover:text-gray-700 disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+              aria-label={`Decrease ${label}`}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const handleImageUpload = async (e) => {
@@ -451,7 +505,7 @@ export default function AdminAddPropertyPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Agency{user?.role === 'super_admin' ? ' (optional)' : ''}
                   </label>
                   <SearchableSelect
@@ -474,7 +528,7 @@ export default function AdminAddPropertyPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agent (optional)</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Agent (optional)</label>
                   <SearchableSelect
                     value={formData.agent}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
@@ -496,17 +550,17 @@ export default function AdminAddPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Title</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="e.g., Beautiful 3BR Apartment in Downtown"
+                  placeholder="Enter property title"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Property Type</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Property Type</label>
                 <SearchableSelect
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
@@ -529,7 +583,7 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Type</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Listing Type</label>
                 <SearchableSelect
                   value={formData.listingType}
                   onChange={(e) => handleInputChange('listingType', e.target.value)}
@@ -544,7 +598,7 @@ export default function AdminAddPropertyPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Status</label>
                 <SearchableSelect
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
@@ -568,7 +622,7 @@ export default function AdminAddPropertyPage() {
                 )}
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Description</label>
                 <textarea
                   rows={4}
                   value={formData.description}
@@ -586,7 +640,7 @@ export default function AdminAddPropertyPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {(formData.listingType === 'sale' || formData.listingType === 'both') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Sale Price</label>
                   <input
                     type="number"
                     min="0"
@@ -600,7 +654,7 @@ export default function AdminAddPropertyPage() {
               {(formData.listingType === 'rent' || formData.listingType === 'both') && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rent Amount</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Rent Amount</label>
                     <input
                       type="number"
                       min="0"
@@ -611,7 +665,7 @@ export default function AdminAddPropertyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rent Period</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Rent Period</label>
                     <SearchableSelect
                       value={formData.price.rent.period}
                       onChange={(e) => handleInputChange('price.rent.period', e.target.value)}
@@ -629,7 +683,7 @@ export default function AdminAddPropertyPage() {
                 </>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Currency</label>
                 <SearchableSelect
                   value={formData.price.currency}
                   onChange={(e) => handleInputChange('price.currency', e.target.value)}
@@ -655,68 +709,68 @@ export default function AdminAddPropertyPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Address</label>
                 <input
                   type="text"
                   value={formData.location.address}
                   onChange={(e) => handleInputChange('location.address', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Street address"
+                  placeholder="Enter street address"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
                 <input
                   type="text"
                   value={formData.location.city}
                   onChange={(e) => handleInputChange('location.city', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="City"
+                  placeholder="Enter city"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
                 <input
                   type="text"
                   value={formData.location.state}
                   onChange={(e) => handleInputChange('location.state', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="State"
+                  placeholder="Enter state"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
                 <input
                   type="text"
                   value={formData.location.country}
                   onChange={(e) => handleInputChange('location.country', sanitizeAlphaText(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Country"
+                  placeholder="Enter country"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">ZIP Code</label>
                 <input
                   type="text"
                   value={formData.location.zipCode}
                   onChange={(e) => handleInputChange('location.zipCode', sanitizeZip(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="ZIP Code"
+                  placeholder="Enter ZIP code"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Neighborhood</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Neighborhood</label>
                 <input
                   type="text"
                   value={formData.location.neighborhood}
                   onChange={(e) => handleInputChange('location.neighborhood', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Neighborhood"
+                  placeholder="Enter neighborhood"
                 />
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Map Location</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Map Location</label>
               <GoogleMapPicker
                 onLocationSelect={handleLocationSelect}
                 initialLocation={formData.location.coordinates}
@@ -729,76 +783,77 @@ export default function AdminAddPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Regulatory Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Reference</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Reference</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.reference}
                   onChange={(e) => handleInputChange('regulatoryInformation.reference', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="DPF-S-47165"
+                  placeholder="Enter reference"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Listed At</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Listed At</label>
                 <input
                   type="date"
                   value={formData.regulatoryInformation.listedAt}
+                  max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => handleInputChange('regulatoryInformation.listedAt', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Broker License</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Broker License</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.brokerLicense}
                   onChange={(e) => handleInputChange('regulatoryInformation.brokerLicense', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="11917"
+                  placeholder="Enter broker license"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agency Name</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Agency Name</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.agencyName}
                   onChange={(e) => handleInputChange('regulatoryInformation.agencyName', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="DRIVEN PROPERTIES LLC"
+                  placeholder="Enter agency name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zone Name</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Zone Name</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.zoneName}
                   onChange={(e) => handleInputChange('regulatoryInformation.zoneName', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Jumeirah First"
+                  placeholder="Enter zone name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent License</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Agent License</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.agentLicense}
                   onChange={(e) => handleInputChange('regulatoryInformation.agentLicense', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="46127"
+                  placeholder="Enter agent license"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DLD Permit Number</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">DLD Permit Number</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.dldPermitNumber}
                   onChange={(e) => handleInputChange('regulatoryInformation.dldPermitNumber', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="65171959460"
+                  placeholder="Enter DLD permit number"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">QR code image (optional)</label>
+                <label className="block text-sm font-bold text-gray-900 mb-2">QR code image (optional)</label>
                 <p className="text-xs text-gray-500 mb-2">Upload a PNG/JPEG of the listing QR, or paste a URL below.</p>
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:bg-gray-50 text-sm font-medium text-gray-700">
@@ -831,23 +886,23 @@ export default function AdminAddPropertyPage() {
                     />
                   </div>
                 )}
-                {/* <label className="block text-sm font-medium text-gray-700 mt-3 mb-1">Or paste image URL</label>
+                {/* <label className="block text-sm font-bold text-gray-900 mt-3 mb-1">Or paste image URL</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.qrImage}
                   onChange={(e) => handleInputChange('regulatoryInformation.qrImage', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="https://… (optional)"
+                  placeholder="Enter URL (optional)"
                 /> */}
               </div>
               <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">QR Value</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">QR Value</label>
                 <input
                   type="text"
                   value={formData.regulatoryInformation.qrValue}
                   onChange={(e) => handleInputChange('regulatoryInformation.qrValue', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="https://your-frontend.com/property/123"
+                  placeholder="Enter property URL"
                 />
               </div>
             </div>
@@ -857,58 +912,10 @@ export default function AdminAddPropertyPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms (BHK Type)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.bedrooms}
-                  onChange={(e) =>
-                    handleInputChange('specifications.bedrooms', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bathrooms</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.bathrooms}
-                  onChange={(e) =>
-                    handleInputChange('specifications.bathrooms', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Balconies</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.balconies}
-                  onChange={(e) =>
-                    handleInputChange('specifications.balconies', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Living Room</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.livingRoom}
-                  onChange={(e) =>
-                    handleInputChange('specifications.livingRoom', sanitizeDigits(e.target.value, 2))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
+              {renderSpecificationStepper('Bedrooms (BHK Type)', 'specifications.bedrooms', formData.specifications.bedrooms)}
+              {renderSpecificationStepper('Bathrooms', 'specifications.bathrooms', formData.specifications.bathrooms)}
+              {renderSpecificationStepper('Balconies', 'specifications.balconies', formData.specifications.balconies)}
+              {renderSpecificationStepper('Living Room', 'specifications.livingRoom', formData.specifications.livingRoom)}
               <div className="md:col-span-2 flex flex-row flex-nowrap items-end gap-4 sm:gap-6 md:gap-8 pb-2 min-h-[3.25rem] overflow-x-auto">
                 <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
@@ -917,7 +924,7 @@ export default function AdminAddPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.unfurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
-                  <span className="text-sm font-medium text-gray-700">Unfurnished</span>
+                  <span className="text-sm font-bold text-gray-900">Unfurnished</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
@@ -926,7 +933,7 @@ export default function AdminAddPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.semiFurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
-                  <span className="text-sm font-medium text-gray-700">Semi-Furnished</span>
+                  <span className="text-sm font-bold text-gray-900">Semi-Furnished</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap">
                   <input
@@ -935,11 +942,11 @@ export default function AdminAddPropertyPage() {
                     onChange={(e) => handleInputChange('specifications.fullyFurnished', e.target.checked ? 1 : 0)}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
                   />
-                  <span className="text-sm font-medium text-gray-700">Fully Furnished</span>
+                  <span className="text-sm font-bold text-gray-900">Fully Furnished</span>
                 </label>
               </div>
               <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Area (optional)</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Area (optional)</label>
                 <div className="flex flex-col sm:flex-row sm:items-stretch gap-2 sm:gap-3 max-w-xl">
                   <input
                     type="text"
@@ -968,37 +975,17 @@ export default function AdminAddPropertyPage() {
                   </div>
                 </div>
               </div>
+              {renderSpecificationStepper('Parking Spaces', 'specifications.parking', formData.specifications.parking)}
+              {renderSpecificationStepper('Floors', 'specifications.floors', formData.specifications.floors, 2, 'Add', 1)}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Parking Spaces</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.parking}
-                  onChange={(e) => handleInputChange('specifications.parking', sanitizeDigits(e.target.value, 2))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Floors</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.specifications.floors}
-                  onChange={(e) => handleInputChange('specifications.floors', sanitizeDigits(e.target.value, 2))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="1"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Year Built</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={formData.specifications.yearBuilt}
                   onChange={(e) => handleInputChange('specifications.yearBuilt', sanitizeDigits(e.target.value, 4))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Year"
+                  placeholder="Enter year"
                 />
               </div>
             </div>
@@ -1042,6 +1029,14 @@ export default function AdminAddPropertyPage() {
                         Primary
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded transition-opacity z-10"
+                      aria-label="Remove image"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button
                         type="button"
@@ -1049,13 +1044,6 @@ export default function AdminAddPropertyPage() {
                         className="opacity-0 group-hover:opacity-100 bg-white text-primary-600 px-3 py-1 rounded text-sm"
                       >
                         Set Primary
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="opacity-0 group-hover:opacity-100 bg-red-600 text-white px-3 py-1 rounded text-sm"
-                      >
-                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -1069,7 +1057,7 @@ export default function AdminAddPropertyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Category & Amenities</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <label className="block text-sm font-bold text-gray-900 mb-2">Category</label>
                 <SearchableSelect
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
@@ -1085,46 +1073,48 @@ export default function AdminAddPropertyPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
-                <div className="max-h-60 overflow-y-auto border-2 border-gray-300 rounded-lg p-3 bg-gray-50">
-                  {amenities.length > 0 ? (
-                    <div className="space-y-2">
-                      {amenities.map(amenity => (
-                        <label
-                          key={amenity._id}
-                          className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary-200"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.amenities.includes(amenity._id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFormData({
-                                  ...formData,
-                                  amenities: [...formData.amenities, amenity._id]
-                                })
-                              } else {
-                                setFormData({
-                                  ...formData,
-                                  amenities: formData.amenities.filter(id => id !== amenity._id)
-                                })
-                              }
-                            }}
-                            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                          />
-                          <span className="text-sm text-gray-700 font-medium">{amenity.name}</span>
-                          {amenity.icon && (
-                            <span className="ml-auto text-primary-600">{amenity.icon}</span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-gray-500">No amenities available</p>
-                      <p className="text-xs text-gray-400 mt-1">Create amenities in Settings first</p>
-                    </div>
-                  )}
+                <label className="block text-sm font-bold text-gray-900 mb-2">Amenities</label>
+                <SearchableSelect
+                  value={formData.amenities?.[0] || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (!value) return
+                    setFormData((prev) => ({
+                      ...prev,
+                      amenities: Array.from(new Set([...(prev.amenities || []), value]))
+                    }))
+                  }}
+                  options={amenities.map((amenity) => ({ value: amenity._id, label: amenity.name }))}
+                  placeholder="Add amenity..."
+                  buttonClassName="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all bg-white"
+                  searchPlaceholder="Search amenity..."
+                />
+                {amenities.length === 0 && (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">No amenities available</p>
+                    <p className="text-xs text-gray-400 mt-1">Create amenities in Settings first</p>
+                  </div>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(formData.amenities || []).map((id) => {
+                    const label = amenities.find((a) => a._id === id)?.name || id
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            amenities: (prev.amenities || []).filter((x) => x !== id)
+                          }))
+                        }}
+                        title="Remove"
+                      >
+                        {label} ×
+                      </button>
+                    )
+                  })}
                 </div>
                 {formData.amenities.length > 0 && (
                   <p className="mt-2 text-xs text-primary-600 font-medium">

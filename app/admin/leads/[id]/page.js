@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
+import { getAddressLabeledRows } from '../../../../lib/formatAddress'
 import {
   ArrowLeft,
   User,
@@ -42,6 +43,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
 
 export default function AdminLeadDetailPage() {
   const params = useParams()
@@ -54,9 +56,12 @@ export default function AdminLeadDetailPage() {
   const canEditLead = permissionsLoaded ? checkPermission('leads', 'edit') : false
   const canDeleteLead = permissionsLoaded ? checkPermission('leads', 'delete') : false
   const canCreateLead = permissionsLoaded ? checkPermission('leads', 'create') : false
+  const canCreateUser = permissionsLoaded ? checkPermission('users', 'create') : false
 
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [lead, setLead] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [convertingToClient, setConvertingToClient] = useState(false)
 
   useEffect(() => {
     // Wait for auth and permissions to load before checking
@@ -92,6 +97,38 @@ export default function AdminLeadDetailPage() {
       router.push('/admin/leads')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const convertLeadToClient = async () => {
+    const id = params.id
+    if (!id || !lead?.contact?.email) {
+      toast.error('This lead needs an email to convert to a client.')
+      return
+    }
+    const ok = await confirm({
+      title: 'Convert lead to client',
+      message:
+        'This creates a client account from this lead and removes the lead. The client can use Forgot password on the login page to set their password.',
+      confirmText: 'Convert to client',
+      cancelText: 'Cancel',
+      tone: 'primary'
+    })
+    if (!ok) return
+    try {
+      setConvertingToClient(true)
+      await api.post(`/leads/${id}/convert-to-client`, {})
+      toast.success('Lead converted to client successfully.')
+      router.push('/admin/leads')
+    } catch (error) {
+      console.error('Convert to client error:', error)
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.[0]?.msg ||
+        'Failed to convert lead to client'
+      toast.error(msg)
+    } finally {
+      setConvertingToClient(false)
     }
   }
 
@@ -155,15 +192,27 @@ export default function AdminLeadDetailPage() {
             <Link href="/admin/leads" className="text-gray-400 hover:text-gray-700 transition-colors">
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            {canEditLead && (
-              <Link
-                href={`/admin/leads/${params.id}/edit`}
-                className="px-4 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1.5 text-sm font-medium transition-colors"
-              >
-                <Edit className="h-3.5 w-3.5" />
-                Edit
-              </Link>
-            )}
+            <div className="flex items-center gap-2">
+              {canEditLead && canCreateUser && lead?.contact?.email && (
+                <button
+                  type="button"
+                  onClick={convertLeadToClient}
+                  disabled={convertingToClient}
+                  className="px-4 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-1.5 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {convertingToClient ? 'Converting…' : 'Convert to client'}
+                </button>
+              )}
+              {canEditLead && (
+                <Link
+                  href={`/admin/leads/${params.id}/edit`}
+                  className="px-4 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1.5 text-sm font-medium transition-colors"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  Edit
+                </Link>
+              )}
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -232,22 +281,21 @@ export default function AdminLeadDetailPage() {
                   </div>
                 </div>
               </div>
-              {lead.contact.address && (lead.contact.address.street || lead.contact.address.city) ? (
+              {getAddressLabeledRows(lead.contact.address).length > 0 ? (
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-100 flex flex-col justify-center">
                   <div className="mb-4">
                     <div className="p-2 bg-[#700E08]/10 rounded-lg w-fit mb-3">
                       <MapPin className="h-6 w-6 text-[#700E08]" />
                     </div>
-                    <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">Physical Address</label>
-                    <p className="text-lg font-semibold text-gray-900 leading-relaxed">
-                      {[
-                        lead.contact.address.street,
-                        lead.contact.address.city,
-                        lead.contact.address.state,
-                        lead.contact.address.country,
-                        lead.contact.address.zipCode
-                      ].filter(Boolean).join(', ') || 'N/A'}
-                    </p>
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Physical Address</label>
+                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                      {getAddressLabeledRows(lead.contact.address).map(({ label, value }) => (
+                        <div key={label} className="min-w-0">
+                          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">{label}</dt>
+                          <dd className="text-lg font-semibold text-gray-900 leading-snug whitespace-pre-line break-words">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   </div>
                 </div>
               ) : (
@@ -325,6 +373,7 @@ export default function AdminLeadDetailPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

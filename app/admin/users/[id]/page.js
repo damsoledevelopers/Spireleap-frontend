@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
+import { getAddressLabeledRows } from '../../../../lib/formatAddress'
 import {
   ArrowLeft,
   User,
@@ -34,6 +35,7 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import UserDetailOverview from '../../../../components/Users/UserDetailOverview'
+import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
 
 export default function AdminUserDetailPage() {
   const params = useParams()
@@ -63,6 +65,7 @@ export default function AdminUserDetailPage() {
   const [completingForLeadId, setCompletingForLeadId] = useState(null)
   const [visitCompletionData, setVisitCompletionData] = useState({ feedback: '', interestLevel: 'medium', nextAction: '' })
   const [deletingSiteVisit, setDeletingSiteVisit] = useState(false)
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [completingVisit, setCompletingVisit] = useState(false)
   const [viewCompletedVisit, setViewCompletedVisit] = useState(null)
   const [editingCompletedVisit, setEditingCompletedVisit] = useState(null)
@@ -317,7 +320,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleDeleteTask = async (task) => {
-    if (!confirm('Are you sure you want to delete this task?')) return
+    if (!(await confirm({ title: 'Delete Task', message: 'Are you sure you want to delete this task?', confirmText: 'Delete', tone: 'danger' }))) return
     try {
       await api.delete(`/users/${params.id}/tasks/${task._id}`)
       toast.success('Task deleted successfully')
@@ -377,7 +380,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleDeleteReminder = async (reminder) => {
-    if (!confirm('Are you sure you want to delete this reminder?')) return
+    if (!(await confirm({ title: 'Delete Reminder', message: 'Are you sure you want to delete this reminder?', confirmText: 'Delete', tone: 'danger' }))) return
     try {
       await api.delete(`/users/${params.id}/reminders/${reminder._id}`)
       toast.success('Reminder deleted successfully')
@@ -537,7 +540,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleDeleteSiteVisit = async (visitId, leadId) => {
-    if (!confirm('Are you sure you want to delete this site visit?')) return
+    if (!(await confirm({ title: 'Delete Site Visit', message: 'Are you sure you want to delete this site visit?', confirmText: 'Delete', tone: 'danger' }))) return
     if (!leadId) {
       toast.error('Lead ID not found')
       return
@@ -648,7 +651,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleDeleteDocument = async (leadId, document) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) return
+    if (!(await confirm({ title: 'Delete Document', message: 'Are you sure you want to delete this document?', confirmText: 'Delete', tone: 'danger' }))) return
 
     const documentId = document?._id
     const filename = document?.filename
@@ -750,7 +753,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleDeleteNote = async (noteId) => {
-    if (!confirm('Are you sure you want to delete this note?')) return
+    if (!(await confirm({ title: 'Delete Note', message: 'Are you sure you want to delete this note?', confirmText: 'Delete', tone: 'danger' }))) return
     try {
       setDeletingNoteId(noteId)
       // Get current user data
@@ -1148,22 +1151,21 @@ export default function AdminUserDetailPage() {
                     </div>
                   )}
                 </div>
-                {userData.address && (userData.address.street || userData.address.city) ? (
+                {getAddressLabeledRows(userData.address).length > 0 ? (
                   <div className="bg-gray-50 p-5 rounded-lg border border-gray-100 flex flex-col justify-center">
                     <div className="mb-4">
                       <div className="p-2 bg-[#700E08]/10 rounded-lg w-fit mb-3">
                         <MapPin className="h-6 w-6 text-[#700E08]" />
                       </div>
-                      <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">Physical Address</label>
-                      <p className="text-lg font-semibold text-gray-900 leading-relaxed">
-                        {[
-                          userData.address.street,
-                          userData.address.city,
-                          userData.address.state,
-                          userData.address.country,
-                          userData.address.zipCode
-                        ].filter(Boolean).join(', ') || 'N/A'}
-                      </p>
+                      <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Physical Address</label>
+                      <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                        {getAddressLabeledRows(userData.address).map(({ label, value }) => (
+                          <div key={label} className="min-w-0">
+                            <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">{label}</dt>
+                            <dd className="text-lg font-semibold text-gray-900 leading-snug whitespace-pre-line break-words">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
                     </div>
                   </div>
                 ) : (
@@ -1209,14 +1211,21 @@ export default function AdminUserDetailPage() {
                     <tbody className="bg-white">
                       {userInquiries.map((inquiry, index) => {
                         const displayProperty = inquiry.property || inquiry.interestedProperties?.[0]?.property
+                        const toRupee = (value) => {
+                          const numeric = Number(value)
+                          return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : null
+                        }
                         const propertyPrice = displayProperty?.price
                           ? (typeof displayProperty.price === 'object'
-                            ? (displayProperty.price.sale
-                              ? `₹${Number(displayProperty.price.sale).toLocaleString()}`
-                              : displayProperty.price.rent?.amount
-                                ? `₹${Number(displayProperty.price.rent.amount).toLocaleString()}/${displayProperty.price.rent.period || 'month'}`
+                            ? (displayProperty.price.sale !== undefined && displayProperty.price.sale !== null && displayProperty.price.sale !== ''
+                              ? (toRupee(displayProperty.price.sale) || 'N/A')
+                              : (displayProperty.price.rent?.amount !== undefined && displayProperty.price.rent?.amount !== null && displayProperty.price.rent?.amount !== '')
+                                ? (() => {
+                                  const rentAmount = toRupee(displayProperty.price.rent.amount)
+                                  return rentAmount ? `${rentAmount}/${displayProperty.price.rent.period || 'month'}` : 'N/A'
+                                })()
                                 : 'Price on request')
-                            : `₹${Number(displayProperty.price).toLocaleString()}`)
+                            : (toRupee(displayProperty.price) || 'N/A'))
                           : 'Price on request'
 
                         return (
@@ -1886,12 +1895,23 @@ export default function AdminUserDetailPage() {
                             <p className="text-xl font-black text-gray-900 leading-none">
                               {property.price
                                 ? (typeof property.price === 'object'
-                                  ? (property.price.sale
-                                    ? `₹${Number(property.price.sale).toLocaleString()}`
-                                    : property.price.rent?.amount
-                                      ? `₹${Number(property.price.rent.amount).toLocaleString()}`
-                                      : 'N/A')
-                                  : `₹${Number(property.price).toLocaleString()}`)
+                                  ? (() => {
+                                    const toRupee = (value) => {
+                                      const numeric = Number(value)
+                                      return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : null
+                                    }
+                                    if (property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
+                                      return toRupee(property.price.sale) || 'N/A'
+                                    }
+                                    if (property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
+                                      return toRupee(property.price.rent.amount) || 'N/A'
+                                    }
+                                    return 'N/A'
+                                  })()
+                                  : (() => {
+                                    const numeric = Number(property.price)
+                                    return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : 'N/A'
+                                  })())
                                 : 'N/A'}
                             </p>
                             {property.price?.rent?.amount && <p className="text-[10px] font-bold text-gray-400 text-right mt-1">/ month</p>}
@@ -2241,8 +2261,8 @@ export default function AdminUserDetailPage() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Select PDF Files *
+                          <label className="block text-sm font-bold text-gray-900 mb-2">
+                            Select PDF Files<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                           </label>
                           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-500 transition-colors bg-gray-50 hover:bg-gray-100 text-center cursor-pointer relative">
                             <input
@@ -2457,8 +2477,8 @@ export default function AdminUserDetailPage() {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -2469,7 +2489,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Description
                   </label>
                   <textarea
@@ -2481,7 +2501,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Due Date
                   </label>
                   <input
@@ -2492,7 +2512,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Task Type
                   </label>
                   <select
@@ -2508,7 +2528,7 @@ export default function AdminUserDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Priority
                   </label>
                   <select
@@ -2571,8 +2591,8 @@ export default function AdminUserDetailPage() {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -2583,7 +2603,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Description
                   </label>
                   <textarea
@@ -2595,8 +2615,8 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reminder Date & Time *
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Reminder Date & Time<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="datetime-local"
@@ -2675,8 +2695,8 @@ export default function AdminUserDetailPage() {
                 </div>
                 <div className="p-6 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Select Property *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Select Property<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     {uniqueProperties.length === 0 ? (
                       <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -2718,8 +2738,8 @@ export default function AdminUserDetailPage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Scheduled Date *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Scheduled Date<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="date"
@@ -2730,8 +2750,8 @@ export default function AdminUserDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Scheduled Time *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Scheduled Time<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="time"
@@ -2786,7 +2806,7 @@ export default function AdminUserDetailPage() {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Feedback
                   </label>
                   <textarea
@@ -2798,7 +2818,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Interest Level
                   </label>
                   <select
@@ -2813,7 +2833,7 @@ export default function AdminUserDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Next Action
                   </label>
                   <input
@@ -2869,15 +2889,15 @@ export default function AdminUserDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Feedback</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Feedback</label>
                   <p className="text-gray-900 whitespace-pre-wrap">{viewCompletedVisit.feedback || '—'}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Interest Level</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Interest Level</label>
                   <p className="text-gray-900 capitalize">{viewCompletedVisit.interestLevel ? viewCompletedVisit.interestLevel.replace('_', ' ') : '—'}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Next Action</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Next Action</label>
                   <p className="text-gray-900">{viewCompletedVisit.nextAction || '—'}</p>
                 </div>
               </div>
@@ -2911,7 +2931,7 @@ export default function AdminUserDetailPage() {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Feedback</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Feedback</label>
                   <textarea
                     value={visitCompletionData.feedback}
                     onChange={(e) => setVisitCompletionData({ ...visitCompletionData, feedback: e.target.value })}
@@ -2921,7 +2941,7 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Interest Level</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Interest Level</label>
                   <select
                     value={visitCompletionData.interestLevel}
                     onChange={(e) => setVisitCompletionData({ ...visitCompletionData, interestLevel: e.target.value })}
@@ -2934,7 +2954,7 @@ export default function AdminUserDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Next Action</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Next Action</label>
                   <input
                     type="text"
                     value={visitCompletionData.nextAction}
@@ -2998,8 +3018,8 @@ export default function AdminUserDetailPage() {
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Transaction Type *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Transaction Type<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <select
                       value={bookingData.type}
@@ -3011,8 +3031,8 @@ export default function AdminUserDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount (₹) *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Amount (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="number"
@@ -3024,20 +3044,21 @@ export default function AdminUserDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Transaction Date *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Transaction Date<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="date"
                       value={bookingData.transactionDate}
+                      max={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setBookingData({ ...bookingData, transactionDate: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Payment Method *
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
+                      Payment Method<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <select
                       value={bookingData.paymentMethod}
@@ -3052,7 +3073,7 @@ export default function AdminUserDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
                       Unit Number
                     </label>
                     <input
@@ -3064,14 +3085,14 @@ export default function AdminUserDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
                       Commission Percentage (%)
                     </label>
                     <input
                       type="number"
                       value={bookingData.commissionPercentage}
                       onChange={(e) => setBookingData({ ...bookingData, commissionPercentage: e.target.value })}
-                      placeholder="2"
+                      placeholder="Enter commission %"
                       min="0"
                       max="100"
                       step="0.1"
@@ -3080,7 +3101,7 @@ export default function AdminUserDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
                     Notes
                   </label>
                   <textarea
@@ -3177,8 +3198,8 @@ export default function AdminUserDetailPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Amount Paid (₹) *
+                      <label className="block text-sm font-bold text-gray-900 mb-1">
+                        Amount Paid (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="number"
@@ -3203,8 +3224,8 @@ export default function AdminUserDetailPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Due Amount (₹) *
+                      <label className="block text-sm font-bold text-gray-900 mb-1">
+                        Due Amount (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="number"
@@ -3231,12 +3252,13 @@ export default function AdminUserDetailPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Date *
+                      <label className="block text-sm font-bold text-gray-900 mb-1">
+                        Payment Date<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="date"
                         value={finalizationData.paymentDate}
+                        max={new Date().toISOString().split('T')[0]}
                         onChange={(e) => setFinalizationData({ ...finalizationData, paymentDate: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                         required
@@ -3244,8 +3266,8 @@ export default function AdminUserDetailPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Method *
+                      <label className="block text-sm font-bold text-gray-900 mb-1">
+                        Payment Method<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <select
                         value={finalizationData.paymentMethod}
@@ -3265,7 +3287,7 @@ export default function AdminUserDetailPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
                       Transaction Reference / Receipt Number
                     </label>
                     <input
@@ -3279,7 +3301,7 @@ export default function AdminUserDetailPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-bold text-gray-900 mb-1">
                       Additional Notes
                     </label>
                     <textarea
@@ -3359,6 +3381,7 @@ export default function AdminUserDetailPage() {
         )}
         </div>
       </div>
+      <ConfirmDialog />
     </DashboardLayout>
   )
 }

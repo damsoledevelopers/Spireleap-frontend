@@ -5,9 +5,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { Plus, Edit, Trash2, Search, Image, Camera, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useConfirmDialog } from '../Common/useConfirmDialog'
 
 export default function BannerManagement() {
   const { checkPermission } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [banners, setBanners] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -19,7 +21,7 @@ export default function BannerManagement() {
     image: '',
     link: '',
     position: 'homepage',
-    order: 0,
+    order: '',
     isActive: true,
     startDate: '',
     endDate: ''
@@ -73,12 +75,17 @@ export default function BannerManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const orderNum =
+      formData.order === '' || formData.order == null || Number.isNaN(Number(formData.order))
+        ? 0
+        : Number(formData.order)
+    const payload = { ...formData, order: orderNum }
     try {
       if (editingBanner) {
-        await api.put(`/cms/banners/${editingBanner._id}`, formData)
+        await api.put(`/cms/banners/${editingBanner._id}`, payload)
         toast.success('Banner updated successfully')
       } else {
-        await api.post('/cms/banners', formData)
+        await api.post('/cms/banners', payload)
         toast.success('Banner created successfully')
       }
       setShowModal(false)
@@ -97,7 +104,7 @@ export default function BannerManagement() {
       image: banner.image || '',
       link: banner.link || '',
       position: banner.position || 'homepage',
-      order: banner.order || 0,
+      order: Number.isFinite(Number(banner.order)) ? Number(banner.order) : '',
       isActive: banner.isActive !== false,
       startDate: banner.startDate ? new Date(banner.startDate).toISOString().split('T')[0] : '',
       endDate: banner.endDate ? new Date(banner.endDate).toISOString().split('T')[0] : ''
@@ -106,7 +113,13 @@ export default function BannerManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this banner?')) return
+    const ok = await confirm({
+      title: 'Delete Banner',
+      message: 'Are you sure you want to delete this banner?',
+      confirmText: 'Delete',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       await api.delete(`/cms/banners/${id}`)
       toast.success('Banner deleted successfully')
@@ -122,7 +135,7 @@ export default function BannerManagement() {
       image: '',
       link: '',
       position: 'homepage',
-      order: 0,
+      order: '',
       isActive: true,
       startDate: '',
       endDate: ''
@@ -217,17 +230,18 @@ export default function BannerManagement() {
               <h2 className="text-2xl font-bold mb-4">{editingBanner ? 'Edit Banner' : 'Create New Banner'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Title<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     required
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    placeholder="Enter title"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banner Image *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Banner Image<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                   <div className="flex gap-2">
                     <div className="flex-1 relative">
                       <input
@@ -236,7 +250,7 @@ export default function BannerManagement() {
                         value={formData.image}
                         onChange={(e) => setFormData({ ...formData, image: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                        placeholder="Image URL"
+                        placeholder="Enter image URL"
                       />
                     </div>
                     <label className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors">
@@ -269,17 +283,18 @@ export default function BannerManagement() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Link</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Link</label>
                   <input
                     type="url"
                     value={formData.link}
                     onChange={(e) => setFormData({ ...formData, link: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    placeholder="Enter link"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Position</label>
                     <select
                       value={formData.position}
                       onChange={(e) => setFormData({ ...formData, position: e.target.value })}
@@ -291,18 +306,28 @@ export default function BannerManagement() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Order</label>
                     <input
                       type="number"
-                      value={formData.order}
-                      onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })}
+                      min={0}
+                      placeholder="Enter order"
+                      value={formData.order === '' ? '' : formData.order}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        if (raw === '') {
+                          setFormData({ ...formData, order: '' })
+                          return
+                        }
+                        const n = parseInt(raw, 10)
+                        setFormData({ ...formData, order: Number.isNaN(n) ? '' : n })
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Start Date</label>
                     <input
                       type="date"
                       value={formData.startDate}
@@ -311,7 +336,7 @@ export default function BannerManagement() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">End Date</label>
                     <input
                       type="date"
                       value={formData.endDate}
@@ -328,7 +353,7 @@ export default function BannerManagement() {
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Active</span>
+                    <span className="text-sm font-bold text-gray-900">Active</span>
                   </label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -352,6 +377,7 @@ export default function BannerManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   )
 }
