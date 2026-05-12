@@ -609,6 +609,7 @@ export default function AdminLeadsPage() {
     try {
       setLoadingMetrics(true)
       const params = new URLSearchParams()
+      params.append('_t', String(Date.now()))
 
       // Add active filters to the metrics request
       Object.entries(filters).forEach(([key, value]) => {
@@ -630,6 +631,65 @@ export default function AdminLeadsPage() {
     } finally {
       setLoadingMetrics(false)
     }
+  }
+
+  const applyLocalConversionMetrics = (convertedLead) => {
+    if (!convertedLead) return
+
+    setDashboardMetrics((prev) => {
+      if (!prev || typeof prev !== 'object') return prev
+
+      const safeTotal = Math.max(0, Number(prev.totalLeads || 0))
+      const safeBooked = Math.max(0, Number(prev.bookedLeads || 0))
+      const safeClosed = Math.max(0, Number(prev.closedLeads || 0))
+      const safeConverted = Math.max(0, Number(prev.convertedLeads || 0))
+
+      const nextTotal = Math.max(0, safeTotal - 1)
+      const nextConverted = safeConverted + 1
+      const nextSuccessful = safeBooked + safeClosed + nextConverted
+      const nextConversionRate = nextTotal > 0 ? (nextSuccessful / nextTotal) * 100 : 0
+
+      const sourceKey = String(convertedLead.source || '').trim()
+      const leadSourcePerformance = { ...(prev.leadSourcePerformance || {}) }
+      if (sourceKey && leadSourcePerformance[sourceKey]) {
+        const sourceData = leadSourcePerformance[sourceKey] || {}
+        const sourceTotal = Math.max(0, Number(sourceData.total || 0) - 1)
+        const sourceConverted = Math.max(0, Number(sourceData.converted || 0) + 1)
+        leadSourcePerformance[sourceKey] = {
+          ...sourceData,
+          total: sourceTotal,
+          converted: sourceConverted,
+          conversionRate: sourceTotal > 0 ? (sourceConverted / sourceTotal) * 100 : 0
+        }
+      }
+
+      const assignedAgentId =
+        convertedLead.assignedAgent?._id ||
+        convertedLead.assignedAgent ||
+        null
+      const salesExecutivePerformance = Array.isArray(prev.salesExecutivePerformance)
+        ? prev.salesExecutivePerformance.map((agentRow) => {
+          if (!assignedAgentId || String(agentRow.agentId) !== String(assignedAgentId)) return agentRow
+          const agentTotal = Math.max(0, Number(agentRow.totalLeads || 0) - 1)
+          const agentConverted = Math.max(0, Number(agentRow.convertedLeads || 0) + 1)
+          return {
+            ...agentRow,
+            totalLeads: agentTotal,
+            convertedLeads: agentConverted,
+            conversionRate: agentTotal > 0 ? (agentConverted / agentTotal) * 100 : 0
+          }
+        })
+        : prev.salesExecutivePerformance
+
+      return {
+        ...prev,
+        totalLeads: nextTotal,
+        convertedLeads: nextConverted,
+        conversionRate: nextConversionRate,
+        leadSourcePerformance,
+        salesExecutivePerformance
+      }
+    })
   }
 
   const fetchMissedFollowUps = async () => {
@@ -1237,12 +1297,17 @@ export default function AdminLeadsPage() {
     if (!ok) return
 
     try {
+      const convertingLead =
+        allLeads.find((lead) => String(getLeadId(lead)) === String(leadId)) ||
+        leads.find((lead) => String(getLeadId(lead)) === String(leadId)) ||
+        null
+
       setConvertingToClientId(leadId)
       await api.post(`/leads/${leadId}/convert-to-client`, {})
       toast.success('Lead converted to client successfully.')
       setDetailsLead(null)
+      applyLocalConversionMetrics(convertingLead)
       fetchLeads()
-      fetchDashboardMetrics()
       fetchMissedFollowUps()
     } catch (error) {
       console.error('Convert to client error:', error)
@@ -1819,7 +1884,7 @@ export default function AdminLeadsPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
             </div>
           ) : dashboardMetrics ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-sm p-4 border-l-4 border-green-500">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1847,6 +1912,15 @@ export default function AdminLeadsPage() {
                     <p className="text-xs text-gray-600 mt-1">Booked / closed / converted</p>
                   </div>
                   <Target className="h-10 w-10 text-purple-500 opacity-80" />
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg shadow-sm p-4 border-l-4 border-indigo-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Converted Leads</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardMetrics.convertedLeads || 0}</p>
+                  </div>
+                  <UserCheck className="h-10 w-10 text-indigo-500 opacity-80" />
                 </div>
               </div>
               <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-sm p-4 border-l-4 border-orange-500">

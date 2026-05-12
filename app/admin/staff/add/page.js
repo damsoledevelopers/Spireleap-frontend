@@ -13,6 +13,11 @@ import SearchableSelect from '../../../../components/Common/SearchableSelect'
 import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
 import { validateConfirmPassword, validateEmail, validateName, validatePassword } from '../../../../lib/validation'
 import { scrollToFirstErrorField } from '../../../../lib/scrollToError'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../../lib/postalCode'
 
 export default function AddStaffPage() {
   const { user, loading: authLoading } = useAuth()
@@ -48,12 +53,6 @@ export default function AddStaffPage() {
 
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
 
   useEffect(() => {
     fetchCountries()
@@ -122,7 +121,6 @@ export default function AddStaffPage() {
   const fetchCities = async (country, state) => {
     if (!country || !state) {
       setGeo((p) => ({ ...p, cities: [] }))
-      setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
       return
     }
     try {
@@ -151,7 +149,6 @@ export default function AddStaffPage() {
     }
   }
 
-
   if (authLoading) {
     return (
       <DashboardLayout>
@@ -177,27 +174,73 @@ export default function AddStaffPage() {
     )
   }
 
+  // const handleInputChange = (field, value) => {
+  //   const keys = field.split('.')
+  //   if (keys.length === 1) {
+  //     setFormData({ ...formData, [field]: value })
+  //   } else if (keys.length === 2) {
+  //     setFormData({
+  //       ...formData,
+  //       [keys[0]]: { ...formData[keys[0]], [keys[1]]: value }
+  //     })
+  //   } else if (keys.length === 3) {
+  //     setFormData({
+  //       ...formData,
+  //       [keys[0]]: {
+  //         ...formData[keys[0]],
+  //         [keys[1]]: {
+  //           ...formData[keys[0]][keys[1]],
+  //           [keys[2]]: value
+  //         }
+  //       }
+  //     })
+  //   }
+  //   if (errors[field]) {
+  //     setErrors((prev) => {
+  //       const next = { ...prev }
+  //       delete next[field]
+  //       return next
+  //     })
+  //   }
+  // }
+
   const handleInputChange = (field, value) => {
     const keys = field.split('.')
-    if (keys.length === 1) {
-      setFormData({ ...formData, [field]: value })
-    } else if (keys.length === 2) {
-      setFormData({
-        ...formData,
-        [keys[0]]: { ...formData[keys[0]], [keys[1]]: value }
-      })
-    } else if (keys.length === 3) {
-      setFormData({
-        ...formData,
-        [keys[0]]: {
-          ...formData[keys[0]],
-          [keys[1]]: {
-            ...formData[keys[0]][keys[1]],
-            [keys[2]]: value
+
+    setFormData((prev) => {
+      if (keys.length === 1) {
+        return {
+          ...prev,
+          [field]: value
+        }
+      }
+
+      if (keys.length === 2) {
+        return {
+          ...prev,
+          [keys[0]]: {
+            ...prev[keys[0]],
+            [keys[1]]: value
           }
         }
-      })
-    }
+      }
+
+      if (keys.length === 3) {
+        return {
+          ...prev,
+          [keys[0]]: {
+            ...prev[keys[0]],
+            [keys[1]]: {
+              ...prev[keys[0]][keys[1]],
+              [keys[2]]: value
+            }
+          }
+        }
+      }
+
+      return prev
+    })
+
     if (errors[field]) {
       setErrors((prev) => {
         const next = { ...prev }
@@ -217,8 +260,8 @@ export default function AddStaffPage() {
     nextErrors.email = validateEmail(formData.email, 'Email')
     nextErrors.password = validatePassword(formData.password)
     nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
-    if (!isValidZip(formData.address?.zipCode)) {
-      nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+    if (!isValidOptionalPostalDigits(formData.address?.zipCode)) {
+      nextErrors['address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
     }
     const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : undefined
     if (formData.phone && !e164Phone) {
@@ -244,7 +287,18 @@ export default function AddStaffPage() {
         role: 'staff',
         phone: formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : undefined,
         isActive: formData.isActive,
-        address: Object.values(formData.address).some(v => v) ? formData.address : undefined,
+        // address: Object.values(formData.address).some(v => v) ? formData.address : undefined,
+        address: (() => {
+          const cleaned = { ...formData.address }
+
+          Object.keys(cleaned).forEach((key) => {
+            if (!cleaned[key]) {
+              delete cleaned[key]
+            }
+          })
+
+          return Object.keys(cleaned).length ? cleaned : undefined
+        })(),
         staffInfo: {
           department: formData.staffInfo.department || undefined,
           position: formData.staffInfo.position || undefined,
@@ -380,7 +434,7 @@ export default function AddStaffPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                  name="password"
+                    name="password"
                     required
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
@@ -407,8 +461,8 @@ export default function AddStaffPage() {
                 </label>
                 <div className="relative">
                   <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    name="confirmPassword"
                     required
                     value={formData.confirmPassword}
                     onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
@@ -418,10 +472,10 @@ export default function AddStaffPage() {
                   />
                   <button
                     type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 {errors.confirmPassword && (
@@ -558,13 +612,13 @@ export default function AddStaffPage() {
                   type="text"
                   name="address.zipCode"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizePostalDigits(e.target.value))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors['address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="Enter ZIP code"
                 />
-                {formData.address.zipCode && !isValidZip(formData.address.zipCode) && (
+                {formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode) && (
                   <p className="mt-1 text-xs font-semibold text-red-600">
-                    ZIP Code must be 5 digits or 9 digits (ZIP+4)
+                    {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                   </p>
                 )}
               </div>

@@ -676,12 +676,20 @@ export default function FooterManagement() {
             {/* Predefined Copyright Text - Read Only */}
             <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-xl border-2 border-gray-200">
               <label className="block text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <span className="text-primary-600">🔒</span>
+                <span className="text-primary-600">🔒</span>  
                 Predefined Copyright Text (Fixed)
               </label>
               <div className="bg-white px-4 py-3 rounded-lg border-2 border-gray-300 shadow-inner">
                 <p className="text-gray-800 font-medium">
-                  © 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥ Spireleap Innovations
+                  © 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥{' '}
+                  <a
+                    href="https://spireleap.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-700 hover:text-primary-800 underline"
+                  >
+                    Spireleap Innovations
+                  </a>
                 </p>
               </div>
               <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
@@ -713,7 +721,17 @@ export default function FooterManagement() {
               </p>
               <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-inner">
                 <p className="text-sm text-gray-800 leading-relaxed">
-                  <span className="font-semibold text-gray-700">© 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥ Spireleap Innovations</span>
+                  <span className="font-semibold text-gray-700">
+                    © 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥{' '}
+                  </span>
+                  <a
+                    href="https://spireleap.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-primary-700 hover:text-primary-800 underline"
+                  >
+                    Spireleap Innovations
+                  </a>
                   {formData.additionalContent && (
                     <span className="text-gray-900 font-medium"> {formData.additionalContent}</span>
                   )}

@@ -299,12 +299,12 @@ export default function ContactPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-bold text-gray-900 mb-2">
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-bold text-gray-900 mb-2">
                         Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
-                      </label>
-                      <input
+                      <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                    </label>
+                    <input
                         type="email"
                         id="email"
                         name="email"
@@ -314,13 +314,12 @@ export default function ContactPage() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                         placeholder="Enter email"
                       />
-                    </div>
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-bold text-gray-900 mb-2">
-                        Phone
-                      </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">                   
+                    <div className="md:col-span-2">
                       <PhoneField
-                        label=""
+                        label="Phone Number"
                         countryCodeName="phoneCountryCode"
                         phoneName="phone"
                         countryCodeValue={phoneCountryCode}

@@ -148,7 +148,7 @@ function PropertyImageGallery({ title, images }) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      <div className="relative h-72 sm:h-[520px] bg-gray-200">
+      <div className="relative h-72 sm:h-[520px] bg-gray-200 overflow-hidden">
         <img
           src={activeUrl || '/placeholder-property.jpg'}
           alt={title || `Property image ${activeIndex + 1}`}
@@ -749,7 +749,7 @@ export default function PropertyDetailPage() {
                             <img
                               src={qrImageSrc}
                               alt="Uploaded listing QR code"
-                              className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+                              className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg border border-gray-200 bg-white p-3 shadow-sm overflow-hidden"
                             />
                           </div>
                         )}
@@ -1021,7 +1021,9 @@ export default function PropertyDetailPage() {
                 <h2 className="text-xl font-semibold mb-4">Agency</h2>
                 <div className="flex items-center gap-3">
                   {property.agency.logo && (
-                    <img src={property.agency.logo} alt={property.agency.name} className="w-12 h-12 object-contain" />
+                    <div className="w-12 h-12 overflow-hidden rounded bg-white border border-gray-200">
+                      <img src={property.agency.logo} alt={property.agency.name} className="w-full h-full object-contain" />
+                    </div>
                   )}
                   <div>
                     <h3 className="font-semibold text-gray-900">

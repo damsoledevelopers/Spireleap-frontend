@@ -20,7 +20,9 @@ import {
   User,
   DollarSign,
   Package,
-  Eye
+  Eye,
+  ExternalLink,
+  QrCode
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -71,6 +73,8 @@ export default function AdminPropertyViewPage() {
     return toCurrency(price) || 'N/A'
   }
 
+  const hasValue = (value) => value !== undefined && value !== null && String(value).trim() !== ''
+
   const getImageUrl = (image) => {
     if (typeof image === 'string') return image
     return image?.url || image
@@ -85,6 +89,13 @@ export default function AdminPropertyViewPage() {
   }
 
   const orderedImages = getOrderedImages()
+  const regulatory = property?.regulatoryInformation || {}
+  const location = property?.location || {}
+  const specifications = property?.specifications || {}
+  const amenityNames = Array.isArray(property?.amenities)
+    ? property.amenities.map((a) => (typeof a === 'string' ? a : a?.name)).filter(Boolean)
+    : []
+  const categoryName = typeof property?.category === 'object' ? property?.category?.name : property?.category
 
   useEffect(() => {
     setActiveImageIndex(0)
@@ -152,12 +163,12 @@ export default function AdminPropertyViewPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Images */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="relative h-96 bg-gray-200">
+              <div className="relative h-96 bg-gray-200 overflow-hidden">
                 {activeImage ? (
                   <img
                     src={getImageUrl(activeImage)}
                     alt={property.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                     onError={(e) => {
                       e.target.src = '/placeholder-property.jpg'
                     }}
@@ -206,7 +217,7 @@ export default function AdminPropertyViewPage() {
                       <img
                         src={getImageUrl(img)}
                         alt={`${property.title} ${idx + 1}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                         onError={(e) => {
                           e.target.style.display = 'none'
                         }}
@@ -244,6 +255,24 @@ export default function AdminPropertyViewPage() {
               <div className="border-t pt-4 mt-4">
                 <h3 className="text-lg font-semibold mb-4">Description</h3>
                 <p className="text-gray-700 whitespace-pre-wrap">{property.description || 'No description available'}</p>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-lg font-semibold mb-4">Complete Location</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <p><span className="text-gray-500">Address:</span> <span className="text-gray-900">{location.address || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">City:</span> <span className="text-gray-900">{location.city || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">State:</span> <span className="text-gray-900">{location.state || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">Country:</span> <span className="text-gray-900">{location.country || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">Zip Code:</span> <span className="text-gray-900">{location.zipCode || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">Neighborhood:</span> <span className="text-gray-900">{location.neighborhood || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">Landmark:</span> <span className="text-gray-900">{location.landmark || 'N/A'}</span></p>
+                  <p><span className="text-gray-500">Coordinates:</span> <span className="text-gray-900">
+                    {hasValue(location.coordinates?.lat) && hasValue(location.coordinates?.lng)
+                      ? `${location.coordinates.lat}, ${location.coordinates.lng}`
+                      : 'N/A'}
+                  </span></p>
+                </div>
               </div>
             </div>
 
@@ -288,6 +317,52 @@ export default function AdminPropertyViewPage() {
                   <span className="text-sm text-gray-600">Year Built: {property.specifications.yearBuilt}</span>
                 </div>
               )}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <p><span className="text-gray-500">Balconies:</span> <span className="text-gray-900">{specifications.balconies ?? 0}</span></p>
+                <p><span className="text-gray-500">Living Room:</span> <span className="text-gray-900">{specifications.livingRoom ?? 0}</span></p>
+                <p><span className="text-gray-500">Floors:</span> <span className="text-gray-900">{specifications.floors ?? 'N/A'}</span></p>
+                <p><span className="text-gray-500">Lot Size:</span> <span className="text-gray-900">
+                  {hasValue(specifications.lotSize?.value)
+                    ? `${specifications.lotSize.value} ${specifications.lotSize.unit || ''}`.trim()
+                    : 'N/A'}
+                </span></p>
+                <p><span className="text-gray-500">Unfurnished:</span> <span className="text-gray-900">{specifications.unfurnished ?? 0}</span></p>
+                <p><span className="text-gray-500">Semi-Furnished:</span> <span className="text-gray-900">{specifications.semiFurnished ?? 0}</span></p>
+                <p><span className="text-gray-500">Fully Furnished:</span> <span className="text-gray-900">{specifications.fullyFurnished ?? 0}</span></p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-semibold mb-4">Regulatory Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <p><span className="text-gray-500">Reference:</span> <span className="text-gray-900">{regulatory.reference || 'N/A'}</span></p>
+                <p><span className="text-gray-500">Listed At:</span> <span className="text-gray-900">{regulatory.listedAt ? new Date(regulatory.listedAt).toLocaleDateString() : 'N/A'}</span></p>
+                <p><span className="text-gray-500">Broker License:</span> <span className="text-gray-900">{regulatory.brokerLicense || 'N/A'}</span></p>
+                <p><span className="text-gray-500">Agency Name:</span> <span className="text-gray-900">{regulatory.agencyName || 'N/A'}</span></p>
+                <p><span className="text-gray-500">Zone Name:</span> <span className="text-gray-900">{regulatory.zoneName || 'N/A'}</span></p>
+                <p><span className="text-gray-500">Agent License:</span> <span className="text-gray-900">{regulatory.agentLicense || 'N/A'}</span></p>
+                <p><span className="text-gray-500">DLD Permit:</span> <span className="text-gray-900">{regulatory.dldPermitNumber || 'N/A'}</span></p>
+                <p><span className="text-gray-500">QR Value:</span> <span className="text-gray-900 break-all">{regulatory.qrValue || 'N/A'}</span></p>
+              </div>
+              {regulatory.qrImage && (
+                <div className="mt-4 flex items-start gap-4">
+                  <div className="border rounded-lg p-2 bg-white w-28 h-28 overflow-hidden">
+                    <img src={getImageUrl(regulatory.qrImage)} alt="QR" className="w-full h-full object-contain" />
+                  </div>
+                  {regulatory.qrValue && (
+                    <a
+                      href={/^https?:\/\//i.test(regulatory.qrValue) ? regulatory.qrValue : `https://${regulatory.qrValue}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                    >
+                      <QrCode className="h-4 w-4" />
+                      <span>Open QR Link</span>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -308,6 +383,16 @@ export default function AdminPropertyViewPage() {
               <p className="text-sm text-gray-500 capitalize mt-1">
                 Type: {property.propertyType}
               </p>
+              {hasValue(property.price?.currency) && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Currency: {property.price.currency}
+                </p>
+              )}
+              {property.price?.rent?.amount && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Rent Cycle: {property.price.rent.period || 'monthly'}
+                </p>
+              )}
             </div>
 
             {/* Agency & Agent Info */}
@@ -342,6 +427,32 @@ export default function AdminPropertyViewPage() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold mb-4">Additional Information</h3>
               <div className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Category:</span>
+                  <span className="text-gray-900 text-right">{categoryName || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Amenities:</span>
+                  <span className="text-gray-900 text-right">{amenityNames.length ? amenityNames.join(', ') : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Tags:</span>
+                  <span className="text-gray-900 text-right">{Array.isArray(property.tags) && property.tags.length ? property.tags.join(', ') : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Virtual Tour:</span>
+                  <span className="text-gray-900 text-right">
+                    {property.virtualTour?.url ? (
+                      <a href={property.virtualTour.url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
+                        {property.virtualTour.type || '3D Tour'}
+                      </a>
+                    ) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Videos:</span>
+                  <span className="text-gray-900">{Array.isArray(property.videos) ? property.videos.filter((v) => v?.url).length : 0}</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Property ID:</span>
                   <span className="text-gray-900 font-mono text-xs">{property._id}</span>

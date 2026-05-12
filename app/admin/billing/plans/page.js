@@ -562,17 +562,17 @@ export default function AdminBillingPlansPage() {
         </div>
 
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <div className="absolute inset-0 bg-black/40" onClick={closeModal} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
-              <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl my-4 sm:my-0 max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b shrink-0">
                 <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
                 <button onClick={closeModal} className="p-2 rounded-md hover:bg-gray-100">
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <form onSubmit={savePlan} className="p-6 space-y-4">
+              <form onSubmit={savePlan} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="form-label">
@@ -710,7 +710,7 @@ export default function AdminBillingPlansPage() {
                   />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-white border-t border-gray-100 mt-6 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3">
                   <button type="button" className="btn btn-secondary" onClick={closeModal}>
                     Cancel
                   </button>

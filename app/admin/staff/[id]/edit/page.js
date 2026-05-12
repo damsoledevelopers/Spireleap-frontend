@@ -13,6 +13,11 @@ import SearchableSelect from '../../../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../../lib/phone'
 import { scrollToFirstErrorField } from '../../../../../lib/scrollToError'
 import { validateEmail, validateName, validatePassword } from '../../../../../lib/validation'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../../../lib/postalCode'
 
 export default function EditStaffPage() {
   const params = useParams()
@@ -46,13 +51,6 @@ export default function EditStaffPage() {
     }
   })
 
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
-
   useEffect(() => {
     fetchStaff()
   }, [params.id])
@@ -76,7 +74,7 @@ export default function EditStaffPage() {
       setLoading(true)
       const response = await api.get(`/users/${params.id}`)
       const staff = response.data
-      
+
       // Verify this is a staff member
       if (staff.role !== 'staff') {
         toast.error('This user is not a staff member')
@@ -113,6 +111,12 @@ export default function EditStaffPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (formData.address.country && formData.address.state) {
+      fetchCities(formData.address.country, formData.address.state)
+    }
+  }, [formData.address.country, formData.address.state])
 
   const fetchCountries = async () => {
     try {
@@ -165,9 +169,13 @@ export default function EditStaffPage() {
   }
 
   const fetchCities = async (country, state) => {
+    // if (!country || !state) {
+    //   setGeo((p) => ({ ...p, cities: [] }))
+    //   setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
+    //   return
+    // }
     if (!country || !state) {
       setGeo((p) => ({ ...p, cities: [] }))
-      setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
       return
     }
     try {
@@ -195,7 +203,6 @@ export default function EditStaffPage() {
       setGeoLoading((p) => ({ ...p, cities: false }))
     }
   }
-
 
   const handleInputChange = (field, value) => {
     const keys = field.split('.')
@@ -239,8 +246,8 @@ export default function EditStaffPage() {
       nextErrors.firstName = validateName(formData.firstName, 'First name')
       nextErrors.lastName = validateName(formData.lastName, 'Last name')
       nextErrors.email = validateEmail(formData.email, 'Email')
-      if (!isValidZip(formData.address?.zipCode)) {
-        nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      if (!isValidOptionalPostalDigits(formData.address?.zipCode)) {
+        nextErrors['address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
       }
       const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : undefined
       if (formData.phone && !e164Phone) {
@@ -461,7 +468,8 @@ export default function EditStaffPage() {
                 </label>
                 <SearchableSelect
                   value={formData.isActive ? 'true' : 'false'}
-                  onChange={(e) => handleInputChange('isActive', e.target.value === 'true')}
+                  // onChange={(e) => handleInputChange('isActive', e.target.value === 'true')}
+                  onChange={(value) => handleInputChange('isActive', value === 'true')}
                   options={[
                     { value: 'true', label: 'Active' },
                     { value: 'false', label: 'Inactive' }
@@ -487,7 +495,7 @@ export default function EditStaffPage() {
                 </label>
                 <SearchableSelect
                   value={formData.staffInfo.department}
-                  onChange={(e) => handleInputChange('staffInfo.department', e.target.value)}
+                  onChange={(e) => handleInputChange('staffInfo.department', e.target.value)}                  
                   searchable={false}
                   options={[
                     { value: '', label: 'Select Department' },
@@ -602,13 +610,13 @@ export default function EditStaffPage() {
                   type="text"
                   name="address.zipCode"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizePostalDigits(e.target.value))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors['address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="Enter ZIP code"
                 />
-                {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || errors['address.zipCode'] ? (
+                {(formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) || errors['address.zipCode'] ? (
                   <p className="mt-1 text-xs font-semibold text-red-600">
-                    {errors['address.zipCode'] || 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'}
+                    {errors['address.zipCode'] || OPTIONAL_POSTAL_DIGITS_MESSAGE}
                   </p>
                 ) : null}
               </div>

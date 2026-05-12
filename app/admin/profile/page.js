@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -19,7 +19,13 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import {
+    sanitizePostalDigits,
+    isValidOptionalPostalDigits,
+    OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../lib/postalCode'
 
 const CLOUDINARY_PROFILE_MAX_BYTES = 5 * 1024 * 1024 // must match backend Cloudinary route
 const DISK_PROFILE_MAX_BYTES = 10 * 1024 * 1024 // matches multer disk limit for /upload/profile-image
@@ -43,6 +49,8 @@ export default function ProfilePage() {
     const [saving, setSaving] = useState(false)
     const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
     const [uploading, setUploading] = useState(false)
+    const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+    const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -64,6 +72,10 @@ export default function ProfilePage() {
             yearsOfExperience: 0
         }
     })
+
+    useEffect(() => {
+        fetchCountries()
+    }, [])
 
     useEffect(() => {
         if (!user) {
@@ -126,6 +138,102 @@ export default function ProfilePage() {
             cancelled = true
         }
     }, [user])
+
+    useEffect(() => {
+        const country = String(formData.address?.country || '').trim()
+        const state = String(formData.address?.state || '').trim()
+        if (country) {
+            fetchStates(country)
+        } else {
+            setGeo((p) => ({ ...p, states: [], cities: [] }))
+        }
+        if (country && state) {
+            fetchCities(country, state)
+        } else {
+            setGeo((p) => ({ ...p, cities: [] }))
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.address?.country, formData.address?.state])
+
+    const mergedStates = useMemo(() => {
+        return Array.from(new Set([...(geo.states || []), String(formData.address?.state || '').trim()].filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b))
+    }, [geo.states, formData.address?.state])
+
+    const mergedCities = useMemo(() => {
+        return Array.from(new Set([...(geo.cities || []), String(formData.address?.city || '').trim()].filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b))
+    }, [geo.cities, formData.address?.city])
+
+    const fetchCountries = async () => {
+        try {
+            setGeoLoading((p) => ({ ...p, countries: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+            const data = await res.json()
+            const countries = Array.isArray(data?.data)
+                ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean)
+                : []
+            countries.sort((a, b) => a.localeCompare(b))
+            setGeo((p) => ({ ...p, countries }))
+        } catch (error) {
+            console.error('Error fetching countries:', error)
+            setGeo((p) => ({ ...p, countries: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, countries: false }))
+        }
+    }
+
+    const fetchStates = async (country) => {
+        if (!country) {
+            setGeo((p) => ({ ...p, states: [], cities: [] }))
+            return
+        }
+        try {
+            setGeoLoading((p) => ({ ...p, states: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ country })
+            })
+            const data = await res.json()
+            const states = Array.isArray(data?.data?.states)
+                ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean)
+                : []
+            states.sort((a, b) => a.localeCompare(b))
+            setGeo((p) => ({ ...p, states }))
+        } catch (error) {
+            console.error('Error fetching states:', error)
+            setGeo((p) => ({ ...p, states: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, states: false }))
+        }
+    }
+
+    const fetchCities = async (country, state) => {
+        if (!country || !state) {
+            setGeo((p) => ({ ...p, cities: [] }))
+            return
+        }
+        try {
+            setGeoLoading((p) => ({ ...p, cities: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ country, state })
+            })
+            const data = await res.json()
+            const cities = Array.isArray(data?.data)
+                ? data.data.map((c) => String(c || '').trim()).filter(Boolean)
+                : []
+            cities.sort((a, b) => a.localeCompare(b))
+            setGeo((p) => ({ ...p, cities }))
+        } catch (error) {
+            console.error('Error fetching cities:', error)
+            setGeo((p) => ({ ...p, cities: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, cities: false }))
+        }
+    }
 
     const handleInputChange = (e) => {
         const { name, value } = e.target || {}
@@ -264,8 +372,8 @@ export default function ProfilePage() {
                 setSaving(false)
                 return
             }
-            if (formData.address?.zipCode && ![5, 9].includes(String(formData.address.zipCode).length)) {
-                toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+            if (formData.address?.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) {
+                toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
                 setSaving(false)
                 return
             }
@@ -497,53 +605,96 @@ export default function ProfilePage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-900">State</label>
-                                        <input
-                                            type="text"
-                                            name="state"
-                                            value={formData.address.state}
-                                            onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    address: { ...prev.address, state: v }
-                                                }))
-                                            }}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
-                                        />
-                                    </div>
-                                    <div>
                                         <label className="block text-sm font-bold text-gray-900">Country</label>
-                                        <input
-                                            type="text"
+                                        <SearchableSelect
+                                            id="profile-country"
                                             name="country"
                                             value={formData.address.country}
                                             onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
-                                                setFormData(prev => ({
+                                                const country = String(e.target.value || '').trim()
+                                                setFormData((prev) => ({
                                                     ...prev,
-                                                    address: { ...prev.address, country: v }
+                                                    address: {
+                                                        ...prev.address,
+                                                        country,
+                                                        state: '',
+                                                        city: ''
+                                                    }
                                                 }))
+                                                setGeo((p) => ({ ...p, states: [], cities: [] }))
+                                                fetchStates(country)
                                             }}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                                            options={geo.countries.map((c) => ({ value: c, label: c }))}
+                                            disabled={geoLoading.countries}
+                                            clearOnBackspace
+                                            placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
+                                            searchable={false}
+                                            buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-900">State</label>
+                                        <SearchableSelect
+                                            id="profile-state"
+                                            name="state"
+                                            value={formData.address.state}
+                                            onChange={(e) => {
+                                                const state = String(e.target.value || '').trim()
+                                                const country = String(formData.address.country || '').trim()
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    address: {
+                                                        ...prev.address,
+                                                        state,
+                                                        city: ''
+                                                    }
+                                                }))
+                                                setGeo((p) => ({ ...p, cities: [] }))
+                                                fetchCities(country, state)
+                                            }}
+                                            options={mergedStates.map((s) => ({ value: s, label: s }))}
+                                            disabled={!formData.address.country || geoLoading.states}
+                                            clearOnBackspace
+                                            placeholder={
+                                                !formData.address.country
+                                                    ? 'Select country first'
+                                                    : geoLoading.states
+                                                      ? 'Loading states...'
+                                                      : 'Select state'
+                                            }
+                                            searchable={false}
+                                            buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
                                         />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-bold text-gray-900">City</label>
-                                        <input
-                                            type="text"
+                                        <SearchableSelect
+                                            id="profile-city"
                                             name="city"
                                             value={formData.address.city}
                                             onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/[^a-zA-Z\s.'-]/g, '')
-                                                setFormData(prev => ({
+                                                const city = String(e.target.value || '').trim()
+                                                setFormData((prev) => ({
                                                     ...prev,
-                                                    address: { ...prev.address, city: v }
+                                                    address: { ...prev.address, city }
                                                 }))
                                             }}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                                            options={mergedCities.map((c) => ({ value: c, label: c }))}
+                                            disabled={!formData.address.country || !formData.address.state || geoLoading.cities}
+                                            clearOnBackspace
+                                            placeholder={
+                                                !formData.address.country
+                                                    ? 'Select country first'
+                                                    : !formData.address.state
+                                                      ? 'Select state first'
+                                                      : geoLoading.cities
+                                                        ? 'Loading cities...'
+                                                        : 'Select city'
+                                            }
+                                            searchable={false}
+                                            buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
                                         />
                                     </div>
                                     <div>
@@ -553,7 +704,7 @@ export default function ProfilePage() {
                                             name="zipCode"
                                             value={formData.address.zipCode}
                                             onChange={(e) => {
-                                                const v = String(e.target.value || '').replace(/\D/g, '').slice(0, 9)
+                                                const v = sanitizePostalDigits(e.target.value)
                                                 setFormData(prev => ({
                                                     ...prev,
                                                     address: { ...prev.address, zipCode: v }
@@ -561,9 +712,9 @@ export default function ProfilePage() {
                                             }}
                                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
                                         />
-                                        {formData.address.zipCode && ![5, 9].includes(String(formData.address.zipCode).length) && (
+                                        {formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode) && (
                                             <p className="mt-1 text-xs font-semibold text-red-600">
-                                                Zip code must be 5 digits or 9 digits (ZIP+4)
+                                                {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                                             </p>
                                         )}
                                     </div>

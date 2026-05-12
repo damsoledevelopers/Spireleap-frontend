@@ -257,148 +257,148 @@ export function StaffPageContent() {
 
         {/* Filter Section */}
         <div className="flex items-center justify-end gap-3 flex-wrap">
-            <SearchableSelect
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              options={[
-                { value: '', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              placeholder="All Status"
-              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
-              searchPlaceholder="Search status..."
+          <SearchableSelect
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { value: '', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+            placeholder="All Status"
+            buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
+            searchPlaceholder="Search status..."
+          />
+          <SearchableSelect
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            searchable={false}
+            options={[
+              { value: '', label: 'All Departments' },
+              { value: 'accounts', label: 'Accounts' },
+              { value: 'hr', label: 'HR' },
+              { value: 'support', label: 'Support' },
+              { value: 'marketing', label: 'Marketing' },
+              { value: 'other', label: 'Other' }
+            ]}
+            placeholder="All Departments"
+            buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[180px] bg-white"
+          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search staff..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+              }}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm min-w-[200px]"
             />
-            <SearchableSelect
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              searchable={false}
-              options={[
-                { value: '', label: 'All Departments' },
-                { value: 'accounts', label: 'Accounts' },
-                { value: 'hr', label: 'HR' },
-                { value: 'support', label: 'Support' },
-                { value: 'marketing', label: 'Marketing' },
-                { value: 'other', label: 'Other' }
-              ]}
-              placeholder="All Departments"
-              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium min-w-[180px] bg-white"
-            />
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search staff..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                }}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm min-w-[200px]"
-              />
-            </div>
-            {/* Date Range Filter */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
-                  ? 'border-primary-500 text-gray-900'
-                  : 'border-gray-300 text-gray-700'
-                  }`}
-              >
-                <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                <span className="whitespace-nowrap">
-                  {startDate && endDate
-                    ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                    : startDate
-                      ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                      : endDate
-                        ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                        : 'Date Range'}
-                </span>
-                {startDate || endDate ? (
-                  <X
-                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setStartDate('')
-                      setEndDate('')
-                      fetchStaff()
-                    }}
-                  />
-                ) : null}
-              </button>
-              {showDatePicker && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowDatePicker(false)}
-                  />
-                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
-                        <input
-                          type="date"
-                          value={startDate}
-                          max={new Date().toISOString().split('T')[0]}
-                          onChange={(e) => {
-                            const newStartDate = e.target.value
-                            setStartDate(newStartDate)
-                            if (endDate && newStartDate && endDate < newStartDate) {
-                              setEndDate('')
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => {
-                            const newEndDate = e.target.value
-                            setEndDate(newEndDate)
-                          }}
-                          min={startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
+          </div>
+          {/* Date Range Filter */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
+                ? 'border-primary-500 text-gray-900'
+                : 'border-gray-300 text-gray-700'
+                }`}
+            >
+              <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+              <span className="whitespace-nowrap">
+                {startDate && endDate
+                  ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                  : startDate
+                    ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                    : endDate
+                      ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                      : 'Date Range'}
+              </span>
+              {startDate || endDate ? (
+                <X
+                  className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setStartDate('')
+                    setEndDate('')
+                    fetchStaff()
+                  }}
+                />
+              ) : null}
+            </button>
+            {showDatePicker && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowDatePicker(false)}
+                />
+                <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        max={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          const newStartDate = e.target.value
+                          setStartDate(newStartDate)
+                          if (endDate && newStartDate && endDate < newStartDate) {
+                            setEndDate('')
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
                     </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <button
-                        onClick={() => {
-                          setStartDate('')
-                          setEndDate('')
-                          setShowDatePicker(false)
-                          fetchStaff()
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          const newEndDate = e.target.value
+                          setEndDate(newEndDate)
                         }}
-                        className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowDatePicker(false)
-                          fetchStaff()
-                        }}
-                        className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                      >
-                        Apply
-                      </button>
+                        min={startDate || undefined}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-            {canCreateStaff && (
-              <Link href="/admin/staff/add" className="btn btn-primary whitespace-nowrap flex-shrink-0">
-                <Plus className="h-5 w-5 mr-2" />
-                Add Staff
-              </Link>
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button
+                      onClick={() => {
+                        setStartDate('')
+                        setEndDate('')
+                        setShowDatePicker(false)
+                        fetchStaff()
+                      }}
+                      className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDatePicker(false)
+                        fetchStaff()
+                      }}
+                      className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
+          </div>
+          {canCreateStaff && (
+            <Link href="/admin/staff/add" className="btn btn-primary whitespace-nowrap flex-shrink-0">
+              <Plus className="h-5 w-5 mr-2" />
+              Add Staff
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -664,6 +664,16 @@ export function StaffPageContent() {
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>
                 ),
               },
+            ],
+          },
+          {
+            title: 'Address Details',
+            items: [
+              { label: 'Street', value: detailsStaff.address?.street || '—' },
+              { label: 'City', value: detailsStaff.address?.city || '—' },
+              { label: 'State', value: detailsStaff.address?.state || '—' },
+              { label: 'Country', value: detailsStaff.address?.country || '—' },
+              { label: 'Zip Code', value: detailsStaff.address?.zipCode || '—' },
             ],
           },
           {

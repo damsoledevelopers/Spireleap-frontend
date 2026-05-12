@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Building, Plus, Edit, Trash2, Users, UserPlus, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
+import { Building, Plus, Edit, Trash2, Users, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import DetailsModal from '../../../components/Common/DetailsModal'
@@ -31,16 +31,13 @@ export function AgenciesPageContent() {
   }, [user, canViewAgencies, router])
 
   const [agencies, setAgencies] = useState([])
-  const [allAgencies, setAllAgencies] = useState([]) // Store all agencies for metrics calculation
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [agencyMetrics, setAgencyMetrics] = useState({
     totalAgencies: 0,
     activeAgencies: 0,
     inactiveAgencies: 0,
-    totalAgents: 0,
-    totalProperties: 0,
-    totalLeads: 0
+    totalAgents: 0
   })
   const [statusFilter, setStatusFilter] = useState('') // Filter by status (active/inactive)
   const [startDate, setStartDate] = useState('') // Date range filter start
@@ -182,20 +179,15 @@ export function AgenciesPageContent() {
       const allAgenciesData = agenciesRes.data?.agencies || []
       const totalFromPagination = agenciesRes.data?.pagination?.total
       const totals = agenciesRes.data?.agencyTotals
-      setAllAgencies(allAgenciesData)
 
       const totalAgents = allAgenciesData.reduce((s, a) => s + (a.stats?.totalAgents || 0), 0)
-      const totalProperties = allAgenciesData.reduce((s, a) => s + (a.stats?.totalProperties || 0), 0)
-      const totalLeads = allAgenciesData.reduce((s, a) => s + (a.stats?.totalLeads || 0), 0)
 
       setAgencyMetrics({
         totalAgencies:
           typeof totalFromPagination === 'number' ? totalFromPagination : allAgenciesData.length,
         activeAgencies: typeof totals?.active === 'number' ? totals.active : 0,
         inactiveAgencies: typeof totals?.inactive === 'number' ? totals.inactive : 0,
-        totalAgents,
-        totalProperties,
-        totalLeads
+        totalAgents
       })
     } catch (error) {
       console.error('Error fetching metrics:', error)
@@ -226,7 +218,7 @@ export function AgenciesPageContent() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Agency Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
@@ -261,24 +253,6 @@ export function AgenciesPageContent() {
                 <p className="text-2xl font-bold text-gray-900 mt-1">{agencyMetrics.totalAgents}</p>
               </div>
               <Users className="h-10 w-10 text-purple-500 opacity-80" />
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg shadow-sm p-4 border-l-4 border-teal-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 font-medium">Total Properties</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{agencyMetrics.totalProperties}</p>
-              </div>
-              <Building className="h-10 w-10 text-teal-600 opacity-80" />
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg shadow-sm p-4 border-l-4 border-amber-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 font-medium">Total Leads</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{agencyMetrics.totalLeads}</p>
-              </div>
-              <UserPlus className="h-10 w-10 text-amber-600 opacity-80" />
             </div>
           </div>
         </div>
@@ -424,54 +398,54 @@ export function AgenciesPageContent() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="w-full table-fixed divide-y divide-gray-200">
+            <div className="bg-white rounded-lg shadow overflow-x-auto">
+              <table className="w-full min-w-[1180px] table-fixed divide-y divide-gray-200">
                 <colgroup>
-                  <col className="w-16" />
-                  <col className="w-[16%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-28" />
-                  <col className="w-16" />
-                  <col className="w-16" />
-                  <col className="w-16" />
-                  <col className="w-20" />
-                  <col className="w-28" />
+                  <col style={{ width: '3.5rem' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '23%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '9%' }} />
                 </colgroup>
                 <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-3 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
                       Logo
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-3 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
                       Agency
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-3 pr-1.5 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
                       Email
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="pl-1.5 pr-3 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
                       Phone
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-2 py-3.5 text-center text-xs font-bold text-white uppercase tracking-normal whitespace-nowrap">
                       Agents
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-2.5 py-3.5 text-center text-[11px] sm:text-xs font-bold text-white uppercase tracking-normal whitespace-nowrap">
                       Properties
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-2.5 py-3.5 text-center text-[11px] sm:text-xs font-bold text-white uppercase tracking-normal whitespace-nowrap">
                       Leads
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-3 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider">
+                    <th className="px-3 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {agencies.map((agency) => (
-                    <tr key={String(agency._id)} className="hover:bg-logo-beige transition-colors">
-                      <td className="px-4 py-4">
+                    <tr key={String(agency._id)} className="hover:bg-logo-beige transition-colors align-middle">
+                      <td className="px-3 py-4 align-middle">
                         <button
                           type="button"
                           onClick={() => setDetailsAgency(agency)}
@@ -491,55 +465,61 @@ export function AgenciesPageContent() {
                           )}
                         </button>
                       </td>
-                      <td className="px-4 py-4 min-w-0">
+                      <td className="px-3 py-4 align-middle min-w-0">
                         <button
                           type="button"
                           onClick={() => setDetailsAgency(agency)}
-                          className="text-left w-full focus:outline-none"
+                          className="text-left w-full min-w-0 focus:outline-none"
                           title="View details"
                         >
-                          <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 truncate">
+                          <div className="text-sm font-semibold text-gray-900 hover:text-primary-700 line-clamp-2 break-words">
                             {agency.name}
                           </div>
                           {agency.slug && (
-                            <div className="text-xs text-gray-500 truncate">/{agency.slug}</div>
+                            <div className="text-xs text-gray-500 mt-0.5 truncate" title={`/${agency.slug}`}>
+                              /{agency.slug}
+                            </div>
                           )}
                         </button>
                       </td>
-                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agency.contact?.email || ''}>
-                        {agency.contact?.email || '—'}
+                      <td className="px-3 pr-1.5 py-4 text-left text-sm text-gray-900 align-middle min-w-0">
+                        <div className="line-clamp-2 break-all" title={agency.contact?.email || ''}>
+                          {agency.contact?.email || '—'}
+                        </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-gray-900 truncate" title={agency.contact?.phone || ''}>
-                        {agency.contact?.phone || '—'}
+                      <td className="pl-1.5 pr-3 py-4 text-left text-sm text-gray-900 align-middle min-w-0">
+                        <div className="whitespace-nowrap tabular-nums overflow-hidden text-ellipsis" title={agency.contact?.phone || ''}>
+                          {agency.contact?.phone || '—'}
+                        </div>
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {agency.stats?.totalAgents || 0}
+                      <td className="px-2 py-4 text-center align-middle">
+                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {agency.stats?.totalAgents ?? 0}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <td className="px-2.5 py-4 text-center align-middle">
+                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           {agency.stats?.totalProperties ?? 0}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900">
+                      <td className="px-2.5 py-4 text-center align-middle">
+                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-900">
                           {agency.stats?.totalLeads ?? 0}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-3 py-4 text-center align-middle">
                         {agency.isActive ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             Inactive
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-center text-sm font-medium">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="px-3 py-4 text-center text-sm font-medium align-middle">
+                        <div className="flex items-center justify-center gap-2 flex-nowrap">
                           {isSuperAdmin && (
                             <Link
                               href={`/admin/permissions?type=agency&id=${String(agency._id)}`}
@@ -693,12 +673,26 @@ export function AgenciesPageContent() {
             ],
           },
           {
+            title: 'Address',
+            items: (() => {
+              const addr = detailsAgency.contact?.address || {}
+              const v = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : '')
+              return [
+                { label: 'Street', value: v(addr.street) },
+                { label: 'Country', value: v(addr.country) },
+                { label: 'State', value: v(addr.state) },
+                { label: 'City', value: v(addr.city) },
+                { label: 'ZIP code', value: v(addr.zipCode ?? addr.zip) },
+              ]
+            })(),
+          },
+          {
             title: 'Stats',
             items: [
               { label: 'Agents', value: detailsAgency.stats?.totalAgents ?? 0 },
-              { label: 'Total properties', value: detailsAgency.stats?.totalProperties ?? 0 },
-              { label: 'Active properties', value: detailsAgency.stats?.activeProperties ?? 0 },
+              { label: 'Properties', value: detailsAgency.stats?.totalProperties ?? 0 },
               { label: 'Leads', value: detailsAgency.stats?.totalLeads ?? 0 },
+              { label: 'Active properties', value: detailsAgency.stats?.activeProperties ?? 0 },
             ],
           },
           {

@@ -10,6 +10,11 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import SearchableSelect from '../../../../components/Common/SearchableSelect'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../../lib/postalCode'
 
 // Dynamically import Google Maps to avoid SSR issues
 const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
@@ -29,7 +34,6 @@ export default function AdminAddPropertyPage() {
   const [agencies, setAgencies] = useState([])
   const [agents, setAgents] = useState([])
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
   const sanitizeDigits = (v, maxLen) => {
     const s = String(v ?? '').replace(/\D/g, '')
     return typeof maxLen === 'number' ? s.slice(0, maxLen) : s
@@ -41,11 +45,20 @@ export default function AdminAddPropertyPage() {
     if (firstDot === -1) return s
     return s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
   }
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
+
+  const [geo, setGeo] = useState({
+    countries: [],
+    states: [],
+    cities: []
+  })
+
+  const [geoLoading, setGeoLoading] = useState({
+    countries: false,
+    states: false,
+    cities: false
+  })
+
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -137,6 +150,107 @@ export default function AdminAddPropertyPage() {
     }
   }, [user])
 
+  // Load countries on mount
+  useEffect(() => {
+    fetchCountries()
+  }, [])
+
+  // Load states when country changes
+  useEffect(() => {
+    fetchStates(formData.location.country)
+  }, [formData.location.country])
+
+  // Load cities when state changes
+  useEffect(() => {
+    fetchCities(formData.location.country, formData.location.state)
+  }, [formData.location.country, formData.location.state])
+
+  // Fetch countries
+  const fetchCountries = async () => {
+    try {
+      setGeoLoading(prev => ({ ...prev, countries: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+      const countries = Array.isArray(data?.data)
+        ? data.data.map(c => c?.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo(prev => ({ ...prev, countries }))
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      setGeo(prev => ({ ...prev, countries: [] }))
+    } finally {
+      setGeoLoading(prev => ({ ...prev, countries: false }))
+    }
+  }
+
+  // Fetch states for a country
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo(prev => ({ ...prev, states: [], cities: [] }))
+      setFormData(prev => ({ ...prev, location: { ...prev.location, state: '', city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading(prev => ({ ...prev, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map(s => s?.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo(prev => ({ ...prev, states, cities: [] }))
+
+      // Reset invalid state/city
+      setFormData(prev => {
+        const currentState = prev.location.state
+        if (!currentState || states.includes(currentState)) return prev
+        return { ...prev, location: { ...prev.location, state: '', city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo(prev => ({ ...prev, states: [], cities: [] }))
+    } finally {
+      setGeoLoading(prev => ({ ...prev, states: false }))
+    }
+  }
+
+  // Fetch cities for a country/state
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo(prev => ({ ...prev, cities: [] }))
+      setFormData(prev => ({ ...prev, location: { ...prev.location, city: '' } }))
+      return
+    }
+    try {
+      setGeoLoading(prev => ({ ...prev, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo(prev => ({ ...prev, cities }))
+
+      // Reset invalid city
+      setFormData(prev => {
+        const currentCity = prev.location.city
+        if (!currentCity || cities.includes(currentCity)) return prev
+        return { ...prev, location: { ...prev.location, city: '' } }
+      })
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo(prev => ({ ...prev, cities: [] }))
+    } finally {
+      setGeoLoading(prev => ({ ...prev, cities: false }))
+    }
+  }
+
   const fetchInitialData = async () => {
     if (!user) return
 
@@ -185,6 +299,31 @@ export default function AdminAddPropertyPage() {
         }
       })
     }
+  }
+
+  const handleCountryChange = (country) => {
+    setFormData((prev) => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        country,
+        state: '',
+        city: ''
+      }
+    }))
+    setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+  }
+
+  const handleStateChange = (state) => {
+    setFormData((prev) => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        state,
+        city: ''
+      }
+    }))
+    setGeo((prev) => ({ ...prev, cities: [] }))
   }
 
   const renderSpecificationStepper = (label, field, value, maxLen = 2, placeholder = 'Add', min = 0, max) => {
@@ -354,8 +493,8 @@ export default function AdminAddPropertyPage() {
         return
       }
 
-      if (!isValidZip(formData.location?.zipCode)) {
-        toast.error('ZIP Code must be 5 digits or 9 digits (ZIP+4)')
+      if (!isValidOptionalPostalDigits(formData.location?.zipCode)) {
+        toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
         setLoading(false)
         return
       }
@@ -390,11 +529,11 @@ export default function AdminAddPropertyPage() {
           fullyFurnished: parseInt(formData.specifications.fullyFurnished, 10) || 0,
           ...(formData.specifications.area.value !== '' && formData.specifications.area.value != null
             ? {
-                area: {
-                  value: parseFloat(formData.specifications.area.value),
-                  unit: formData.specifications.area.unit
-                }
+              area: {
+                value: parseFloat(formData.specifications.area.value),
+                unit: formData.specifications.area.unit
               }
+            }
             : {}),
           parking: parseInt(formData.specifications.parking, 10) || 0,
           floors: parseInt(formData.specifications.floors, 10) || 1,
@@ -739,51 +878,72 @@ export default function AdminAddPropertyPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Address</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Address<span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.location.address}
                   onChange={(e) => handleInputChange('location.address', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="Enter street address"
                 />
               </div>
+              {/* Country */}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
-                <input
-                  type="text"
-                  value={formData.location.city}
-                  onChange={(e) => handleInputChange('location.city', sanitizeAlphaText(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Enter city"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
-                <input
-                  type="text"
-                  value={formData.location.state}
-                  onChange={(e) => handleInputChange('location.state', sanitizeAlphaText(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Enter state"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-bold text-gray-900 mb-1">Country<span className="text-red-500">*</span></label>
+                <select
+                  required
                   value={formData.location.country}
-                  onChange={(e) => handleInputChange('location.country', sanitizeAlphaText(e.target.value))}
+                  onChange={(e) => handleCountryChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="Enter country"
-                />
+                >
+                  <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                  {geo.countries.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
+
+              {/* State */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">State<span className="text-red-500">*</span></label>
+                <select
+                  required
+                  value={formData.location.state}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  disabled={!formData.location.country || geoLoading.states}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+                >
+                  <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                  {geo.states.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* City */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">City<span className="text-red-500">*</span></label>
+                <select
+                  required
+                  value={formData.location.city}
+                  onChange={(e) => handleInputChange('location.city', e.target.value)}
+                  disabled={!formData.location.state || geoLoading.cities}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+                >
+                  <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                  {geo.cities.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">ZIP Code</label>
                 <input
                   type="text"
                   value={formData.location.zipCode}
-                  onChange={(e) => handleInputChange('location.zipCode', sanitizeZip(e.target.value))}
+                  onChange={(e) => handleInputChange('location.zipCode', sanitizePostalDigits(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="Enter ZIP code"
                 />

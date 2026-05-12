@@ -50,6 +50,11 @@ import SearchableSelect from '../../../components/Common/SearchableSelect'
 import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 import { validateConfirmPassword, validateEmail, validateName, validatePassword } from '../../../lib/validation'
 import { scrollToFirstErrorField } from '../../../lib/scrollToError'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../lib/postalCode'
 
 export default function AdminUsers() {
   const { user, checkPermission } = useAuth()
@@ -152,12 +157,6 @@ export default function AdminUsers() {
   const [submitting, setSubmitting] = useState(false)
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
 
   useEffect(() => {
     fetchAdminUsers()
@@ -411,8 +410,8 @@ export default function AdminUsers() {
       if (formData.phone && !e164Phone) {
         nextErrors.phone = 'Enter a valid phone number for the selected country'
       }
-      if (!isValidZip(formData.address?.zipCode)) {
-        nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      if (!isValidOptionalPostalDigits(formData.address?.zipCode)) {
+        nextErrors['address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
       }
       Object.keys(nextErrors).forEach((k) => {
         if (!nextErrors[k]) delete nextErrors[k]
@@ -1302,7 +1301,7 @@ export default function AdminUsers() {
                         className={`form-input ${addUserErrors['address.zipCode'] ? 'border-red-500' : ''}`}
                         value={formData.address.zipCode}
                         onChange={(e) => {
-                          const cleaned = sanitizeZip(e.target.value)
+                          const cleaned = sanitizePostalDigits(e.target.value)
                           setFormData((prev) => ({
                             ...prev,
                             address: { ...prev.address, zipCode: cleaned }
@@ -1317,9 +1316,9 @@ export default function AdminUsers() {
                         }}
                         placeholder="Enter ZIP code"
                       />
-                      {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || addUserErrors['address.zipCode'] ? (
+                      {(formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) || addUserErrors['address.zipCode'] ? (
                         <p className="mt-1 text-xs font-semibold text-red-600">
-                          {addUserErrors['address.zipCode'] || 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'}
+                          {addUserErrors['address.zipCode'] || OPTIONAL_POSTAL_DIGITS_MESSAGE}
                         </p>
                       ) : null}
                     </div>

@@ -12,6 +12,11 @@ import PhoneField from '../../../../components/Common/PhoneField'
 import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
 import { validateConfirmPassword, validateEmail, validatePassword, validateRequired, validateUrlOptional } from '../../../../lib/validation'
 import { scrollToFirstErrorField } from '../../../../lib/scrollToError'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../../lib/postalCode'
 
 export default function AddAgencyPage() {
   const { user, loading: authLoading } = useAuth()
@@ -48,12 +53,6 @@ export default function AddAgencyPage() {
   })
 
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
 
   useEffect(() => {
     fetchCountries()
@@ -212,7 +211,7 @@ export default function AddAgencyPage() {
         isAddressField && ['city', 'state', 'country'].includes(grandchild)
           ? sanitizeAlphaText(value)
           : isAddressField && grandchild === 'zipCode'
-            ? sanitizeZip(value)
+            ? sanitizePostalDigits(value)
             : (type === 'checkbox' ? checked : value)
       setFormData(prev => ({
         ...prev,
@@ -349,8 +348,8 @@ export default function AddAgencyPage() {
       nextErrors.password = validatePassword(formData.password)
       nextErrors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword)
       nextErrors['contact.website'] = validateUrlOptional(formData.contact?.website, 'Website')
-      if (!isValidZip(formData.contact?.address?.zipCode)) {
-        nextErrors['contact.address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      if (!isValidOptionalPostalDigits(formData.contact?.address?.zipCode)) {
+        nextErrors['contact.address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
       }
 
       const e164Phone = buildE164Phone(phoneCountryCode, formData.contact?.phone)
@@ -370,9 +369,15 @@ export default function AddAgencyPage() {
 
       // Clean up form data - remove empty address fields and password confirmation
       const cleanedData = { ...formData }
-      if (!cleanedData.contact.address.street && 
-          !cleanedData.contact.address.city && 
-          !cleanedData.contact.address.state) {
+      // Omit address only when every field is empty (do not drop country/ZIP if street is blank)
+      const a = cleanedData.contact?.address || {}
+      const hasAddress =
+        !!(a.street && String(a.street).trim()) ||
+        !!(a.city && String(a.city).trim()) ||
+        !!(a.state && String(a.state).trim()) ||
+        !!(a.country && String(a.country).trim()) ||
+        !!((a.zipCode ?? a.zip) != null && String(a.zipCode ?? a.zip).trim())
+      if (!hasAddress) {
         cleanedData.contact.address = {}
       }
 
@@ -769,9 +774,9 @@ export default function AddAgencyPage() {
                     value={formData.contact.address.zipCode}
                     onChange={handleChange}
                   />
-                  {formData.contact.address.zipCode && !isValidZip(formData.contact.address.zipCode) && (
+                  {formData.contact.address.zipCode && !isValidOptionalPostalDigits(formData.contact.address.zipCode) && (
                     <p className="mt-1 text-xs font-semibold text-red-600">
-                      ZIP Code must be 5 digits or 9 digits (ZIP+4)
+                      {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                     </p>
                   )}
                 </div>

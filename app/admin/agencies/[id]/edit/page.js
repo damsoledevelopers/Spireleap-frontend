@@ -12,6 +12,11 @@ import PhoneField from '@/components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '@/lib/phone'
 import { scrollToFirstErrorField } from '@/lib/scrollToError'
 import { validateConfirmPassword, validateEmail, validatePassword, validateRequired, validateUrlOptional } from '@/lib/validation'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '@/lib/postalCode'
 
 export default function EditAgencyPage() {
   const { user, loading: authLoading } = useAuth()
@@ -50,12 +55,6 @@ export default function EditAgencyPage() {
   })
 
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -262,7 +261,7 @@ export default function EditAgencyPage() {
         isAddressField && ['city', 'state', 'country'].includes(grandchild)
           ? sanitizeAlphaText(value)
           : isAddressField && grandchild === 'zipCode'
-            ? sanitizeZip(value)
+            ? sanitizePostalDigits(value)
             : (type === 'checkbox' ? checked : value)
       setFormData(prev => ({
         ...prev,
@@ -397,8 +396,8 @@ export default function EditAgencyPage() {
       }
       nextErrors['contact.email'] = validateEmail(formData.contact?.email, 'Email')
       nextErrors['contact.website'] = validateUrlOptional(formData.contact?.website, 'Website')
-      if (!isValidZip(formData.contact?.address?.zipCode)) {
-        nextErrors['contact.address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      if (!isValidOptionalPostalDigits(formData.contact?.address?.zipCode)) {
+        nextErrors['contact.address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
       }
 
       const e164Phone = buildE164Phone(phoneCountryCode, formData.contact?.phone)
@@ -860,9 +859,9 @@ export default function EditAgencyPage() {
                     value={formData.contact.address.zipCode}
                     onChange={handleChange}
                   />
-                  {formData.contact.address.zipCode && !isValidZip(formData.contact.address.zipCode) && (
+                  {formData.contact.address.zipCode && !isValidOptionalPostalDigits(formData.contact.address.zipCode) && (
                     <p className="mt-1 text-xs font-semibold text-red-600">
-                      ZIP Code must be 5 digits or 9 digits (ZIP+4)
+                      {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                     </p>
                   )}
                 </div>

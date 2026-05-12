@@ -12,6 +12,11 @@ import PhoneField from '@/components/Common/PhoneField'
 import SearchableSelect from '@/components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '@/lib/phone'
 import { getDropdownOptions } from '@/lib/dropdownsApi'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '@/lib/postalCode'
 
 export default function AdminEditLeadPage() {
   const { user, loading: authLoading } = useAuth()
@@ -23,13 +28,6 @@ export default function AdminEditLeadPage() {
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
   const sanitizePhone = (v) => String(v || '').replace(/\D/g, '').slice(0, 10)
   const isValidPhone10 = (v) => String(v || '').replace(/\D/g, '').length === 10
   const sanitizeDecimal = (v) => {
@@ -47,6 +45,16 @@ export default function AdminEditLeadPage() {
     leadPriorities: [],
     leadSources: [],
     leadStatuses: []
+  })
+  const [geo, setGeo] = useState({
+    countries: [],
+    states: [],
+    cities: []
+  })
+  const [geoLoading, setGeoLoading] = useState({
+    countries: false,
+    states: false,
+    cities: false
   })
   const [formData, setFormData] = useState({
     contact: {
@@ -109,6 +117,18 @@ export default function AdminEditLeadPage() {
       fetchAllAgents()
     }
   }, [formData.agency])
+
+  useEffect(() => {
+    fetchCountries()
+  }, [])
+
+  useEffect(() => {
+    fetchStates(formData.contact.address.country)
+  }, [formData.contact.address.country])
+
+  useEffect(() => {
+    fetchCities(formData.contact.address.country, formData.contact.address.state)
+  }, [formData.contact.address.country, formData.contact.address.state])
 
   const fetchLeadData = async () => {
     try {
@@ -222,6 +242,109 @@ export default function AdminEditLeadPage() {
     }
   }
 
+  const fetchCountries = async () => {
+    try {
+      setGeoLoading((prev) => ({ ...prev, countries: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+      const countries = Array.isArray(data?.data)
+        ? data.data.map((c) => c?.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo((prev) => ({ ...prev, countries }))
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      setGeo((prev) => ({ ...prev, countries: [] }))
+    } finally {
+      setGeoLoading((prev) => ({ ...prev, countries: false }))
+    }
+  }
+
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+      setFormData((prev) => ({
+        ...prev,
+        contact: {
+          ...prev.contact,
+          address: { ...prev.contact.address, state: '', city: '' }
+        }
+      }))
+      return
+    }
+    try {
+      setGeoLoading((prev) => ({ ...prev, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map((s) => s?.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo((prev) => ({ ...prev, states, cities: [] }))
+      setFormData((prev) => {
+        const currentState = prev.contact.address.state
+        if (!currentState || states.includes(currentState)) return prev
+        return {
+          ...prev,
+          contact: {
+            ...prev.contact,
+            address: { ...prev.contact.address, state: '', city: '' }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+    } finally {
+      setGeoLoading((prev) => ({ ...prev, states: false }))
+    }
+  }
+
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo((prev) => ({ ...prev, cities: [] }))
+      setFormData((prev) => ({
+        ...prev,
+        contact: {
+          ...prev.contact,
+          address: { ...prev.contact.address, city: '' }
+        }
+      }))
+      return
+    }
+    try {
+      setGeoLoading((prev) => ({ ...prev, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo((prev) => ({ ...prev, cities }))
+      setFormData((prev) => {
+        const currentCity = prev.contact.address.city
+        if (!currentCity || cities.includes(currentCity)) return prev
+        return {
+          ...prev,
+          contact: {
+            ...prev.contact,
+            address: { ...prev.contact.address, city: '' }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo((prev) => ({ ...prev, cities: [] }))
+    } finally {
+      setGeoLoading((prev) => ({ ...prev, cities: false }))
+    }
+  }
+
   const fetchAgentsByAgency = async (agencyId) => {
     try {
       const response = await api.get(`/users?role=agent&agency=${agencyId}`)
@@ -279,6 +402,37 @@ export default function AdminEditLeadPage() {
     }
   }
 
+  const handleCountryChange = (country) => {
+    setFormData((prev) => ({
+      ...prev,
+      contact: {
+        ...prev.contact,
+        address: {
+          ...prev.contact.address,
+          country,
+          state: '',
+          city: ''
+        }
+      }
+    }))
+    setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+  }
+
+  const handleStateChange = (state) => {
+    setFormData((prev) => ({
+      ...prev,
+      contact: {
+        ...prev.contact,
+        address: {
+          ...prev.contact.address,
+          state,
+          city: ''
+        }
+      }
+    }))
+    setGeo((prev) => ({ ...prev, cities: [] }))
+  }
+
   const validateLead = () => {
     if (!formData.contact.firstName || formData.contact.firstName !== sanitizeName(formData.contact.firstName)) {
       return { ok: false, message: 'First name must contain only alphabets' }
@@ -292,8 +446,8 @@ export default function AdminEditLeadPage() {
     if (formData.contact.alternatePhone && !isValidPhone10(formData.contact.alternatePhone)) {
       return { ok: false, message: 'Alternate phone number must be exactly 10 digits' }
     }
-    if (!isValidZip(formData.contact.address?.zipCode)) {
-      return { ok: false, message: 'ZIP Code must be 5 digits or 9 digits (ZIP+4)' }
+    if (!isValidOptionalPostalDigits(formData.contact.address?.zipCode)) {
+      return { ok: false, message: OPTIONAL_POSTAL_DIGITS_MESSAGE }
     }
     return { ok: true }
   }
@@ -325,7 +479,7 @@ export default function AdminEditLeadPage() {
             ...(formData.contact.address.city && { city: formData.contact.address.city }),
             ...(formData.contact.address.state && { state: formData.contact.address.state }),
             ...(formData.contact.address.country && { country: formData.contact.address.country }),
-            ...(formData.contact.address.zipCode && { zipCode: sanitizeZip(formData.contact.address.zipCode) })
+            ...(formData.contact.address.zipCode && { zipCode: sanitizePostalDigits(formData.contact.address.zipCode) })
           }
         },
         property: formData.property || undefined,
@@ -516,34 +670,48 @@ export default function AdminEditLeadPage() {
                   <label className="block text-sm font-bold text-gray-900 mb-1">
                     Country
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.contact.address.country}
-                    onChange={(e) => handleInputChange('contact.address.country', sanitizeAlphaText(e.target.value))}
+                    onChange={(e) => handleCountryChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
+                  >
+                    <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                    {geo.countries.map((country) => (
+                      <option key={country} value={country}>{country}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
                     State
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.contact.address.state}
-                    onChange={(e) => handleInputChange('contact.address.state', sanitizeAlphaText(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
+                    onChange={(e) => handleStateChange(e.target.value)}
+                    disabled={!formData.contact.address.country || geoLoading.states}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+                  >
+                    <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                    {geo.states.map((state) => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
                     City
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.contact.address.city}
-                    onChange={(e) => handleInputChange('contact.address.city', sanitizeAlphaText(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
+                    onChange={(e) => handleInputChange('contact.address.city', e.target.value)}
+                    disabled={!formData.contact.address.state || geoLoading.cities}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+                  >
+                    <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                    {geo.cities.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
@@ -552,7 +720,7 @@ export default function AdminEditLeadPage() {
                   <input
                     type="text"
                     value={formData.contact.address.zipCode}
-                    onChange={(e) => handleInputChange('contact.address.zipCode', sanitizeZip(e.target.value))}
+                    onChange={(e) => handleInputChange('contact.address.zipCode', sanitizePostalDigits(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>

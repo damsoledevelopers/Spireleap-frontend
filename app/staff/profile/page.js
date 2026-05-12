@@ -8,6 +8,11 @@ import { User, Save, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../lib/postalCode'
 
 export default function StaffProfilePage() {
   const { user, updateUser } = useAuth()
@@ -115,7 +120,6 @@ export default function StaffProfilePage() {
   }
 
   const sanitizeAlpha = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
 
   const handleSubmit = async (e) => {
@@ -133,8 +137,8 @@ export default function StaffProfilePage() {
         setLoading(false)
         return
       }
-      if (formData.address?.zipCode && ![5, 9].includes(String(formData.address.zipCode).length)) {
-        toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+      if (formData.address?.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) {
+        toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
         setLoading(false)
         return
       }
@@ -370,12 +374,12 @@ export default function StaffProfilePage() {
                 <input
                   type="text"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizePostalDigits(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
-                {formData.address.zipCode && ![5, 9].includes(String(formData.address.zipCode).length) && (
+                {formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode) && (
                   <p className="mt-1 text-xs font-semibold text-red-600">
-                    Zip code must be 5 digits or 9 digits (ZIP+4)
+                    {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                   </p>
                 )}
               </div>

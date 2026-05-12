@@ -32,6 +32,7 @@ export default function AdminBillingSubscriptionsPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [subscriptions, setSubscriptions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [openFilter, setOpenFilter] = useState(null) // 'price', 'date' or null
   const [filters, setFilters] = useState({
     isActive: 'true',
@@ -113,6 +114,7 @@ export default function AdminBillingSubscriptionsPage() {
       toast.error('Failed to load subscriptions')
     } finally {
       setLoading(false)
+      setInitialLoading(false)
     }
   }
 
@@ -210,7 +212,7 @@ export default function AdminBillingSubscriptionsPage() {
     }
   }
 
-  if (loading) {
+  if (initialLoading && loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -436,7 +438,16 @@ export default function AdminBillingSubscriptionsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {subscriptions.filter(s => s.isActive).map((s) => (
+                  {loading ? (
+                    <tr>
+                      <td className="px-6 py-10 text-center text-sm text-gray-500" colSpan={8}>
+                        <div className="inline-flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Updating subscriptions...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : subscriptions.filter(s => s.isActive).map((s) => (
                     <tr key={s._id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -500,7 +511,7 @@ export default function AdminBillingSubscriptionsPage() {
                       </td>
                     </tr>
                   ))}
-                  {subscriptions.filter(s => s.isActive).length === 0 && (
+                  {!loading && subscriptions.filter(s => s.isActive).length === 0 && (
                     <tr>
                       <td className="px-6 py-10 text-center text-sm text-gray-500" colSpan={8}>
                         No active subscriptions found

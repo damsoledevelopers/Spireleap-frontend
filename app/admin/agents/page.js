@@ -695,6 +695,52 @@ export default function AgentsPage() {
             ],
           },
           {
+            title: 'Address',
+            items: (() => {
+              const addr = detailsAgent.address || {}
+              const v = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : null)
+              return [
+                { label: 'Street', value: v(addr.street) },
+                { label: 'Country', value: v(addr.country) },
+                { label: 'State', value: v(addr.state) },
+                { label: 'City', value: v(addr.city) },
+                { label: 'ZIP code', value: v(addr.zipCode ?? addr.zip) },
+              ]
+            })(),
+          },
+          {
+            title: 'Professional',
+            items: (() => {
+              const ai = detailsAgent.agentInfo || {}
+              const list = (arr) =>
+                Array.isArray(arr) && arr.filter((x) => x != null && String(x).trim()).length
+                  ? arr
+                    .map((x) => String(x).trim())
+                    .filter(Boolean)
+                    .join(', ')
+                  : null
+              const yr = ai.yearsOfExperience
+              const yearsDisplay =
+                yr === '' || yr === null || yr === undefined ? null : String(yr)
+              const cr = ai.commissionRate
+              const commDisplay =
+                cr === '' || cr === null || cr === undefined ? null : `${Number(cr)}%`
+              const bioRaw = ai.bio != null ? String(ai.bio).trim() : ''
+              const bioDisplay = bioRaw
+                ? <span className="whitespace-pre-wrap text-sm leading-relaxed">{bioRaw}</span>
+                : null
+              const license = ai.licenseNumber != null ? String(ai.licenseNumber).trim() : ''
+              return [
+                { label: 'License number', value: license || null },
+                { label: 'Years of experience', value: yearsDisplay },
+                { label: 'Commission rate', value: commDisplay },
+                { label: 'Bio', value: bioDisplay },
+                { label: 'Specialties', value: list(ai.specialties) },
+                { label: 'Languages', value: list(ai.languages) },
+              ]
+            })(),
+          },
+          {
             title: 'Timeline',
             items: [
               { label: 'Created', value: formatDate(detailsAgent.createdAt || detailsAgent.created_at) },

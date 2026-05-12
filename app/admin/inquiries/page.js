@@ -102,6 +102,7 @@ export default function AdminInquiriesPage() {
   const [inquiries, setInquiries] = useState([])
   const [allInquiries, setAllInquiries] = useState([])
   const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [filters, setFilters] = useState({
     property: '',
     assignedAgent: '',
@@ -362,6 +363,7 @@ export default function AdminInquiriesPage() {
       setPagination({ page: 1, limit: itemsPerPage, total: 0, pages: 0 })
     } finally {
       setLoading(false)
+      setInitialLoading(false)
     }
   }, [
     currentPage,
@@ -373,12 +375,17 @@ export default function AdminInquiriesPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      fetchInquiries()
       fetchProperties()
       fetchAgents()
       fetchAgencies()
     }
-  }, [user, authLoading, fetchInquiries, fetchProperties, fetchAgents, fetchAgencies])
+  }, [user, authLoading, fetchProperties, fetchAgents, fetchAgencies])
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchInquiries()
+    }
+  }, [user, authLoading, fetchInquiries])
 
   // Assign agent to a lead
   const handleUpdateStatus = useCallback(async (leadId, newStatus) => {
@@ -534,7 +541,7 @@ export default function AdminInquiriesPage() {
     return null // Router will handle redirect
   }
 
-  if (loading && inquiries.length === 0) {
+  if (initialLoading && loading && inquiries.length === 0) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">

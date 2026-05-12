@@ -126,7 +126,7 @@ export function AdminReportsContent() {
       const computedTotals = {
         totalUsers: stats.totalUsers ?? sumStatsObject(nextUsersByRole),
         totalProperties: stats.totalProperties ?? sumStatsObject(nextPropertiesByStatus),
-        totalLeads: stats.totalLeads ?? sumStatsObject(nextLeadsByStatus)
+        totalLeads: stats.totalLeadsWithConverted ?? stats.totalLeads ?? sumStatsObject(nextLeadsByStatus)
       }
 
       setReportData(prev => ({
@@ -154,9 +154,10 @@ export function AdminReportsContent() {
           rentedProperties: nextPropertiesByStatus?.rented || 0,
           newLeads: nextLeadsByStatus?.new || 0,
           convertedLeads:
-            (nextLeadsByStatus?.booked || 0) +
-            (nextLeadsByStatus?.closed || 0) +
-            (nextLeadsByStatus?.converted || 0)
+            stats.convertedLeads ??
+            ((nextLeadsByStatus?.booked || 0) +
+              (nextLeadsByStatus?.closed || 0) +
+              (nextLeadsByStatus?.converted || 0))
         }
       }))
     } catch (error) {
@@ -1443,9 +1444,7 @@ export function AdminReportsContent() {
                       <span className="text-2xl font-semibold text-green-600">
                         {reportData.totalLeads > 0
                           ? `${formatPercentLabel(
-                              (((reportData.leadsByStatus.booked || 0) +
-                                (reportData.leadsByStatus.closed || 0) +
-                                (reportData.leadsByStatus.converted || 0)) /
+                              ((reportData.systemStats.convertedLeads || 0) /
                                 reportData.totalLeads) *
                                 100
                             )}%`

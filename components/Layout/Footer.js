@@ -370,7 +370,15 @@ export default function Footer() {
             <p className="text-gray-400 text-sm">
               {footerData ? (
                 <>
-                  <span>© 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥ Spireleap Innovations</span>
+                  <span>© 2026 NOVAKEYS RealEstate. All Rights Reserved. Design and Developed with ♥ </span>
+                  <a
+                    href="https://spireleap.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gold-400 hover:text-gold-300 underline"
+                  >
+                    Spireleap Innovations
+                  </a>
                   {footerData.additionalContent && (
                     <span> {footerData.additionalContent.replace(/\s*damsole\s*/gi, '').trim()}</span>
                   )}

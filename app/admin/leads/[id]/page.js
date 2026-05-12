@@ -62,6 +62,11 @@ export default function AdminLeadDetailPage() {
   const [lead, setLead] = useState(null)
   const [loading, setLoading] = useState(true)
   const [convertingToClient, setConvertingToClient] = useState(false)
+  const showValue = (value) => {
+    if (value === null || value === undefined) return 'N/A'
+    if (typeof value === 'string') return value.trim() || 'N/A'
+    return String(value)
+  }
 
   useEffect(() => {
     // Wait for auth and permissions to load before checking
@@ -369,6 +374,132 @@ export default function AdminLeadDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Inquiry Information */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+            <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-2">
+              <div className="p-1.5 bg-emerald-50 rounded-lg">
+                <MessageSquare className="h-5 w-5 text-emerald-600" />
+              </div>
+              Inquiry Information
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Budget Min</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.budget?.min)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Budget Max</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.budget?.max)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Currency</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.budget?.currency)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Timeline</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.timeline)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Preferred Rooms</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.preferredRooms)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Preferred Size</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.preferredSize)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Buyer Type</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.buyerType)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Payment Method</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.paymentMethod)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Nationality</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.inquiry?.nationality)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">DOB</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {lead.inquiry?.dob ? new Date(lead.inquiry.dob).toLocaleDateString() : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 md:col-span-2">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Preferred Location</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {Array.isArray(lead.inquiry?.preferredLocation) && lead.inquiry.preferredLocation.length
+                    ? lead.inquiry.preferredLocation.join(', ')
+                    : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Property Type</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {Array.isArray(lead.inquiry?.propertyType) && lead.inquiry.propertyType.length
+                    ? lead.inquiry.propertyType.join(', ')
+                    : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 md:col-span-2">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Spoken Languages</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {Array.isArray(lead.inquiry?.spokenLanguages) && lead.inquiry.spokenLanguages.length
+                    ? lead.inquiry.spokenLanguages.join(', ')
+                    : 'N/A'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Message</p>
+                <p className="text-sm font-semibold text-gray-900 whitespace-pre-wrap">{showValue(lead.inquiry?.message)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Requirements</p>
+                <p className="text-sm font-semibold text-gray-900 whitespace-pre-wrap">{showValue(lead.inquiry?.requirements)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Submitted Details */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+            <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-2">
+              <div className="p-1.5 bg-amber-50 rounded-lg">
+                <FileText className="h-5 w-5 text-amber-600" />
+              </div>
+              Additional Submitted Details
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Alternate Phone</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.contact?.alternatePhone)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Lost Reason</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.lostReason)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Last Updated</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Unit Number</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.booking?.unitNumber)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Flat Number</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.booking?.flatNumber)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Booking Amount</p>
+                <p className="text-sm font-semibold text-gray-900">{showValue(lead.booking?.bookingAmount)}</p>
+              </div>
             </div>
           </div>
         </div>

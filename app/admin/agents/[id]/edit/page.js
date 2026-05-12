@@ -13,6 +13,11 @@ import SearchableSelect from '../../../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../../lib/phone'
 import { scrollToFirstErrorField } from '../../../../../lib/scrollToError'
 import { validateEmail, validateName, validatePassword } from '../../../../../lib/validation'
+import {
+  sanitizePostalDigits,
+  isValidOptionalPostalDigits,
+  OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../../../lib/postalCode'
 
 export default function EditAgentPage() {
   const params = useParams()
@@ -48,13 +53,6 @@ export default function EditAgentPage() {
       commissionRate: ''
     }
   })
-
-  const sanitizeZip = (v) => String(v || '').replace(/\D/g, '').slice(0, 9)
-  const isValidZip = (v) => {
-    const s = String(v || '').trim()
-    if (!s) return true
-    return s.length === 5 || s.length === 9
-  }
 
   useEffect(() => {
     fetchAgent()
@@ -253,8 +251,8 @@ export default function EditAgentPage() {
       nextErrors.firstName = validateName(formData.firstName, 'First name')
       nextErrors.lastName = validateName(formData.lastName, 'Last name')
       nextErrors.email = validateEmail(formData.email, 'Email')
-      if (!isValidZip(formData.address?.zipCode)) {
-        nextErrors['address.zipCode'] = 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'
+      if (!isValidOptionalPostalDigits(formData.address?.zipCode)) {
+        nextErrors['address.zipCode'] = OPTIONAL_POSTAL_DIGITS_MESSAGE
       }
       const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : undefined
       if (formData.phone && !e164Phone) {
@@ -581,13 +579,13 @@ export default function EditAgentPage() {
                   type="text"
                   name="address.zipCode"
                   value={formData.address.zipCode}
-                  onChange={(e) => handleInputChange('address.zipCode', sanitizeZip(e.target.value))}
+                  onChange={(e) => handleInputChange('address.zipCode', sanitizePostalDigits(e.target.value))}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${errors['address.zipCode'] ? 'border-red-500' : 'border-gray-300'}`}
                   placeholder="Enter ZIP code"
                 />
-                {(formData.address.zipCode && !isValidZip(formData.address.zipCode)) || errors['address.zipCode'] ? (
+                {(formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) || errors['address.zipCode'] ? (
                   <p className="mt-1 text-xs font-semibold text-red-600">
-                    {errors['address.zipCode'] || 'ZIP Code must be 5 digits or 9 digits (ZIP+4)'}
+                    {errors['address.zipCode'] || OPTIONAL_POSTAL_DIGITS_MESSAGE}
                   </p>
                 ) : null}
               </div>

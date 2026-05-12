@@ -17,6 +17,11 @@ import {
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import {
+    sanitizePostalDigits,
+    isValidOptionalPostalDigits,
+    OPTIONAL_POSTAL_DIGITS_MESSAGE
+} from '../../../lib/postalCode'
 
 export default function CustomerProfile() {
     const { user, login } = useAuth()
@@ -66,7 +71,7 @@ export default function CustomerProfile() {
             const nextValue = isAlphaOnlyField
                 ? String(value || '').replace(/[^a-zA-Z\s.'-]/g, '')
                 : isZipField
-                    ? String(value || '').replace(/\D/g, '').slice(0, 9)
+                    ? sanitizePostalDigits(value)
                     : value
             setFormData(prev => ({
                 ...prev,
@@ -93,8 +98,8 @@ export default function CustomerProfile() {
                 toast.error('Last name must contain only alphabets')
                 return
             }
-            if (formData.address?.zipCode && ![5, 9].includes(formData.address.zipCode.length)) {
-                toast.error('Zip code must be 5 digits or 9 digits (ZIP+4)')
+            if (formData.address?.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) {
+                toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
                 return
             }
             if (formData.phone && formData.phone.length !== 10) {
@@ -276,9 +281,9 @@ export default function CustomerProfile() {
                                         onChange={handleChange}
                                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                                     />
-                                    {formData.address.zipCode && ![5, 9].includes(formData.address.zipCode.length) && (
+                                    {formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode) && (
                                         <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                            Zip code must be 5 digits or 9 digits (ZIP+4)
+                                            {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                                         </p>
                                     )}
                                 </div>

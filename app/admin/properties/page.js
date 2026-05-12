@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -52,6 +52,9 @@ export default function AdminPropertiesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
   const [permissionModalEntry, setPermissionModalEntry] = useState(null)
+  const [countries, setCountries] = useState([])
+  const [geo, setGeo] = useState({ states: [], cities: [] })
+  const [geoLoading, setGeoLoading] = useState({ states: false, cities: false })
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
     propertyType: searchParams.get('propertyType') || '',
@@ -303,6 +306,116 @@ export default function AdminPropertiesPage() {
     }
   }
 
+  const fetchCountries = async () => {
+    try {
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+      const data = await res.json()
+
+      const countries = Array.isArray(data?.data)
+        ? data.data
+          .map((c) => String(c?.name || '').trim())
+          .filter(Boolean)
+          .sort()
+        : []
+
+      return countries
+    } catch (error) {
+      console.error('Error fetching countries:', error)
+      return []
+    }
+  }
+
+  useEffect(() => {
+    loadCountries()
+  }, [])
+
+  const loadCountries = async () => {
+    const list = await fetchCountries()
+    setCountries(list)
+  }
+
+  const countryOptions = useMemo(() => {
+    return [{ value: '', label: 'All Countries' }, ...(countries || []).map((c) => ({ value: c, label: c }))]
+  }, [countries])
+
+  const stateOptions = useMemo(() => {
+    const states = Array.from(new Set([...(geo.states || []), String(filters.state || '').trim()].filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+    return [{ value: '', label: 'All States' }, ...states.map((s) => ({ value: s, label: s }))]
+  }, [geo.states, filters.state])
+
+  const cityOptions = useMemo(() => {
+    const cities = Array.from(new Set([...(geo.cities || []), String(filters.city || '').trim()].filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+    return [{ value: '', label: 'All Cities' }, ...cities.map((c) => ({ value: c, label: c }))]
+  }, [geo.cities, filters.city])
+
+  const fetchStates = async (country) => {
+    if (!country) {
+      setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+      return
+    }
+    try {
+      setGeoLoading((prev) => ({ ...prev, states: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country })
+      })
+      const data = await res.json()
+      const states = Array.isArray(data?.data?.states)
+        ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo((prev) => ({ ...prev, states, cities: [] }))
+    } catch (error) {
+      console.error('Error fetching states:', error)
+      setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+    } finally {
+      setGeoLoading((prev) => ({ ...prev, states: false }))
+    }
+  }
+
+  const fetchCities = async (country, state) => {
+    if (!country || !state) {
+      setGeo((prev) => ({ ...prev, cities: [] }))
+      return
+    }
+    try {
+      setGeoLoading((prev) => ({ ...prev, cities: true }))
+      const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country, state })
+      })
+      const data = await res.json()
+      const cities = Array.isArray(data?.data)
+        ? data.data.map((c) => String(c || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        : []
+      setGeo((prev) => ({ ...prev, cities }))
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      setGeo((prev) => ({ ...prev, cities: [] }))
+    } finally {
+      setGeoLoading((prev) => ({ ...prev, cities: false }))
+    }
+  }
+
+  useEffect(() => {
+    if (filters.country) {
+      fetchStates(filters.country)
+    } else {
+      setGeo((prev) => ({ ...prev, states: [], cities: [] }))
+    }
+  }, [filters.country])
+
+  useEffect(() => {
+    if (filters.country && filters.state) {
+      fetchCities(filters.country, filters.state)
+    } else {
+      setGeo((prev) => ({ ...prev, cities: [] }))
+    }
+  }, [filters.country, filters.state])
+
   const fetchMetrics = async () => {
     try {
       // Use the optimized dashboard stats endpoint
@@ -520,38 +633,38 @@ export default function AdminPropertiesPage() {
             ]}
             placeholder="All Status"
             searchable={false}
-            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[160px] ${
-              filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
+            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[160px] ${filters.status ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              }`}
           />
 
           {/* Property Type Filter - Direct Dropdown */}
-          <SearchableSelect
-            value={filters.propertyType}
-            onChange={(e) => {
-              setFilters(prev => ({ ...prev, propertyType: e.target.value }))
-              setPagination(prev => ({ ...prev, current: 1 }))
-            }}
-            options={[
-              { value: '', label: 'All Types' },
-              { value: 'apartment', label: 'Apartment' },
-              { value: 'house', label: 'House' },
-              { value: 'villa', label: 'Villa' },
-              { value: 'condo', label: 'Condo' },
-              { value: 'townhouse', label: 'Townhouse' },
-              { value: 'land', label: 'Land' },
-              { value: 'commercial', label: 'Commercial' },
-              { value: 'office', label: 'Office' },
-              { value: 'retail', label: 'Retail' },
-              { value: 'warehouse', label: 'Warehouse' },
-              { value: 'other', label: 'Other' }
-            ]}
-            placeholder="All Types"
-            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[170px] ${
-              filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-            }`}
-            searchPlaceholder="Search type..."
-          />
+          <div className="relative min-w-[150px]">
+            <SearchableSelect
+              value={filters.propertyType}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, propertyType: e.target.value }))
+                setPagination(prev => ({ ...prev, current: 1 }))
+              }}
+              options={[
+                { value: '', label: 'All Types' },
+                { value: 'apartment', label: 'Apartment' },
+                { value: 'house', label: 'House' },
+                { value: 'villa', label: 'Villa' },
+                { value: 'condo', label: 'Condo' },
+                { value: 'townhouse', label: 'Townhouse' },
+                { value: 'land', label: 'Land' },
+                { value: 'commercial', label: 'Commercial' },
+                { value: 'office', label: 'Office' },
+                { value: 'retail', label: 'Retail' },
+                { value: 'warehouse', label: 'Warehouse' },
+                { value: 'other', label: 'Other' }
+              ]}
+              placeholder="All Types"
+              buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[170px] ${filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
+              searchPlaceholder="Search type..."
+            />
+          </div>
 
           {/* Price Filter Button */}
           <div className="relative">
@@ -644,167 +757,170 @@ export default function AdminPropertiesPage() {
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'specification' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'specification' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold text-gray-900">Specifications</h3>
-                    {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
-                      <button
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '', balconies: '', livingRoom: '', unfurnished: '', semiFurnished: '', fullyFurnished: '' }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        className="text-xs text-primary-600 hover:text-primary-800"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Bedrooms</label>
-                      <SearchableSelect
-                        value={filters.bedrooms}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, bedrooms: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        options={[
-                          { value: '', label: 'Any' },
-                          { value: '1', label: '1' },
-                          { value: '2', label: '2' },
-                          { value: '3', label: '3' },
-                          { value: '4', label: '4' },
-                          { value: '5', label: '5' },
-                          { value: '6', label: '6' }
-                        ]}
-                        placeholder="Any"
-                        buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
-                        searchPlaceholder="Search..."
-                      />
+              // <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 w-[340px] overflow-hidden">
+                <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                  <div className="p-4 space-y-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-semibold text-gray-900">Specifications</h3>
+                      {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
+                        <button
+                          onClick={() => {
+                            setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '', balconies: '', livingRoom: '', unfurnished: '', semiFurnished: '', fullyFurnished: '' }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          className="text-xs text-primary-600 hover:text-primary-800"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Bathrooms</label>
-                      <SearchableSelect
-                        value={filters.bathrooms}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, bathrooms: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        options={[
-                          { value: '', label: 'Any' },
-                          { value: '1', label: '1' },
-                          { value: '2', label: '2' },
-                          { value: '3', label: '3' },
-                          { value: '4', label: '4' },
-                          { value: '5', label: '5' }
-                        ]}
-                        placeholder="Any"
-                        buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
-                        searchPlaceholder="Search..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Min Area (sqft)</label>
-                      <input
-                        type="number"
-                        value={filters.minArea}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, minArea: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Enter min area"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Max Area (sqft)</label>
-                      <input
-                        type="number"
-                        value={filters.maxArea}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, maxArea: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Enter max area"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Balconies</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={filters.balconies}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, balconies: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Min balconies"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Living Room</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={filters.livingRoom}
-                        onChange={(e) => {
-                          setFilters(prev => ({ ...prev, livingRoom: e.target.value }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                        }}
-                        placeholder="Min living rooms"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-2 pt-2">
-                      <label className="block text-sm font-bold text-gray-900">Furnishing</label>
-                      <div className="flex flex-col gap-2">
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                          <input
-                            type="checkbox"
-                            checked={filters.unfurnished === 'true'}
-                            onChange={(e) => {
-                              setFilters(prev => ({ ...prev, unfurnished: e.target.checked ? 'true' : '' }))
-                              setPagination(prev => ({ ...prev, current: 1 }))
-                            }}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          Unfurnished
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                          <input
-                            type="checkbox"
-                            checked={filters.semiFurnished === 'true'}
-                            onChange={(e) => {
-                              setFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? 'true' : '' }))
-                              setPagination(prev => ({ ...prev, current: 1 }))
-                            }}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          Semi-Furnished
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                          <input
-                            type="checkbox"
-                            checked={filters.fullyFurnished === 'true'}
-                            onChange={(e) => {
-                              setFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? 'true' : '' }))
-                              setPagination(prev => ({ ...prev, current: 1 }))
-                            }}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          Fully Furnished
-                        </label>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Bedrooms</label>
+                        <SearchableSelect
+                          value={filters.bedrooms}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, bedrooms: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          options={[
+                            { value: '', label: 'Any' },
+                            { value: '1', label: '1' },
+                            { value: '2', label: '2' },
+                            { value: '3', label: '3' },
+                            { value: '4', label: '4' },
+                            { value: '5', label: '5' },
+                            { value: '6', label: '6' }
+                          ]}
+                          placeholder="Any"
+                          buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+                          searchPlaceholder="Search..."
+                        />
                       </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Bathrooms</label>
+                        <SearchableSelect
+                          value={filters.bathrooms}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, bathrooms: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          options={[
+                            { value: '', label: 'Any' },
+                            { value: '1', label: '1' },
+                            { value: '2', label: '2' },
+                            { value: '3', label: '3' },
+                            { value: '4', label: '4' },
+                            { value: '5', label: '5' }
+                          ]}
+                          placeholder="Any"
+                          buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+                          searchPlaceholder="Search..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Min Area (sqft)</label>
+                        <input
+                          type="number"
+                          value={filters.minArea}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, minArea: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="Enter min area"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Max Area (sqft)</label>
+                        <input
+                          type="number"
+                          value={filters.maxArea}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, maxArea: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="Enter max area"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Balconies</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={filters.balconies}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, balconies: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="Min balconies"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Living Room</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={filters.livingRoom}
+                          onChange={(e) => {
+                            setFilters(prev => ({ ...prev, livingRoom: e.target.value }))
+                            setPagination(prev => ({ ...prev, current: 1 }))
+                          }}
+                          placeholder="Min living rooms"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2 pt-2">
+                        <label className="block text-sm font-bold text-gray-900">Furnishing</label>
+                        <div className="flex flex-col gap-2">
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={filters.unfurnished === 'true'}
+                              onChange={(e) => {
+                                setFilters(prev => ({ ...prev, unfurnished: e.target.checked ? 'true' : '' }))
+                                setPagination(prev => ({ ...prev, current: 1 }))
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            Unfurnished
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={filters.semiFurnished === 'true'}
+                              onChange={(e) => {
+                                setFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? 'true' : '' }))
+                                setPagination(prev => ({ ...prev, current: 1 }))
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            Semi-Furnished
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={filters.fullyFurnished === 'true'}
+                              onChange={(e) => {
+                                setFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? 'true' : '' }))
+                                setPagination(prev => ({ ...prev, current: 1 }))
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            Fully Furnished
+                          </label>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setOpenFilter(null)}
+                        className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                      >
+                        Apply
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setOpenFilter(null)}
-                      className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
-                    >
-                      Apply
-                    </button>
                   </div>
                 </div>
               </div>
@@ -813,100 +929,46 @@ export default function AdminPropertiesPage() {
 
           {/* Country Filter Button */}
           <div className="relative">
-            <button
-              onClick={() => setOpenFilter(openFilter === 'country' ? null : 'country')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+            <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+
+            <SearchableSelect
+              value={filters.country} 
+              onChange={(e) => {
+                const country = e.target.value
+                setFilters(prev => ({ ...prev, country, state: '', city: '' }))
+                setPagination(prev => ({ ...prev, current: 1 }))
+              }}
+              options={countryOptions}
+              placeholder="Country"
+              searchable={true}
+              searchPlaceholder="Search country..."
+              buttonClassName={`pl-10 pr-4 py-2 border rounded-lg text-sm font-medium min-w-[200px] flex items-center gap-2 ${filters.country
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-gray-300'
                 }`}
-            >
-              <MapPin className="h-4 w-4" />
-              Country
-              {filters.country && (
-                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {filters.country}
-                </span>
-              )}
-              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'country' ? 'rotate-180' : ''}`} />
-            </button>
-            {openFilter === 'country' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
-                <div className="p-4 max-h-[300px] overflow-y-auto">
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        setFilters(prev => ({ ...prev, country: '' }))
-                        setPagination(prev => ({ ...prev, current: 1 }))
-                        setOpenFilter(null)
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All Countries
-                    </button>
-                    {uniqueLocations.countries.map((country) => (
-                      <button
-                        key={country}
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, country }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                          setOpenFilter(null)
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.country === country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {country}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            />
           </div>
 
-          {/* State Filter Button */}
+          {/* State Filter */}
           <div className="relative">
-            <button
-              onClick={() => setOpenFilter(openFilter === 'state' ? null : 'state')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.state ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+            <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+            <SearchableSelect
+              value={filters.state}
+              onChange={(e) => {
+                const state = e.target.value
+                setFilters(prev => ({ ...prev, state, city: '' }))
+                setPagination(prev => ({ ...prev, current: 1 }))
+              }}
+              options={stateOptions}
+              placeholder="State"
+              searchable
+              searchPlaceholder="Search state..."
+              buttonClassName={`pl-10 pr-4 py-2 border rounded-lg text-sm font-medium min-w-[160px] ${filters.state
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-gray-300'
                 }`}
-            >
-              <MapPin className="h-4 w-4" />
-              State
-              {filters.state && (
-                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {filters.state}
-                </span>
-              )}
-              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'state' ? 'rotate-180' : ''}`} />
-            </button>
-            {openFilter === 'state' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
-                <div className="p-4 max-h-[300px] overflow-y-auto">
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        setFilters(prev => ({ ...prev, state: '' }))
-                        setPagination(prev => ({ ...prev, current: 1 }))
-                        setOpenFilter(null)
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All States
-                    </button>
-                    {uniqueLocations.states.map((state) => (
-                      <button
-                        key={state}
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, state }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                          setOpenFilter(null)
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.state === state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {state}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+              disabled={!filters.country || geoLoading.states}
+            />
           </div>
 
           {/* Area Filter Button */}
@@ -971,53 +1033,25 @@ export default function AdminPropertiesPage() {
             )}
           </div>
 
-          {/* Location Filter Button */}
+          {/* City Filter */}
           <div className="relative">
-            <button
-              onClick={() => setOpenFilter(openFilter === 'location' ? null : 'location')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.city ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+            <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+            <SearchableSelect
+              value={filters.city}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, city: e.target.value }))
+                setPagination(prev => ({ ...prev, current: 1 }))
+              }}
+              options={cityOptions}
+              placeholder="City"
+              searchable
+              searchPlaceholder="Search city..."
+              buttonClassName={`pl-10 pr-4 py-2 border rounded-lg text-sm font-medium min-w-[160px] ${filters.city
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-gray-300'
                 }`}
-            >
-              <MapPin className="h-4 w-4" />
-              City
-              {filters.city && (
-                <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {filters.city}
-                </span>
-              )}
-              <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'location' ? 'rotate-180' : ''}`} />
-            </button>
-            {openFilter === 'location' && (
-              <div className="absolute top-full right-0 left-auto mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-w-[min(320px,calc(100vw-2rem))] w-max">
-                <div className="p-4 max-h-[300px] overflow-y-auto">
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        setFilters(prev => ({ ...prev, city: '' }))
-                        setPagination(prev => ({ ...prev, current: 1 }))
-                        setOpenFilter(null)
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All Cities
-                    </button>
-                    {uniqueLocations.cities.map((city) => (
-                      <button
-                        key={city}
-                        onClick={() => {
-                          setFilters(prev => ({ ...prev, city }))
-                          setPagination(prev => ({ ...prev, current: 1 }))
-                          setOpenFilter(null)
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm ${filters.city === city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+              disabled={!filters.country || !filters.state || geoLoading.cities}
+            />
           </div>
 
           {/* Agency Filter - Only for Super Admin */}
@@ -1033,9 +1067,8 @@ export default function AdminPropertiesPage() {
                 ...agencies.map((a) => ({ value: a._id, label: a.name }))
               ]}
               placeholder="All Agencies"
-              buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[180px] ${
-                filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
-              }`}
+              buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[180px] ${filters.agency ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+                }`}
               searchPlaceholder="Search agency..."
             />
           )}
