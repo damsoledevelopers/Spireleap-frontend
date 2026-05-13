@@ -62,6 +62,29 @@ export default function SuperAdminDashboard() {
       completedTransactions: 0,
       totalRevenue: 0,
       totalCommission: 0
+    },
+    userRoleBreakdown: {
+      super_admin: 0,
+      agency_admin: 0,
+      agent: 0,
+      staff: 0,
+      user: 0,
+      managedTotal: 0,
+      newManagedTotal: 0,
+      newByRole: {
+        super_admin: 0,
+        agency_admin: 0,
+        agent: 0,
+        staff: 0,
+        user: 0
+      }
+    },
+    totalUsersCard: 0,
+    totalUsersCardBreakdown: {
+      agencies: 0,
+      agents: 0,
+      staff: 0,
+      clients: 0
     }
   })
   const [loading, setLoading] = useState(true)
@@ -118,6 +141,29 @@ export default function SuperAdminDashboard() {
           completedTransactions: 0,
           totalRevenue: 0,
           totalCommission: 0
+        },
+        userRoleBreakdown: stats.userRoleBreakdown || {
+          super_admin: 0,
+          agency_admin: 0,
+          agent: 0,
+          staff: 0,
+          user: 0,
+          managedTotal: 0,
+          newManagedTotal: 0,
+          newByRole: {
+            super_admin: 0,
+            agency_admin: 0,
+            agent: 0,
+            staff: 0,
+            user: 0
+          }
+        },
+        totalUsersCard: Number(stats.totalUsersCard || 0),
+        totalUsersCardBreakdown: stats.totalUsersCardBreakdown || {
+          agencies: 0,
+          agents: 0,
+          staff: 0,
+          clients: 0
         }
       })
     } catch (error) {
@@ -129,10 +175,13 @@ export default function SuperAdminDashboard() {
   }
 
   const getDynamicStats = () => {
+    const managedUsersTotal = dashboardData.totalUsersCard || 0
+    const managedUsersNew = dashboardData.userRoleBreakdown?.newManagedTotal || 0
+
     const baseStats = [
       { name: 'Total Properties', value: dashboardData.totalProperties, change: dashboardData.newProperties, icon: Package, href: '/admin/properties' },
       { name: 'Total Leads', value: dashboardData.totalLeads, change: dashboardData.newLeads, icon: Users, href: '/admin/leads' },
-      { name: 'Total Users', value: dashboardData.totalUsers, change: dashboardData.newUsers, icon: UserCheck, href: '/admin/users' },
+      { name: 'Total Users', value: managedUsersTotal, change: managedUsersNew, icon: UserCheck, href: '/admin/users' },
     ]
 
     if (user?.role === 'super_admin' || user?.role === 'staff') {
@@ -252,11 +301,6 @@ export default function SuperAdminDashboard() {
                       <span className="text-2xl font-bold text-gray-900 leading-none">
                         {stat.value}
                       </span>
-                      {typeof stat.change === 'number' && stat.change > 0 && (
-                        <span className="text-sm font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                          +{stat.change}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -264,6 +308,32 @@ export default function SuperAdminDashboard() {
             )
           })}
         </div>
+
+        {(user?.role === 'super_admin' || user?.role === 'staff') && (
+          <div className="bg-white rounded-lg shadow p-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Users count includes: Agencies Admins, Agents, Staff, Clients
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="text-gray-500">Agency Admins</p>
+                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.agency_admin || 0}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="text-gray-500">Agents</p>
+                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.agent || 0}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="text-gray-500">Staff</p>
+                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.staff || 0}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="text-gray-500">Clients</p>
+                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.user || 0}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -36,9 +36,15 @@ function resolveProfileImageUrl(url) {
     const u = typeof url === 'string' ? url.trim() : ''
     if (!u) return ''
     if (/^https?:\/\//i.test(u)) return u
-    const rawBase =
-        (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) ||
-        'http://localhost:5000/api'
+    const rawBase = (() => {
+        const prod = 'https://spireleap-backend.onrender.com/api'
+        const dev = 'http://localhost:5000/api'
+        const envApi = typeof process !== 'undefined' ? String(process.env.NEXT_PUBLIC_API_URL || '').trim() : ''
+        const seed = envApi || (process.env.NODE_ENV === 'development' ? dev : prod)
+        const localNetworkHost = /localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/i
+        if (process.env.NODE_ENV !== 'development' && localNetworkHost.test(seed)) return prod
+        return seed
+    })()
     const origin = String(rawBase).replace(/\/api\/?$/i, '')
     return `${origin}${u.startsWith('/') ? u : `/${u}`}`
 }

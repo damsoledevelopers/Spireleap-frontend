@@ -8,6 +8,23 @@ import { api } from '../../lib/api'
 import { io } from 'socket.io-client'
 import { getToken } from '../../lib/tokenStorage'
 
+const PROD_SOCKET_URL = 'https://spireleap-backend.onrender.com'
+const DEV_SOCKET_URL = 'http://localhost:5000'
+
+const resolveSocketUrl = () => {
+  const raw = String(process.env.NEXT_PUBLIC_API_URL || '').trim()
+  const fallback = process.env.NODE_ENV === 'development' ? DEV_SOCKET_URL : PROD_SOCKET_URL
+  if (!raw) return fallback
+  const normalized = raw.replace(/\/api\/?$/i, '')
+  if (
+    process.env.NODE_ENV !== 'development' &&
+    /localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/i.test(normalized)
+  ) {
+    return PROD_SOCKET_URL
+  }
+  return normalized
+}
+
 export default function NotificationBell() {
   const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
@@ -22,7 +39,7 @@ export default function NotificationBell() {
     const token = getToken()
     if (!token) return
 
-    const newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
+    const newSocket = io(resolveSocketUrl(), {
       auth: { token },
       transports: ['websocket', 'polling']
     })

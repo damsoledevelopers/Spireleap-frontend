@@ -608,9 +608,9 @@ export default function AdminUsers() {
                 <div>
                   <p className="text-sm font-medium text-green-600">Active Users</p>
                   <p className="text-2xl font-bold text-green-900 mt-1">{stats.activeUsers}</p>
-                  <p className="text-xs text-green-600 mt-1">
+                  {/* <p className="text-xs text-green-600 mt-1">
                     {stats.totalUsers > 0 ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}% of total
-                  </p>
+                  </p> */}
                 </div>
                 <UserCheck className="h-10 w-10 text-green-500 opacity-70" />
               </div>
@@ -635,9 +635,9 @@ export default function AdminUsers() {
                 <div>
                   <p className="text-sm font-medium text-purple-600">Total Inquiries</p>
                   <p className="text-2xl font-bold text-purple-900 mt-1">{stats.totalInquiries}</p>
-                  <p className="text-xs text-purple-600 mt-1">
+                  {/* <p className="text-xs text-purple-600 mt-1">
                     {stats.usersWithInquiries} users
-                  </p>
+                  </p> */}
                 </div>
                 <MessageSquare className="h-10 w-10 text-purple-500 opacity-70" />
               </div>
@@ -650,9 +650,9 @@ export default function AdminUsers() {
                 <div>
                   <p className="text-sm font-medium text-orange-600">With Inquiries</p>
                   <p className="text-2xl font-bold text-orange-900 mt-1">{stats.usersWithInquiries}</p>
-                  <p className="text-xs text-orange-600 mt-1">
+                  {/* <p className="text-xs text-orange-600 mt-1">
                     {stats.totalUsers > 0 ? Math.round((stats.usersWithInquiries / stats.totalUsers) * 100) : 0}% engaged
-                  </p>
+                  </p> */}
                 </div>
                 <Activity className="h-10 w-10 text-orange-500 opacity-70" />
               </div>

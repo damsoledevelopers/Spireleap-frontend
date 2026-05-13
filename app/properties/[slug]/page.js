@@ -16,8 +16,13 @@ import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
 
 const BACKEND_ORIGIN = (() => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
-  return apiUrl.replace(/\/api\/?$/, '')
+  const prod = 'https://spireleap-backend.onrender.com/api'
+  const dev = 'http://localhost:5000/api'
+  const rawApiUrl = String(process.env.NEXT_PUBLIC_API_URL || '').trim()
+  const seed = rawApiUrl || (process.env.NODE_ENV === 'development' ? dev : prod)
+  const localNetworkHost = /localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/i
+  const safeApi = process.env.NODE_ENV !== 'development' && localNetworkHost.test(seed) ? prod : seed
+  return safeApi.replace(/\/api\/?$/, '')
 })()
 
 const resolveImageUrl = (raw) => {

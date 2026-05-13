@@ -1,10 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['localhost', 'res.cloudinary.com', 'spireleap-backend.onrender.com'],
+    domains: ['res.cloudinary.com', 'spireleap-backend.onrender.com'],
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL ||
+      (process.env.NODE_ENV === 'development'
+        ? 'http://localhost:5000/api'
+        : 'https://spireleap-backend.onrender.com/api'),
   },
   webpack: (config) => {
     config.resolve.alias = {
