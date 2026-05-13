@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
@@ -117,13 +117,6 @@ export default function AdminEditPropertyPage() {
         ? data.data.states.map(s => s?.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
         : []
       setGeo(prev => ({ ...prev, states, cities: [] }))
-
-      // Reset invalid state/city
-      setFormData(prev => {
-        const currentState = prev.location.state
-        if (!currentState || states.includes(currentState)) return prev
-        return { ...prev, location: { ...prev.location, state: '', city: '' } }
-      })
     } catch (error) {
       console.error('Error fetching states:', error)
       setGeo(prev => ({ ...prev, states: [], cities: [] }))
@@ -156,15 +149,9 @@ export default function AdminEditPropertyPage() {
       })
       const data = await res.json()
       const cities = Array.isArray(data?.data)
-        ? data.data.filter(Boolean).sort((a, b) => a.localeCompare(b))
+        ? data.data.map((c) => String(c || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
         : []
       setGeo(prev => ({ ...prev, cities }))
-
-      setFormData(prev => {
-        const currentCity = prev.location.city
-        if (!currentCity || cities.includes(currentCity)) return prev
-        return { ...prev, location: { ...prev.location, city: '' } }
-      })
     } catch (error) {
       console.error('Error fetching cities:', error)
       setGeo(prev => ({ ...prev, cities: [] }))
@@ -346,6 +333,16 @@ export default function AdminEditPropertyPage() {
     setGeo((prev) => ({ ...prev, cities: [] }))
   }
 
+  const stateOptions = useMemo(() => {
+    const current = String(formData.location?.state || '').trim()
+    return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.states, formData.location?.state])
+
+  const cityOptions = useMemo(() => {
+    const current = String(formData.location?.city || '').trim()
+    return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, formData.location?.city])
+
   const renderSpecificationStepper = (label, field, value, maxLen = 2, placeholder = 'Add', min = 0, max) => {
     const numericValue = parseInt(value, 10)
     const current = Number.isNaN(numericValue) ? null : numericValue
@@ -479,6 +476,14 @@ export default function AdminEditPropertyPage() {
 
       const submitData = {
         ...formData,
+        location: {
+          ...formData.location,
+          address: String(formData.location?.address || '').trim(),
+          city: String(formData.location?.city || '').trim(),
+          state: String(formData.location?.state || '').trim(),
+          country: String(formData.location?.country || '').trim(),
+          zipCode: String(formData.location?.zipCode || '').trim(),
+        },
         price: {
           sale: formData.price.sale ? parseFloat(formData.price.sale) : undefined,
           rent: formData.price.rent.amount ? {
@@ -518,6 +523,10 @@ export default function AdminEditPropertyPage() {
         virtualTour: formData.virtualTour.url ? formData.virtualTour : undefined,
         videos: formData.videos.filter(v => v.url)
       }
+
+      if (!submitData.agency) delete submitData.agency
+      if (!submitData.agent) delete submitData.agent
+      if (!submitData.category) delete submitData.category
 
       if (
         submitData.specifications?.area &&
@@ -799,51 +808,45 @@ export default function AdminEditPropertyPage() {
               {/* Country */}
               <div>
                 <label className="block text-sm font-bold mb-1">Country<span className="text-red-500">*</span></label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.location.country}
                   onChange={(e) => handleCountryChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
-                  {geo.countries.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                  options={geo.countries.map((c) => ({ value: c, label: c }))}
+                  placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
+                  searchPlaceholder="Search country..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white text-left"
+                />
               </div>
 
               {/* State */}
               <div>
                 <label className="block text-sm font-bold mb-1">State<span className="text-red-500">*</span></label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.location.state}
                   onChange={(e) => handleStateChange(e.target.value)}
                   disabled={!formData.location.country || geoLoading.states}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
-                  {geo.states.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  options={stateOptions.map((s) => ({ value: s, label: s }))}
+                  placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                  searchPlaceholder="Search state..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white text-left"
+                />
               </div>
 
               {/* City */}
               <div>
                 <label className="block text-sm font-bold mb-1">City<span className="text-red-500">*</span></label>
-                <select
+                <SearchableSelect
                   required
                   value={formData.location.city}
                   onChange={(e) => handleInputChange('location.city', e.target.value)}
                   disabled={!formData.location.state || geoLoading.cities}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
-                  {geo.cities.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                  options={cityOptions.map((c) => ({ value: c, label: c }))}
+                  placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                  searchPlaceholder="Search city..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white text-left"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">Zip Code</label>

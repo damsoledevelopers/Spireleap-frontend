@@ -628,7 +628,8 @@ export default function ProfilePage() {
                                             disabled={geoLoading.countries}
                                             clearOnBackspace
                                             placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
-                                            searchable={false}
+                                            searchable
+                                            searchPlaceholder="Search country..."
                                             buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
                                         />
                                     </div>
@@ -662,7 +663,8 @@ export default function ProfilePage() {
                                                       ? 'Loading states...'
                                                       : 'Select state'
                                             }
-                                            searchable={false}
+                                            searchable
+                                            searchPlaceholder="Search state..."
                                             buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
                                         />
                                     </div>
@@ -693,7 +695,8 @@ export default function ProfilePage() {
                                                         ? 'Loading cities...'
                                                         : 'Select city'
                                             }
-                                            searchable={false}
+                                            searchable
+                                            searchPlaceholder="Search city..."
                                             buttonClassName="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
                                         />
                                     </div>

@@ -3324,6 +3324,16 @@ export default function AdminLeadsPage() {
               },
             ],
           },
+          {
+            title: 'Location',
+            items: [
+              { label: 'Street', value: detailsLead.contact?.address?.street },
+              { label: 'Country', value: detailsLead.contact?.address?.country },
+              { label: 'State', value: detailsLead.contact?.address?.state },
+              { label: 'County', value: detailsLead.contact?.address?.county || detailsLead.contact?.address?.city },
+              { label: 'Zip Code', value: detailsLead.contact?.address?.zipCode },
+            ],
+          },
         ] : []}
         actions={detailsLead ? (
           <>

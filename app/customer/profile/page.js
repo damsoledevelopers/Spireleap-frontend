@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
+import SearchableSelect from '../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 import {
     sanitizePostalDigits,
@@ -24,9 +25,11 @@ import {
 } from '../../../lib/postalCode'
 
 export default function CustomerProfile() {
-    const { user, login } = useAuth()
+    const { user } = useAuth()
     const [loading, setLoading] = useState(false)
     const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
+    const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+    const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -60,6 +63,116 @@ export default function CustomerProfile() {
             })
         }
     }, [user])
+
+    useEffect(() => {
+        fetchCountries()
+    }, [])
+
+    useEffect(() => {
+        const country = String(formData.address?.country || '').trim()
+        if (country) {
+            fetchStates(country)
+        } else {
+            setGeo((p) => ({ ...p, states: [], cities: [] }))
+        }
+    }, [formData.address?.country])
+
+    useEffect(() => {
+        const country = String(formData.address?.country || '').trim()
+        const state = String(formData.address?.state || '').trim()
+        if (country && state) {
+            fetchCities(country, state)
+        } else {
+            setGeo((p) => ({ ...p, cities: [] }))
+        }
+    }, [formData.address?.country, formData.address?.state])
+
+    const fetchCountries = async () => {
+        try {
+            setGeoLoading((p) => ({ ...p, countries: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+            const data = await res.json()
+            const countries = Array.isArray(data?.data)
+                ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+                : []
+            setGeo((p) => ({ ...p, countries }))
+        } catch (error) {
+            console.error('Error fetching countries:', error)
+            setGeo((p) => ({ ...p, countries: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, countries: false }))
+        }
+    }
+
+    const fetchStates = async (country) => {
+        if (!country) return
+        try {
+            setGeoLoading((p) => ({ ...p, states: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ country })
+            })
+            const data = await res.json()
+            const states = Array.isArray(data?.data?.states)
+                ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+                : []
+            setGeo((p) => ({ ...p, states }))
+        } catch (error) {
+            console.error('Error fetching states:', error)
+            setGeo((p) => ({ ...p, states: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, states: false }))
+        }
+    }
+
+    const fetchCities = async (country, state) => {
+        if (!country || !state) return
+        try {
+            setGeoLoading((p) => ({ ...p, cities: true }))
+            const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ country, state })
+            })
+            const data = await res.json()
+            const cities = Array.isArray(data?.data)
+                ? data.data.map((c) => String(c || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+                : []
+            setGeo((p) => ({ ...p, cities }))
+        } catch (error) {
+            console.error('Error fetching cities:', error)
+            setGeo((p) => ({ ...p, cities: [] }))
+        } finally {
+            setGeoLoading((p) => ({ ...p, cities: false }))
+        }
+    }
+
+    const stateOptions = useMemo(() => {
+        const current = String(formData.address?.state || '').trim()
+        return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+    }, [geo.states, formData.address?.state])
+
+    const cityOptions = useMemo(() => {
+        const current = String(formData.address?.city || '').trim()
+        return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+    }, [geo.cities, formData.address?.city])
+
+    const handleCountryChange = (country) => {
+        setFormData((prev) => ({
+            ...prev,
+            address: { ...prev.address, country, state: '', city: '' }
+        }))
+        setGeo((p) => ({ ...p, states: [], cities: [] }))
+    }
+
+    const handleStateChange = (state) => {
+        setFormData((prev) => ({
+            ...prev,
+            address: { ...prev.address, state, city: '' }
+        }))
+        setGeo((p) => ({ ...p, cities: [] }))
+    }
 
     const handleChange = (e) => {
         const { name, value } = e.target
@@ -253,26 +366,58 @@ export default function CustomerProfile() {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">City</label>
-                                    <input
-                                        type="text"
-                                        name="address.city"
-                                        value={formData.address.city}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
-                                    />
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Country</label>
+                                    <div className="relative">
+                                        <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+                                        <SearchableSelect
+                                            value={formData.address.country}
+                                            onChange={(e) => handleCountryChange(e.target.value)}
+                                            options={geo.countries.map((c) => ({ value: c, label: c }))}
+                                            placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
+                                            searchable
+                                            searchPlaceholder="Search country..."
+                                            buttonClassName="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-left"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">State / Province</label>
-                                    <input
-                                        type="text"
-                                        name="address.state"
-                                        value={formData.address.state}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
-                                    />
+                                    <div className="relative">
+                                        <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+                                        <SearchableSelect
+                                            value={formData.address.state}
+                                            onChange={(e) => handleStateChange(e.target.value)}
+                                            options={stateOptions.map((s) => ({ value: s, label: s }))}
+                                            disabled={!formData.address.country || geoLoading.states}
+                                            placeholder={!formData.address.country ? 'Select country first' : geoLoading.states ? 'Loading states...' : 'Select state'}
+                                            searchable
+                                            searchPlaceholder="Search state..."
+                                            buttonClassName="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-left disabled:bg-gray-100"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">City</label>
+                                    <div className="relative">
+                                        <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+                                        <SearchableSelect
+                                            value={formData.address.city}
+                                            onChange={(e) => setFormData((prev) => ({
+                                                ...prev,
+                                                address: { ...prev.address, city: e.target.value }
+                                            }))}
+                                            options={cityOptions.map((c) => ({ value: c, label: c }))}
+                                            disabled={!formData.address.country || !formData.address.state || geoLoading.cities}
+                                            placeholder={!formData.address.country ? 'Select country first' : !formData.address.state ? 'Select state first' : geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                                            searchable
+                                            searchPlaceholder="Search city..."
+                                            buttonClassName="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-left disabled:bg-gray-100"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="space-y-2 md:col-span-1">
                                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Zip Code</label>
                                     <input
                                         type="text"
@@ -286,18 +431,6 @@ export default function CustomerProfile() {
                                             {OPTIONAL_POSTAL_DIGITS_MESSAGE}
                                         </p>
                                     )}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Country</label>
-                                    <input
-                                        type="text"
-                                        name="address.country"
-                                        value={formData.address.country}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
-                                    />
                                 </div>
                             </div>
                         </div>

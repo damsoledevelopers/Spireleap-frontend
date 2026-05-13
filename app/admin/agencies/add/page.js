@@ -9,6 +9,7 @@ import { ArrowLeft, Save, Building, Mail, Phone, MapPin, Upload, X, Eye, EyeOff 
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import PhoneField from '../../../../components/Common/PhoneField'
+import SearchableSelect from '../../../../components/Common/SearchableSelect'
 import { buildE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
 import { validateConfirmPassword, validateEmail, validatePassword, validateRequired, validateUrlOptional } from '../../../../lib/validation'
 import { scrollToFirstErrorField } from '../../../../lib/scrollToError'
@@ -709,56 +710,50 @@ export default function AddAgencyPage() {
                   <label htmlFor="contact.address.country" className="block text-sm font-bold text-gray-900 mb-2">
                     Country
                   </label>
-                  <select
+                  <SearchableSelect
                     id="contact.address.country"
                     name="contact.address.country"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     value={formData.contact.address.country}
-                    onChange={handleChange}
-                  >
-                    <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
-                    {geo.countries.map((country) => (
-                      <option key={country} value={country}>{country}</option>
-                    ))}
-                  </select>
+                    onChange={(e) => handleChange({ target: { name: 'contact.address.country', value: e.target.value, type: 'text' } })}
+                    options={geo.countries.map((country) => ({ value: country, label: country }))}
+                    placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
+                    searchPlaceholder="Search country..."
+                    buttonClassName="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-left"
+                  />
                 </div>
 
                 <div>
                   <label htmlFor="contact.address.state" className="block text-sm font-bold text-gray-900 mb-2">
                     State
                   </label>
-                  <select
+                  <SearchableSelect
                     id="contact.address.state"
                     name="contact.address.state"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                     value={formData.contact.address.state}
-                    onChange={handleChange}
+                    onChange={(e) => handleChange({ target: { name: 'contact.address.state', value: e.target.value, type: 'text' } })}
+                    options={geo.states.map((state) => ({ value: state, label: state }))}
                     disabled={!formData.contact.address.country || geoLoading.states}
-                  >
-                    <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
-                    {geo.states.map((state) => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </select>
+                    placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                    searchPlaceholder="Search state..."
+                    buttonClassName="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 bg-white text-left"
+                  />
                 </div>
 
                 <div>
                   <label htmlFor="contact.address.city" className="block text-sm font-bold text-gray-900 mb-2">
                     City
                   </label>
-                  <select
+                  <SearchableSelect
                     id="contact.address.city"
                     name="contact.address.city"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                     value={formData.contact.address.city}
-                    onChange={handleChange}
+                    onChange={(e) => handleChange({ target: { name: 'contact.address.city', value: e.target.value, type: 'text' } })}
+                    options={geo.cities.map((city) => ({ value: city, label: city }))}
                     disabled={!formData.contact.address.state || geoLoading.cities}
-                  >
-                    <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
-                    {geo.cities.map((city) => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
+                    placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                    searchPlaceholder="Search city..."
+                    buttonClassName="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 bg-white text-left"
+                  />
                 </div>
 
                 <div>

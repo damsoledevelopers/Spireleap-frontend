@@ -464,48 +464,42 @@ export default function AdminUserEditPage() {
                 <label className="block text-sm font-bold text-gray-900 mb-1">
                   Country
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.address.country}
                   onChange={(e) => handleInputChange('address.country', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
-                  {geo.countries.map((country) => (
-                    <option key={country} value={country}>{country}</option>
-                  ))}
-                </select>
+                  options={geo.countries.map((country) => ({ value: country, label: country }))}
+                  placeholder={geoLoading.countries ? 'Loading countries...' : 'Select country'}
+                  searchPlaceholder="Search country..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-left"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">
                   State
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.address.state}
                   onChange={(e) => handleInputChange('address.state', e.target.value)}
                   disabled={!formData.address.country || geoLoading.states}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
-                >
-                  <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
-                  {geo.states.map((state) => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
+                  options={geo.states.map((state) => ({ value: state, label: state }))}
+                  placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                  searchPlaceholder="Search state..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">
                   City
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.address.city}
                   onChange={(e) => handleInputChange('address.city', e.target.value)}
                   disabled={!formData.address.state || geoLoading.cities}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
-                >
-                  <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
-                  {geo.cities.map((city) => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
+                  options={geo.cities.map((city) => ({ value: city, label: city }))}
+                  placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                  searchPlaceholder="Search city..."
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
 import { clearDropdownOptionsCache } from '../../lib/dropdownsApi'
@@ -28,6 +28,15 @@ export default function LocationManagement() {
   const [formData, setFormData] = useState(emptyForm)
   const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
   const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
+  const cityOptions = useMemo(() => {
+    return Array.from(
+      new Set([
+        ...(geo.cities || []),
+        String(formData.city || '').trim(),
+        ...((Array.isArray(formData.citiesSelected) ? formData.citiesSelected : []).map((c) => String(c || '').trim()))
+      ].filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, formData.city, formData.citiesSelected])
 
   useEffect(() => {
     fetchLocations()
@@ -125,7 +134,7 @@ export default function LocationManagement() {
     fetchCountries()
   }
 
-  const openEdit = (loc) => {
+  const openEdit = async (loc) => {
     setEditingLocation(loc)
     setFormData({
       country: loc.country || '',
@@ -136,8 +145,12 @@ export default function LocationManagement() {
     })
     setShowModal(true)
     fetchCountries()
-    if (loc.country) fetchStates(loc.country)
-    if (loc.country && loc.state) fetchCities(loc.country, loc.state)
+    if (loc.country) {
+      await fetchStates(loc.country)
+      if (loc.state) {
+        await fetchCities(loc.country, loc.state)
+      }
+    }
   }
 
   const closeModal = () => {
@@ -176,10 +189,11 @@ export default function LocationManagement() {
     try {
       setSaving(true)
       if (editingLocation) {
+        const primaryCity = String(formData.city || '').trim() || cities[0] || ''
         await api.put(`/settings/locations/${editingLocation._id}`, {
           country,
           state,
-          city: String(formData.city || '').trim(),
+          city: primaryCity,
           isActive
         })
         toast.success('Location updated successfully')
@@ -401,7 +415,7 @@ export default function LocationManagement() {
                     name="city"
                     value={formData.city}
                     onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
-                    options={geo.cities.map((c) => ({ value: c, label: c }))}
+                    options={cityOptions.map((c) => ({ value: c, label: c }))}
                     disabled={!formData.country || !formData.state || geoLoading.cities}
                     clearOnBackspace
                     placeholder={
@@ -469,7 +483,6 @@ export default function LocationManagement() {
                           ))}
                         </div>
                       )}
-
                     </div>
                   )}
                 </div>
