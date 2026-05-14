@@ -26,11 +26,11 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useCurrency } from '../../contexts/CurrencyContext'
-import { formatMoney } from '../../lib/money'  
+import { formatMoneyFromAed } from '../../lib/money'
 
 export default function HomePage() {
   const router = useRouter()
-  const { selectedCurrency } = useCurrency()
+  const { selectedCurrency, ratesByCode } = useCurrency()
   const [featuredProperties, setFeaturedProperties] = useState([])
   const [homeProperties, setHomeProperties] = useState([])
   const [homePropertiesLoading, setHomePropertiesLoading] = useState(true)
@@ -649,7 +649,8 @@ export default function HomePage() {
     }
   }
 
-  const formatPrice = (price) => formatMoney(price, selectedCurrency, { minimumFractionDigits: 0 })
+  const formatPrice = (price) =>
+    formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
 
   const getPrimaryImage = (images) => {
     const primary = images?.find(img => img.isPrimary)

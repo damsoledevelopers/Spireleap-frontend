@@ -34,6 +34,8 @@ export default function SearchableSelect({
   searchThreshold = 5
 }) {
   const containerRef = useRef(null)
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const optionRefs = useRef([])
@@ -42,6 +44,7 @@ export default function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [openUpwards, setOpenUpwards] = useState(false)
 
   const normalizedOptions = useMemo(() => options.map(toOption), [options])
 
@@ -123,6 +126,31 @@ export default function SearchableSelect({
     }, 0)
   }, [open, showSearch])
 
+  const updateMenuDirection = useCallback(() => {
+    if (!triggerRef.current || typeof window === 'undefined') return
+    const triggerRect = triggerRef.current.getBoundingClientRect()
+    const menuHeight = menuRef.current?.offsetHeight || 320
+    const spaceBelow = window.innerHeight - triggerRect.bottom
+    const spaceAbove = triggerRect.top
+    const shouldOpenUpwards = spaceBelow < Math.min(menuHeight, 280) && spaceAbove > spaceBelow
+    setOpenUpwards(shouldOpenUpwards)
+  }, [])
+
+  useEffect(() => {
+    if (!open) {
+      setOpenUpwards(false)
+      return
+    }
+
+    updateMenuDirection()
+    window.addEventListener('resize', updateMenuDirection)
+    window.addEventListener('scroll', updateMenuDirection, true)
+    return () => {
+      window.removeEventListener('resize', updateMenuDirection)
+      window.removeEventListener('scroll', updateMenuDirection, true)
+    }
+  }, [open, updateMenuDirection, filtered.length, query, showSearch])
+
   const emitChange = useCallback(
     (newValue) => {
       if (disabled) return
@@ -192,6 +220,7 @@ export default function SearchableSelect({
       {name && <input type="hidden" name={name} value={value ?? ''} required={required} />}
 
       <button
+        ref={triggerRef}
         id={baseId}
         name={name}
         type="button"
@@ -216,7 +245,10 @@ export default function SearchableSelect({
 
       {open && (
         <div
-          className={`absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden ${menuClassName}`}
+          ref={menuRef}
+          className={`absolute left-0 z-[70] w-full rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden ${
+            openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'
+          } ${menuClassName}`}
           role="listbox"
           aria-activedescendant={highlightIndex >= 0 ? `${baseId}-option-${highlightIndex}` : undefined}
         >

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../../contexts/AuthContext'
@@ -68,6 +68,16 @@ export default function EditStaffPage() {
     fetchCities(formData.address.country, formData.address.state)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.address.country, formData.address.state])
+
+  const stateOptions = useMemo(() => {
+    const current = String(formData.address?.state || '').trim()
+    return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.states, formData.address?.state])
+
+  const cityOptions = useMemo(() => {
+    const current = String(formData.address?.city || '').trim()
+    return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, formData.address?.city])
 
   const fetchStaff = async () => {
     try {
@@ -139,7 +149,6 @@ export default function EditStaffPage() {
   const fetchStates = async (country) => {
     if (!country) {
       setGeo((p) => ({ ...p, states: [], cities: [] }))
-      setFormData((prev) => ({ ...prev, address: { ...prev.address, state: '', city: '' } }))
       return
     }
     try {
@@ -155,11 +164,6 @@ export default function EditStaffPage() {
         : []
       states.sort((a, b) => a.localeCompare(b))
       setGeo((p) => ({ ...p, states, cities: [] }))
-      setFormData((prev) => {
-        const currentState = prev.address.state
-        if (!currentState || states.includes(currentState)) return prev
-        return { ...prev, address: { ...prev.address, state: '', city: '' } }
-      })
     } catch (error) {
       console.error('Error fetching states:', error)
       setGeo((p) => ({ ...p, states: [], cities: [] }))
@@ -169,11 +173,6 @@ export default function EditStaffPage() {
   }
 
   const fetchCities = async (country, state) => {
-    // if (!country || !state) {
-    //   setGeo((p) => ({ ...p, cities: [] }))
-    //   setFormData((prev) => ({ ...prev, address: { ...prev.address, city: '' } }))
-    //   return
-    // }
     if (!country || !state) {
       setGeo((p) => ({ ...p, cities: [] }))
       return
@@ -191,11 +190,6 @@ export default function EditStaffPage() {
         : []
       cities.sort((a, b) => a.localeCompare(b))
       setGeo((p) => ({ ...p, cities }))
-      setFormData((prev) => {
-        const currentCity = prev.address.city
-        if (!currentCity || cities.includes(currentCity)) return prev
-        return { ...prev, address: { ...prev.address, city: '' } }
-      })
     } catch (error) {
       console.error('Error fetching cities:', error)
       setGeo((p) => ({ ...p, cities: [] }))
@@ -576,8 +570,8 @@ export default function EditStaffPage() {
                   value={formData.address.state}
                   onChange={(e) => handleInputChange('address.state', e.target.value)}
                   disabled={!formData.address.country || geoLoading.states}
-                  options={geo.states.map((state) => ({ value: state, label: state }))}
-                  placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                  options={stateOptions.map((state) => ({ value: state, label: state }))}
+                  placeholder={!formData.address.country ? 'Select country first' : geoLoading.states ? 'Loading states...' : 'Select state'}
                   searchPlaceholder="Search state..."
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
                 />
@@ -590,8 +584,8 @@ export default function EditStaffPage() {
                   value={formData.address.city}
                   onChange={(e) => handleInputChange('address.city', e.target.value)}
                   disabled={!formData.address.state || geoLoading.cities}
-                  options={geo.cities.map((city) => ({ value: city, label: city }))}
-                  placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                  options={cityOptions.map((city) => ({ value: city, label: city }))}
+                  placeholder={!formData.address.state ? 'Select state first' : geoLoading.cities ? 'Loading cities...' : 'Select city'}
                   searchPlaceholder="Search city..."
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
                 />

@@ -309,32 +309,6 @@ export default function SuperAdminDashboard() {
           })}
         </div>
 
-        {(user?.role === 'super_admin' || user?.role === 'staff') && (
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">
-              Users count includes: Agencies Admins, Agents, Staff, Clients
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div className="rounded-lg border border-gray-200 p-3">
-                <p className="text-gray-500">Agency Admins</p>
-                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.agency_admin || 0}</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3">
-                <p className="text-gray-500">Agents</p>
-                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.agent || 0}</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3">
-                <p className="text-gray-500">Staff</p>
-                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.staff || 0}</p>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3">
-                <p className="text-gray-500">Clients</p>
-                <p className="font-bold text-gray-900">{dashboardData.userRoleBreakdown?.user || 0}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Inquiry Sources Pie Chart - More attractive donut design */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -68,6 +68,16 @@ export default function AddAgencyPage() {
     fetchCities(formData.contact.address.country, formData.contact.address.state)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.contact.address.country, formData.contact.address.state])
+
+  const stateOptions = useMemo(() => {
+    const current = String(formData.contact?.address?.state || '').trim()
+    return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.states, formData.contact?.address?.state])
+
+  const cityOptions = useMemo(() => {
+    const current = String(formData.contact?.address?.city || '').trim()
+    return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, formData.contact?.address?.city])
 
   const fetchCountries = async () => {
     try {
@@ -731,9 +741,9 @@ export default function AddAgencyPage() {
                     name="contact.address.state"
                     value={formData.contact.address.state}
                     onChange={(e) => handleChange({ target: { name: 'contact.address.state', value: e.target.value, type: 'text' } })}
-                    options={geo.states.map((state) => ({ value: state, label: state }))}
+                    options={stateOptions.map((state) => ({ value: state, label: state }))}
                     disabled={!formData.contact.address.country || geoLoading.states}
-                    placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                    placeholder={!formData.contact.address.country ? 'Select country first' : geoLoading.states ? 'Loading states...' : 'Select state'}
                     searchPlaceholder="Search state..."
                     buttonClassName="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 bg-white text-left"
                   />
@@ -748,9 +758,9 @@ export default function AddAgencyPage() {
                     name="contact.address.city"
                     value={formData.contact.address.city}
                     onChange={(e) => handleChange({ target: { name: 'contact.address.city', value: e.target.value, type: 'text' } })}
-                    options={geo.cities.map((city) => ({ value: city, label: city }))}
+                    options={cityOptions.map((city) => ({ value: city, label: city }))}
                     disabled={!formData.contact.address.state || geoLoading.cities}
-                    placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                    placeholder={!formData.contact.address.state ? 'Select state first' : geoLoading.cities ? 'Loading cities...' : 'Select city'}
                     searchPlaceholder="Search city..."
                     buttonClassName="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 bg-white text-left"
                   />

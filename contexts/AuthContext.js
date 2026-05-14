@@ -83,7 +83,17 @@ export function AuthProvider({ children }) {
   const login = async (email, password, { rememberMe = false } = {}) => {
     try {
       const response = await api.post('/auth/login', { email, password, rememberMe })
-      const { token, user: userData } = response.data
+      const { token, user: userData, requiresOtp } = response.data
+
+      if (requiresOtp) {
+        return {
+          requiresOtp: true,
+          challengeToken: response.data.challengeToken,
+          otpType: response.data.otpType,
+          otpExpiresIn: response.data.otpExpiresIn,
+          maskedEmail: response.data.maskedEmail
+        }
+      }
 
       if (!userData || !userData.role) {
         console.error('Login response missing user data or role:', response.data)

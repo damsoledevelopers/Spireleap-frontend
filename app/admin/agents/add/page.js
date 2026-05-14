@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -76,6 +76,16 @@ export default function AddAgentPage() {
     fetchCities(formData.address.country, formData.address.state)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.address.country, formData.address.state])
+
+  const stateOptions = useMemo(() => {
+    const current = String(formData.address?.state || '').trim()
+    return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.states, formData.address?.state])
+
+  const cityOptions = useMemo(() => {
+    const current = String(formData.address?.city || '').trim()
+    return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, formData.address?.city])
 
   const fetchAgencies = async () => {
     try {
@@ -514,8 +524,8 @@ export default function AddAgentPage() {
                   value={formData.address.state}
                   onChange={(e) => handleInputChange('address.state', e.target.value)}
                   disabled={!formData.address.country || geoLoading.states}
-                  options={geo.states.map((state) => ({ value: state, label: state }))}
-                  placeholder={geoLoading.states ? 'Loading states...' : 'Select state'}
+                  options={stateOptions.map((state) => ({ value: state, label: state }))}
+                  placeholder={!formData.address.country ? 'Select country first' : geoLoading.states ? 'Loading states...' : 'Select state'}
                   searchPlaceholder="Search state..."
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
                 />
@@ -528,8 +538,8 @@ export default function AddAgentPage() {
                   value={formData.address.city}
                   onChange={(e) => handleInputChange('address.city', e.target.value)}
                   disabled={!formData.address.state || geoLoading.cities}
-                  options={geo.cities.map((city) => ({ value: city, label: city }))}
-                  placeholder={geoLoading.cities ? 'Loading cities...' : 'Select city'}
+                  options={cityOptions.map((city) => ({ value: city, label: city }))}
+                  placeholder={!formData.address.state ? 'Select state first' : geoLoading.cities ? 'Loading cities...' : 'Select city'}
                   searchPlaceholder="Search city..."
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 bg-white text-left"
                 />

@@ -256,7 +256,7 @@ export default function CustomerProfile() {
 
                 <form onSubmit={handleSubmit} className="space-y-6 pb-12">
                     {/* Profile Section */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-visible">
                         <div className="p-6 border-b border-gray-100 bg-gray-50/50">
                             <h2 className="text-sm font-bold text-gray-900 flex items-center">
                                 <User className="h-4 w-4 mr-2 text-primary-600" />

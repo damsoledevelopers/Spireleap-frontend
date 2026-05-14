@@ -17,6 +17,10 @@ export default function LoginPage() {
   })
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [otpStep, setOtpStep] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [challengeToken, setChallengeToken] = useState('')
+  const [maskedEmail, setMaskedEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const router = useRouter()
@@ -30,6 +34,14 @@ export default function LoginPage() {
       const email = formData.email.trim()
       const password = formData.password.trim()
       const userData = await login(email, password, { rememberMe })
+      if (userData?.requiresOtp) {
+        setOtpStep(true)
+        setChallengeToken(userData.challengeToken || '')
+        setMaskedEmail(userData.maskedEmail || email)
+        setLoading(false)
+        toast.success('OTP sent to your email')
+        return
+      }
       toast.success('Login successful!')
       // Navigation happens in AuthContext, but we can add a small delay for toast
       setTimeout(() => {
@@ -38,6 +50,49 @@ export default function LoginPage() {
     } catch (error) {
       toast.error(error.message || 'Login failed')
       setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { api } = await import('../../../lib/api')
+      const response = await api.post('/auth/verify-login-otp', {
+        challengeToken,
+        otp: String(otp || '').trim()
+      })
+      const { token, user } = response.data || {}
+      const { setToken } = await import('../../../lib/tokenStorage')
+      setToken(token, { rememberMe })
+      // Trigger normal post-login route flow by reusing login API with verified token in storage
+      toast.success('Login successful!')
+      if (user?.role === 'super_admin') {
+        window.location.href = '/admin/dashboard'
+      } else if (user?.role === 'agency_admin') {
+        window.location.href = '/agency/dashboard'
+      } else if (user?.role === 'agent') {
+        window.location.href = '/agent/dashboard'
+      } else if (user?.role === 'staff') {
+        window.location.href = '/staff/dashboard'
+      } else {
+        window.location.href = '/customer/dashboard'
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Invalid OTP')
+      setLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    if (!challengeToken) return
+    try {
+      const { api } = await import('../../../lib/api')
+      const response = await api.post('/auth/resend-login-otp', { challengeToken })
+      setChallengeToken(response.data?.challengeToken || challengeToken)
+      toast.success('OTP resent')
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to resend OTP')
     }
   }
 
@@ -70,8 +125,9 @@ export default function LoginPage() {
               NOVA KEYS Real Estate Platform
             </p>
           </div>
-          <form className="mt-8 space-y-6 bg-logo-white p-8 rounded-xl shadow-lg" onSubmit={handleSubmit}>
+          <form className="mt-8 space-y-6 bg-logo-white p-8 rounded-xl shadow-lg" onSubmit={otpStep ? handleVerifyOtp : handleSubmit}>
             <div className="space-y-4">
+              {!otpStep && (
               <div>
                 <label htmlFor="email" className="block text-sm font-bold text-gray-900 mb-2">
                   Email address<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
@@ -88,6 +144,8 @@ export default function LoginPage() {
                   onChange={handleChange}
                 />
               </div>
+              )}
+              {!otpStep && (
               <div>
                 <label htmlFor="password" className="block text-sm font-bold text-gray-900 mb-2">
                   Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
@@ -117,8 +175,29 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+              )}
+              {otpStep && (
+                <div>
+                  <label htmlFor="otp" className="block text-sm font-bold text-gray-900 mb-2">
+                    Enter OTP
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">OTP sent to {maskedEmail}</p>
+                  <input
+                    id="otp"
+                    name="otp"
+                    type="text"
+                    required
+                    maxLength={6}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  />
+                </div>
+              )}
             </div>
 
+            {!otpStep && (
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
@@ -143,6 +222,7 @@ export default function LoginPage() {
                 </Link>
               </div>
             </div>
+            )}
 
             <div>
               <button
@@ -153,11 +233,24 @@ export default function LoginPage() {
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  'Sign in'
+                  otpStep ? 'Verify OTP' : 'Sign in'
                 )}
               </button>
             </div>
 
+            {otpStep && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  className="font-medium text-primary-600 hover:text-primary-500 text-sm"
+                >
+                  Resend OTP
+                </button>
+              </div>
+            )}
+
+            {!otpStep && (
             <div className="text-center">
               <span className="text-sm text-gray-600">
                 Don't have an account?{' '}
@@ -169,12 +262,15 @@ export default function LoginPage() {
                 </Link>
               </span>
             </div>
+            )}
 
+            {!otpStep && (
             <div className="pt-4 border-t border-gray-200">
               <p className="text-xs text-center text-gray-500">
                 For agents and agency admins, please use your registered credentials
               </p>
             </div>
+            )}
           </form>
         </div>
       </div>

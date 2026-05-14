@@ -11,6 +11,7 @@ const DEFAULT_CURRENCY = 'USD'
 export function CurrencyProvider({ children }) {
   const [selectedCurrency, setSelectedCurrencyState] = useState(DEFAULT_CURRENCY)
   const [currencies, setCurrencies] = useState([])
+  const [ratesByCode, setRatesByCode] = useState({ AED: 1 })
 
   useEffect(() => {
     try {
@@ -32,6 +33,16 @@ export function CurrencyProvider({ children }) {
           .filter(Boolean)
         if (!mounted) return
         setCurrencies(normalized)
+
+        const apiRates = opts?.currencyRates && typeof opts.currencyRates === 'object'
+          ? Object.entries(opts.currencyRates).reduce((acc, [code, rate]) => {
+              const c = String(code || '').trim().toUpperCase()
+              const r = Number(rate)
+              if (c && Number.isFinite(r) && r > 0) acc[c] = r
+              return acc
+            }, {})
+          : {}
+        setRatesByCode({ AED: 1, ...apiRates })
 
         // Ensure selected currency is valid
         setSelectedCurrencyState((prev) => {
@@ -62,9 +73,10 @@ export function CurrencyProvider({ children }) {
     () => ({
       selectedCurrency,
       setSelectedCurrency,
-      currencies
+      currencies,
+      ratesByCode
     }),
-    [selectedCurrency, currencies]
+    [selectedCurrency, currencies, ratesByCode]
   )
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>
@@ -76,7 +88,8 @@ export function useCurrency() {
     return {
       selectedCurrency: DEFAULT_CURRENCY,
       setSelectedCurrency: () => {},
-      currencies: []
+      currencies: [],
+      ratesByCode: { AED: 1 }
     }
   }
   return ctx

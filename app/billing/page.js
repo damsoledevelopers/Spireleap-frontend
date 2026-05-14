@@ -5,6 +5,8 @@ import Header from '../../components/Layout/Header'
 import Footer from '../../components/Layout/Footer'
 import { api } from '../../lib/api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCurrency } from '../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../lib/money'
 import toast from 'react-hot-toast'
 import {
   ChevronLeft,
@@ -15,6 +17,7 @@ import { useRouter } from 'next/navigation'
 export default function BillingPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { selectedCurrency, ratesByCode } = useCurrency()
   const [plans, setPlans] = useState([])
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState(null)
@@ -130,6 +133,9 @@ export default function BillingPage() {
     }
   }
 
+  const formatPlanPrice = (amount) =>
+    formatMoneyFromAed(amount, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+
   return (
     <div className="min-h-screen bg-logo-offWhite">
       <Header />
@@ -175,7 +181,9 @@ export default function BillingPage() {
             ) : plans.map((plan) => {
               const monthly = plan.monthlyPrice ?? plan.price ?? null
               const yearly = plan.yearlyPrice ?? (plan.price && plan.interval === 'year' ? plan.price : null)
-              const priceLabel = monthly ? `$${monthly}` : (yearly ? `$${yearly}` : 'Contact')
+              const priceLabel = monthly
+                ? formatPlanPrice(monthly)
+                : (yearly ? formatPlanPrice(yearly) : 'Contact')
               const isRecommended = plan.recommended || plan.tier === 'pro'
 
               return (
@@ -211,21 +219,12 @@ export default function BillingPage() {
                     ))}
                   </ul>
 
-                  <div className="mt-4 flex items-center gap-3">
+                  <div className="mt-4">
                     <button
                       onClick={() => handleSubscribeClick(plan)}
-                      className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white ${isRecommended ? 'bg-primary-700 hover:bg-primary-800' : 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800'}`}
+                      className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white ${isRecommended ? 'bg-primary-700 hover:bg-primary-800' : 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800'}`}
                     >
                       Subscribe
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedPlan(plan)
-                        setShowPaymentModal(true)
-                      }}
-                      className="px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700"
-                    >
-                      Details
                     </button>
                   </div>
                 </div>
@@ -254,18 +253,19 @@ export default function BillingPage() {
       {showPaymentModal && selectedPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-2xl bg-white rounded-2xl p-6 shadow-xl">
-            <div className="flex justify-between items-center mb-4">
+            <div className="mb-4">
               <div>
                 <h3 className="text-lg font-bold">Subscribe to {selectedPlan.name}</h3>
                 <p className="text-sm text-gray-500">{selectedPlan.description}</p>
               </div>
-              <button onClick={() => setShowPaymentModal(false)} className="text-gray-500">Close</button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
                 <p className="text-sm text-gray-600">Amount</p>
-                <div className="mt-2 text-2xl font-extrabold text-primary-700">{selectedPlan.price ? `$${selectedPlan.price}` : 'Contact Support'}</div>
+                <div className="mt-2 text-2xl font-extrabold text-primary-700">
+                  {selectedPlan.price ? formatPlanPrice(selectedPlan.price) : 'Contact Support'}
+                </div>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Payment method</p>
