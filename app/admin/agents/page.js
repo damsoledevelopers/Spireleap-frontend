@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { UserCircle, Plus, Edit, Trash2, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield } from 'lucide-react'
+import { UserCircle, Plus, Edit, Trash2, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Building, Shield, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
@@ -545,6 +545,13 @@ export default function AgentsPage() {
                       </td>
                       <td className="px-4 py-4 text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/admin/agents/${String(agent._id)}`}
+                            className="text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Open details page"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </Link>
                           {isSuperAdmin && (
                             <Link
                               href={`/admin/permissions?type=agent&id=${String(agent._id)}`}
@@ -758,6 +765,12 @@ export default function AgentsPage() {
                 Edit
               </Link>
             )}
+            <Link
+              href={`/admin/agents/${String(detailsAgent._id)}`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Open page
+            </Link>
             <button
               type="button"
               onClick={() => setDetailsAgent(null)}

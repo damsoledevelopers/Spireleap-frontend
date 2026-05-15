@@ -53,6 +53,7 @@ export function AdminReportsContent() {
   const [loading, setLoading] = useState(true)
   const [reportData, setReportData] = useState({
     totalUsers: 0,
+    totalClients: 0,
     totalProperties: 0,
     totalLeads: 0,
     totalAgencies: 0,
@@ -125,8 +126,10 @@ export function AdminReportsContent() {
 
       const computedTotals = {
         totalUsers: stats.totalUsers ?? sumStatsObject(nextUsersByRole),
+        totalClients: stats.totalClients ?? nextUsersByRole.user ?? 0,
         totalProperties: stats.totalProperties ?? sumStatsObject(nextPropertiesByStatus),
-        totalLeads: stats.totalLeadsWithConverted ?? stats.totalLeads ?? sumStatsObject(nextLeadsByStatus)
+        // Match Lead collection count — never add client accounts (old totalLeadsWithConverted inflated totals)
+        totalLeads: stats.totalLeads ?? sumStatsObject(nextLeadsByStatus)
       }
 
       setReportData(prev => ({
@@ -146,8 +149,8 @@ export function AdminReportsContent() {
         agencyAnalysis: stats.agencyAnalysis || [],
         recentActivity: stats.recentActivity || [],
         systemStats: {
-          activeUsers: stats.userStats?.activeUsers ?? 0,
-          inactiveUsers: stats.userStats?.inactiveUsers ?? 0,
+          activeUsers: stats.clientStats?.active ?? 0,
+          inactiveUsers: stats.clientStats?.inactive ?? 0,
           activeProperties: nextPropertiesByStatus?.active || 0,
           pendingProperties: nextPropertiesByStatus?.pending || 0,
           soldProperties: nextPropertiesByStatus?.sold || 0,
@@ -341,8 +344,8 @@ export function AdminReportsContent() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Total Users</dt>
-                        <dd className="text-2xl font-semibold text-gray-900">{reportData.totalUsers}</dd>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Total clients</dt>
+                        <dd className="text-2xl font-semibold text-gray-900">{reportData.totalClients}</dd>
                       </dl>
                     </div>
                   </div>
@@ -389,8 +392,13 @@ export function AdminReportsContent() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Total Property Value</dt>
-                        <dd className="text-2xl font-semibold text-gray-900">${reportData.totalPropertyValue.toLocaleString()}</dd>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Total property value</dt>
+                        <dd className="mt-1">
+                          <p className="text-2xl font-semibold text-gray-900">
+                            ${Number(reportData.totalPropertyValue || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">Sum of listing prices                          </p>
+                        </dd>
                       </dl>
                     </div>
                   </div>
@@ -467,11 +475,11 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-gray-900">Active Users</span>
+                      <span className="text-sm font-medium text-gray-900">Active clients</span>
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.activeUsers}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-gray-900">Inactive Users</span>
+                      <span className="text-sm font-medium text-gray-900">Inactive clients</span>
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.inactiveUsers}</p>
                     </div>
                     <div>
@@ -495,8 +503,9 @@ export function AdminReportsContent() {
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.newLeads}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-gray-900">Converted Leads</span>
+                      <span className="text-sm font-medium text-gray-900">Won lead records</span>
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.convertedLeads}</p>
+                      <p className="text-xs text-gray-500 mt-1">Leads still in DB with booked / closed / converted status</p>
                     </div>
                   </div>
                 </div>
@@ -586,7 +595,11 @@ export function AdminReportsContent() {
                 <div className="card-body">
                   <div className="space-y-4">
                     {Object.entries(reportData.usersByRole).map(([role, count]) => {
-                      const pctNum = reportData.totalUsers > 0 ? (count / reportData.totalUsers) * 100 : 0
+                      const roleDenominator =
+                        reportData.totalUsers > 0
+                          ? reportData.totalUsers
+                          : sumStatsObject(reportData.usersByRole)
+                      const pctNum = roleDenominator > 0 ? (count / roleDenominator) * 100 : 0
                       const percentage = formatPercentLabel(pctNum)
                       return (
                         <div key={role}>
@@ -609,20 +622,24 @@ export function AdminReportsContent() {
 
               <div className="card">
                 <div className="card-header">
-                  <h3 className="text-lg font-medium text-gray-900">User Statistics</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Account statistics</h3>
                 </div>
                 <div className="card-body">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Total Users</span>
+                      <span className="text-sm font-medium text-gray-900">Total accounts (all roles)</span>
                       <span className="text-2xl font-semibold text-gray-900">{reportData.totalUsers}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Active Users</span>
+                      <span className="text-sm font-medium text-gray-900">Total clients</span>
+                      <span className="text-2xl font-semibold text-gray-900">{reportData.totalClients}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900">Active clients</span>
                       <span className="text-2xl font-semibold text-green-600">{reportData.systemStats.activeUsers}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Inactive Users</span>
+                      <span className="text-sm font-medium text-gray-900">Inactive clients</span>
                       <span className="text-2xl font-semibold text-red-600">{reportData.systemStats.inactiveUsers}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -744,8 +761,10 @@ export function AdminReportsContent() {
                       <span className="text-2xl font-semibold text-purple-600">{reportData.systemStats.rentedProperties}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Total Property Value</span>
-                      <span className="text-2xl font-semibold text-gray-900">${reportData.totalPropertyValue.toLocaleString()}</span>
+                      <span className="text-sm font-medium text-gray-900">Total property value</span>
+                      <span className="text-2xl font-semibold text-gray-900">
+                        ${Number(reportData.totalPropertyValue || 0).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -848,7 +867,7 @@ export function AdminReportsContent() {
                       <span className="text-2xl font-semibold text-blue-600">{reportData.systemStats.newLeads}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Converted Leads</span>
+                      <span className="text-sm font-medium text-gray-900">Won lead records</span>
                       <span className="text-2xl font-semibold text-green-600">{reportData.systemStats.convertedLeads}</span>
                     </div>
                     <div className="flex items-center justify-between">

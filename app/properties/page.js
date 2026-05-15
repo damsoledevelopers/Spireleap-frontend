@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { api } from '../../lib/api'
-import { Search, Filter, MapPin, Bed, Bath, Square, SlidersHorizontal, X, ChevronDown, DollarSign, TrendingUp, Building, Package } from 'lucide-react'
+import { Search, Filter, MapPin, Bed, Bath, Square, SlidersHorizontal, X, ChevronDown, DollarSign } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../components/Layout/Header'
 import Footer from '../../components/Layout/Footer'
 import { useCurrency } from '../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../lib/money'
+import SearchableSelect from '../../components/Common/SearchableSelect'
 
 export default function PropertiesPage() {
   const router = useRouter()
@@ -65,6 +66,8 @@ export default function PropertiesPage() {
   const [showFilters, setShowFilters] = useState(true)
   const [openFilter, setOpenFilter] = useState(null)
   const [pagination, setPagination] = useState({ page: parseInt(searchParams.get('page')) || 1, limit: 12, total: 0, pages: 0 })
+  const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
+  const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
 
   useEffect(() => {
     // Load filter options once (from backend)
@@ -90,6 +93,111 @@ export default function PropertiesPage() {
 
     fetchFilterOptions()
   }, [])
+
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        setGeoLoading((p) => ({ ...p, countries: true }))
+        const res = await fetch('https://countriesnow.space/api/v0.1/countries/positions')
+        const data = await res.json()
+        const countries = Array.isArray(data?.data)
+          ? data.data.map((c) => String(c?.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+          : []
+        setGeo((p) => ({ ...p, countries }))
+      } catch (e) {
+        console.error('Error fetching countries:', e)
+        setGeo((p) => ({ ...p, countries: [] }))
+      } finally {
+        setGeoLoading((p) => ({ ...p, countries: false }))
+      }
+    }
+    fetchCountries()
+  }, [])
+
+  useEffect(() => {
+    const country = String(filters.country || '').trim()
+    if (!country) {
+      setGeo((p) => ({ ...p, states: [], cities: [] }))
+      return
+    }
+    let cancelled = false
+    const fetchStates = async () => {
+      try {
+        setGeoLoading((p) => ({ ...p, states: true }))
+        const res = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ country })
+        })
+        const data = await res.json()
+        const states = Array.isArray(data?.data?.states)
+          ? data.data.states.map((s) => String(s?.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+          : []
+        if (!cancelled) setGeo((p) => ({ ...p, states, cities: [] }))
+      } catch (e) {
+        console.error('Error fetching states:', e)
+        if (!cancelled) setGeo((p) => ({ ...p, states: [], cities: [] }))
+      } finally {
+        if (!cancelled) setGeoLoading((p) => ({ ...p, states: false }))
+      }
+    }
+    fetchStates()
+    return () => {
+      cancelled = true
+    }
+  }, [filters.country])
+
+  useEffect(() => {
+    const country = String(filters.country || '').trim()
+    const state = String(filters.state || '').trim()
+    if (!country || !state) {
+      setGeo((p) => ({ ...p, cities: [] }))
+      return
+    }
+    let cancelled = false
+    const fetchCities = async () => {
+      try {
+        setGeoLoading((p) => ({ ...p, cities: true }))
+        const res = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ country, state })
+        })
+        const data = await res.json()
+        const cities = Array.isArray(data?.data)
+          ? data.data.map((c) => String(c || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b))
+          : []
+        if (!cancelled) setGeo((p) => ({ ...p, cities }))
+      } catch (e) {
+        console.error('Error fetching cities:', e)
+        if (!cancelled) setGeo((p) => ({ ...p, cities: [] }))
+      } finally {
+        if (!cancelled) setGeoLoading((p) => ({ ...p, cities: false }))
+      }
+    }
+    fetchCities()
+    return () => {
+      cancelled = true
+    }
+  }, [filters.country, filters.state])
+
+  const stateOptions = useMemo(() => {
+    const current = String(filters.state || '').trim()
+    return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.states, filters.state])
+
+  const cityOptions = useMemo(() => {
+    const current = String(filters.city || '').trim()
+    return Array.from(new Set([...(geo.cities || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [geo.cities, filters.city])
+
+  const areaSelectOptions = useMemo(() => {
+    const raw = filterOptions.locations?.areas || []
+    return [{ value: '', label: 'All areas' }, ...raw.map((a) => ({ value: a, label: a }))]
+  }, [filterOptions.locations?.areas])
+
+  const locationSelectClass =
+    'px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[140px] max-w-[200px]'
 
   // Sync state with URL changes
   useEffect(() => {
@@ -491,154 +599,57 @@ export default function PropertiesPage() {
               )}
             </div>
 
-            {/* State Filter */}
-            <div className="relative">
-              <button
-                onClick={() => setOpenFilter(openFilter === 'state' ? null : 'state')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.state ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
-              >
-                <MapPin className="h-4 w-4" />
-                State
-                {filters.state && <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">{filters.state}</span>}
-                <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'state' ? 'rotate-180' : ''}`} />
-              </button>
-              {openFilter === 'state' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => { handleFilterChange('state', ''); setOpenFilter(null); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All States
-                    </button>
-                    {filterOptions.locations.states.map((state) => (
-                      <button
-                        key={state}
-                        onClick={() => { handleFilterChange('state', state); setOpenFilter(null); }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm ${filters.state === state ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {state}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Country Filter */}
-            <div className="relative">
-              <button
-                onClick={() => setOpenFilter(openFilter === 'country' ? null : 'country')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
-              >
-                <MapPin className="h-4 w-4" />
-                Country
-                {filters.country && <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">{filters.country}</span>}
-                <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'country' ? 'rotate-180' : ''}`} />
-              </button>
-              {openFilter === 'country' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => { handleFilterChange('country', ''); setOpenFilter(null); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All Countries
-                    </button>
-                    {filterOptions.locations.countries.map((country) => (
-                      <button
-                        key={country}
-                        onClick={() => { handleFilterChange('country', country); setOpenFilter(null); }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm ${filters.country === country ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {country}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Area Filter */}
-            <div className="relative">
-              <button
-                onClick={() => setOpenFilter(openFilter === 'area' ? null : 'area')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.area ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
-              >
-                <TrendingUp className="h-4 w-4" />
-                Area
-                {filters.area && <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs max-w-[100px] truncate">{filters.area}</span>}
-                <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'area' ? 'rotate-180' : ''}`} />
-              </button>
-              {openFilter === 'area' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => { handleFilterChange('area', ''); setOpenFilter(null); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.area ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All Areas
-                    </button>
-                    {filterOptions.locations.areas.map((area) => (
-                      <button
-                        key={area}
-                        onClick={() => { handleFilterChange('area', area); setOpenFilter(null); }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm ${filters.area === area ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {area}
-                      </button>
-                    ))}
-                    <div className="pt-2 border-t border-gray-100 mt-2 p-1">
-                      <input
-                        type="text"
-                        placeholder="Or type area..."
-                        className="w-full px-3 py-1.5 border rounded text-xs"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleFilterChange('area', e.target.value)
-                            setOpenFilter(null)
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* City Filter (formerly Location) */}
-            <div className="relative">
-              <button
-                onClick={() => setOpenFilter(openFilter === 'city' ? null : 'city')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.city ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
-              >
-                <MapPin className="h-4 w-4" />
-                City
-                {filters.city && <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">{filters.city}</span>}
-                <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'city' ? 'rotate-180' : ''}`} />
-              </button>
-              {openFilter === 'city' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => { handleFilterChange('city', ''); setOpenFilter(null); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${!filters.city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                    >
-                      All Cities
-                    </button>
-                    {filterOptions.locations.cities.map((city) => (
-                      <button
-                        key={city}
-                        onClick={() => { handleFilterChange('city', city); setOpenFilter(null); }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm ${filters.city === city ? 'bg-primary-50 text-primary-700 font-medium' : 'hover:bg-gray-50'}`}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Location: country → state → city (cascading, searchable) + area from listings */}
+            <SearchableSelect
+              value={filters.country}
+              onChange={(e) => {
+                const v = e.target.value
+                setFilters((prev) => ({ ...prev, country: v, state: '', city: '', area: '' }))
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
+              options={[{ value: '', label: 'All countries' }, ...geo.countries.map((c) => ({ value: c, label: c }))]}
+              placeholder={geoLoading.countries ? 'Loading countries…' : 'Country'}
+              searchPlaceholder="Search country…"
+              searchable
+              buttonClassName={`${locationSelectClass} ${filters.country ? 'border-primary-500 bg-primary-50 text-primary-700' : ''}`}
+            />
+            <SearchableSelect
+              value={filters.state}
+              onChange={(e) => {
+                const v = e.target.value
+                setFilters((prev) => ({ ...prev, state: v, city: '', area: '' }))
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
+              options={[{ value: '', label: 'All states' }, ...stateOptions.map((s) => ({ value: s, label: s }))]}
+              placeholder={!filters.country ? 'Select country first' : geoLoading.states ? 'Loading states…' : 'State'}
+              searchPlaceholder="Search state…"
+              disabled={!filters.country || geoLoading.states}
+              searchable
+              buttonClassName={`${locationSelectClass} ${filters.state ? 'border-primary-500 bg-primary-50 text-primary-700' : ''}`}
+            />
+            <SearchableSelect
+              value={filters.city}
+              onChange={(e) => {
+                const v = e.target.value
+                setFilters((prev) => ({ ...prev, city: v, area: '' }))
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
+              options={[{ value: '', label: 'All cities' }, ...cityOptions.map((c) => ({ value: c, label: c }))]}
+              placeholder={!filters.state ? 'Select state first' : geoLoading.cities ? 'Loading cities…' : 'City'}
+              searchPlaceholder="Search city…"
+              disabled={!filters.country || !filters.state || geoLoading.cities}
+              searchable
+              buttonClassName={`${locationSelectClass} ${filters.city ? 'border-primary-500 bg-primary-50 text-primary-700' : ''}`}
+            />
+            <SearchableSelect
+              value={filters.area}
+              onChange={(e) => handleFilterChange('area', e.target.value)}
+              options={areaSelectOptions}
+              placeholder="Area"
+              searchPlaceholder="Search area…"
+              searchable
+              buttonClassName={`${locationSelectClass} ${filters.area ? 'border-primary-500 bg-primary-50 text-primary-700' : ''}`}
+            />
 
             {/* Category Filter */}
             <select

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Users, Plus, Edit, Trash2, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Briefcase, Shield } from 'lucide-react'
+import { Users, Plus, Edit, Trash2, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Briefcase, Shield, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
@@ -518,6 +518,13 @@ export function StaffPageContent() {
                       </td>
                       <td className="px-4 py-4 text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/admin/staff/${String(member._id)}`}
+                            className="text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Open details page"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </Link>
                           {isSuperAdmin && (
                             <Link
                               href={`/admin/permissions?type=staff&id=${String(member._id)}`}
@@ -702,6 +709,12 @@ export function StaffPageContent() {
                 Edit
               </Link>
             )}
+            <Link
+              href={`/admin/staff/${String(detailsStaff._id)}`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Open page
+            </Link>
             <button
               type="button"
               onClick={() => setDetailsStaff(null)}

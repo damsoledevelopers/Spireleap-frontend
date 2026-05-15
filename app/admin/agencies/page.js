@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
 import { api } from '../../../lib/api'
-import { Building, Plus, Edit, Trash2, Users, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield } from 'lucide-react'
+import { Building, Plus, Edit, Trash2, Users, Search, CheckCircle, UserX, Filter, X, ChevronUp, ChevronDown, Shield, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import DetailsModal from '../../../components/Common/DetailsModal'
@@ -520,6 +520,13 @@ export function AgenciesPageContent() {
                       </td>
                       <td className="px-3 py-4 text-center text-sm font-medium align-middle">
                         <div className="flex items-center justify-center gap-2 flex-nowrap">
+                          <Link
+                            href={`/admin/agencies/${String(agency._id)}`}
+                            className="text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Open details page"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </Link>
                           {isSuperAdmin && (
                             <Link
                               href={`/admin/permissions?type=agency&id=${String(agency._id)}`}
@@ -713,6 +720,12 @@ export function AgenciesPageContent() {
                 Edit
               </Link>
             )}
+            <Link
+              href={`/admin/agencies/${String(detailsAgency._id)}`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Open page
+            </Link>
             <button
               type="button"
               onClick={() => setDetailsAgency(null)}

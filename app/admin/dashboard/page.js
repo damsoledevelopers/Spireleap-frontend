@@ -177,6 +177,9 @@ export default function SuperAdminDashboard() {
   const getDynamicStats = () => {
     const managedUsersTotal = dashboardData.totalUsersCard || 0
     const managedUsersNew = dashboardData.userRoleBreakdown?.newManagedTotal || 0
+    const totalClients =
+      dashboardData.totalUsersCardBreakdown?.clients ?? dashboardData.userRoleBreakdown?.user ?? 0
+    const newClients = dashboardData.userRoleBreakdown?.newByRole?.user ?? 0
 
     const baseStats = [
       { name: 'Total Properties', value: dashboardData.totalProperties, change: dashboardData.newProperties, icon: Package, href: '/admin/properties' },
@@ -188,7 +191,13 @@ export default function SuperAdminDashboard() {
       return [
         { name: 'Total Agencies', value: dashboardData.totalAgencies, change: dashboardData.newAgencies, icon: Building, href: '/admin/agencies' },
         ...baseStats.slice(0, 2),
-        baseStats[2]
+        {
+          name: 'Total Clients',
+          value: totalClients,
+          change: newClients,
+          icon: UserCheck,
+          href: '/admin/users',
+        },
       ]
     }
 

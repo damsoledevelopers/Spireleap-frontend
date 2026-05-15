@@ -1043,13 +1043,13 @@ export default function AdminInquiriesPage() {
                     <td className="px-4 py-4 text-center text-sm font-medium">
                       <div className="flex items-center justify-center gap-2">
                         {checkEntryPermission(inquiry, user, 'view', canViewInquiries) && (
-                          <button
-                            onClick={() => handleViewDetails(inquiry._id)}
-                            className="text-primary-600 hover:text-primary-900 transition-colors"
-                            title="View Details"
+                          <Link
+                            href={`/admin/inquiries/${inquiry._id}`}
+                            className="text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Open details page"
                           >
                             <Eye className="h-5 w-5" />
-                          </button>
+                          </Link>
                         )}
                         {checkEntryPermission(inquiry, user, 'edit', canEditInquiry) && (
                           <Link
@@ -1498,6 +1498,12 @@ export default function AdminInquiriesPage() {
                 >
                   Close
                 </button>
+                <Link
+                  href={`/admin/inquiries/${selectedInquiry._id}`}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Open page
+                </Link>
                 <Link
                   href={`/admin/leads/${selectedInquiry._id}/edit`}
                   className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"

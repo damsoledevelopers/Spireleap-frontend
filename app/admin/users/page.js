@@ -661,134 +661,134 @@ export default function AdminUsers() {
         </div>
 
         <div className="flex items-center justify-end gap-3 flex-wrap">
-            {/* Date Range Filter Button - Left End */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
-                  ? 'border-primary-500 text-gray-900'
-                  : 'border-gray-300 text-gray-700'
-                  }`}
-              >
-                <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                <span className="whitespace-nowrap">
-                  {startDate && endDate
-                    ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                    : startDate
-                      ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                      : endDate
-                        ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
-                        : 'Date Range'}
-                </span>
-                {startDate || endDate ? (
-                  <X
-                    className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setStartDate('')
-                      setEndDate('')
-                    }}
-                  />
-                ) : null}
-              </button>
-              {showDatePicker && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowDatePicker(false)}
-                  />
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
-                        <input
-                          type="date"
-                          value={startDate}
-                          max={new Date().toISOString().split('T')[0]}
-                          onChange={(e) => {
-                            const newStartDate = e.target.value
-                            setStartDate(newStartDate)
-                            if (endDate && newStartDate && endDate < newStartDate) {
-                              setEndDate('')
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => {
-                            const newEndDate = e.target.value
-                            setEndDate(newEndDate)
-                          }}
-                          min={startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <button
-                        onClick={() => {
-                          setStartDate('')
-                          setEndDate('')
-                          setShowDatePicker(false)
+          {/* Date Range Filter Button - Left End */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 whitespace-nowrap ${startDate || endDate
+                ? 'border-primary-500 text-gray-900'
+                : 'border-gray-300 text-gray-700'
+                }`}
+            >
+              <Filter className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+              <span className="whitespace-nowrap">
+                {startDate && endDate
+                  ? `${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })} – ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                  : startDate
+                    ? `From ${new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                    : endDate
+                      ? `Until ${new Date(endDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}`
+                      : 'Date Range'}
+              </span>
+              {startDate || endDate ? (
+                <X
+                  className="h-4 w-4 ml-2 text-gray-400 hover:text-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setStartDate('')
+                    setEndDate('')
+                  }}
+                />
+              ) : null}
+            </button>
+            {showDatePicker && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowDatePicker(false)}
+                />
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        max={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          const newStartDate = e.target.value
+                          setStartDate(newStartDate)
+                          if (endDate && newStartDate && endDate < newStartDate) {
+                            setEndDate('')
+                          }
                         }}
-                        className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => setShowDatePicker(false)}
-                        className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                      >
-                        Apply
-                      </button>
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          const newEndDate = e.target.value
+                          setEndDate(newEndDate)
+                        }}
+                        min={startDate || undefined}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      />
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-            {/* All Users Dropdown */}
-            <SearchableSelect
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              options={[
-                { value: '', label: 'All Users' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              placeholder="All Users"
-              buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
-              searchPlaceholder="Search..."
-            />
-            {/* Search Bar - Right End */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                }}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm min-w-[200px] bg-white"
-              />
-            </div>
-            {/* Add User Button */}
-            {canCreateUser && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary flex items-center gap-2 bg-primary-600 hover:bg-primary-700 whitespace-nowrap flex-shrink-0"
-              >
-                <Plus className="h-4 w-4" />
-                Add User
-              </button>
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button
+                      onClick={() => {
+                        setStartDate('')
+                        setEndDate('')
+                        setShowDatePicker(false)
+                      }}
+                      className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={() => setShowDatePicker(false)}
+                      className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
+          </div>
+          {/* All Users Dropdown */}
+          <SearchableSelect
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { value: '', label: 'All Users' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+            placeholder="All Users"
+            buttonClassName="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[150px]"
+            searchPlaceholder="Search..."
+          />
+          {/* Search Bar - Right End */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+              }}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm min-w-[200px] bg-white"
+            />
+          </div>
+          {/* Add User Button */}
+          {canCreateUser && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="btn-primary flex items-center gap-2 bg-primary-600 hover:bg-primary-700 whitespace-nowrap flex-shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              Add User
+            </button>
+          )}
         </div>
 
 
@@ -887,15 +887,6 @@ export default function AdminUsers() {
                         return (
                           <div className="flex flex-col items-center gap-1">
                             <span className="text-sm font-semibold text-gray-900">{inquiryCount}</span>
-                            {inquiryCount > 0 && (
-                              <button
-                                onClick={() => handleViewInquiries(admin)}
-                                className="text-xs text-primary-600 hover:text-primary-800 underline"
-                                title="View inquiries"
-                              >
-                                View
-                              </button>
-                            )}
                           </div>
                         )
                       })()}
@@ -1049,300 +1040,300 @@ export default function AdminUsers() {
                 </button>
               </div>
               <div className="px-6 pb-6">
-              <form onSubmit={handleAddUser}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
-                    <input
-                      type="text"
-                      className={`form-input ${addUserErrors.firstName ? 'border-red-500' : ''}`}
-                      required
-                      placeholder="Enter first name"
-                      value={formData.firstName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, firstName: sanitizeName(e.target.value) })
-                        if (addUserErrors.firstName) {
-                          setAddUserErrors((prev) => {
-                            const next = { ...prev }
-                            delete next.firstName
-                            return next
-                          })
-                        }
-                      }}
-                    />
-                    {addUserErrors.firstName && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.firstName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
-                    <input
-                      type="text"
-                      className={`form-input ${addUserErrors.lastName ? 'border-red-500' : ''}`}
-                      required
-                      placeholder="Enter last name"
-                      value={formData.lastName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, lastName: sanitizeName(e.target.value) })
-                        if (addUserErrors.lastName) {
-                          setAddUserErrors((prev) => {
-                            const next = { ...prev }
-                            delete next.lastName
-                            return next
-                          })
-                        }
-                      }}
-                    />
-                    {addUserErrors.lastName && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.lastName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
-                    <input
-                      type="email"
-                      className={`form-input ${addUserErrors.email ? 'border-red-500' : ''}`}
-                      required
-                      placeholder="Enter email"
-                      value={formData.email}
-                      onChange={(e) => {
-                        setFormData({ ...formData, email: e.target.value })
-                        if (addUserErrors.email) {
-                          setAddUserErrors((prev) => {
-                            const next = { ...prev }
-                            delete next.email
-                            return next
-                          })
-                        }
-                      }}
-                    />
-                    {addUserErrors.email && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.email}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Phone</label>
-                    <PhoneField
-                      label=""
-                      countryCodeName="phoneCountryCode"
-                      phoneName="phone"
-                      countryCodeValue={phoneCountryCode}
-                      phoneValue={formData.phone}
-                      onCountryCodeChange={(value) => setPhoneCountryCode(value)}
-                      onPhoneChange={(value) => {
-                        setFormData((prev) => ({ ...prev, phone: value }))
-                        if (addUserErrors.phone) {
-                          setAddUserErrors((prev) => {
-                            const next = { ...prev }
-                            delete next.phone
-                            return next
-                          })
-                        }
-                      }}
-                      showInlineError={Boolean(formData.phone)}
-                    />
-                    {addUserErrors.phone && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.phone}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
-                    <div className="relative">
+                <form onSubmit={handleAddUser}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">First Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                       <input
-                        type={showAddUserPassword ? 'text' : 'password'}
-                        className={`form-input pr-10 ${addUserErrors.password ? 'border-red-500' : ''}`}
+                        type="text"
+                        className={`form-input ${addUserErrors.firstName ? 'border-red-500' : ''}`}
                         required
-                        placeholder="Enter password"
-                        value={formData.password}
+                        placeholder="Enter first name"
+                        value={formData.firstName}
                         onChange={(e) => {
-                          setFormData({ ...formData, password: e.target.value })
-                          if (addUserErrors.password || addUserErrors.confirmPassword) {
+                          setFormData({ ...formData, firstName: sanitizeName(e.target.value) })
+                          if (addUserErrors.firstName) {
                             setAddUserErrors((prev) => {
                               const next = { ...prev }
-                              delete next.password
-                              delete next.confirmPassword
+                              delete next.firstName
                               return next
                             })
                           }
                         }}
-                        minLength={6}
                       />
-                      <button
-                        type="button"
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                        onClick={() => setShowAddUserPassword((p) => !p)}
-                        aria-label={showAddUserPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showAddUserPassword ? (
-                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        ) : (
-                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        )}
-                      </button>
+                      {addUserErrors.firstName && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.firstName}</p>
+                      )}
                     </div>
-                    {addUserErrors.password && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.password}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="form-label block text-sm font-bold text-gray-900 mb-1">Confirm Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
-                    <div className="relative">
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">Last Name<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
                       <input
-                        type={showAddUserConfirmPassword ? 'text' : 'password'}
-                        className={`form-input pr-10 ${addUserErrors.confirmPassword ? 'border-red-500' : ''}`}
+                        type="text"
+                        className={`form-input ${addUserErrors.lastName ? 'border-red-500' : ''}`}
                         required
-                        placeholder="Confirm password"
-                        value={formData.confirmPassword}
+                        placeholder="Enter last name"
+                        value={formData.lastName}
                         onChange={(e) => {
-                          setFormData({ ...formData, confirmPassword: e.target.value })
-                          if (addUserErrors.confirmPassword) {
+                          setFormData({ ...formData, lastName: sanitizeName(e.target.value) })
+                          if (addUserErrors.lastName) {
                             setAddUserErrors((prev) => {
                               const next = { ...prev }
-                              delete next.confirmPassword
+                              delete next.lastName
                               return next
                             })
                           }
                         }}
-                        minLength={6}
                       />
-                      <button
-                        type="button"
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                        onClick={() => setShowAddUserConfirmPassword((p) => !p)}
-                        aria-label={showAddUserConfirmPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showAddUserConfirmPassword ? (
-                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        ) : (
-                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        )}
-                      </button>
+                      {addUserErrors.lastName && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.lastName}</p>
+                      )}
                     </div>
-                    {addUserErrors.confirmPassword && (
-                      <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.confirmPassword}</p>
-                    )}
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">Email<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
+                      <input
+                        type="email"
+                        className={`form-input ${addUserErrors.email ? 'border-red-500' : ''}`}
+                        required
+                        placeholder="Enter email"
+                        value={formData.email}
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value })
+                          if (addUserErrors.email) {
+                            setAddUserErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.email
+                              return next
+                            })
+                          }
+                        }}
+                      />
+                      {addUserErrors.email && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">Phone</label>
+                      <PhoneField
+                        label=""
+                        countryCodeName="phoneCountryCode"
+                        phoneName="phone"
+                        countryCodeValue={phoneCountryCode}
+                        phoneValue={formData.phone}
+                        onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+                        onPhoneChange={(value) => {
+                          setFormData((prev) => ({ ...prev, phone: value }))
+                          if (addUserErrors.phone) {
+                            setAddUserErrors((prev) => {
+                              const next = { ...prev }
+                              delete next.phone
+                              return next
+                            })
+                          }
+                        }}
+                        showInlineError={Boolean(formData.phone)}
+                      />
+                      {addUserErrors.phone && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.phone}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
+                      <div className="relative">
+                        <input
+                          type={showAddUserPassword ? 'text' : 'password'}
+                          className={`form-input pr-10 ${addUserErrors.password ? 'border-red-500' : ''}`}
+                          required
+                          placeholder="Enter password"
+                          value={formData.password}
+                          onChange={(e) => {
+                            setFormData({ ...formData, password: e.target.value })
+                            if (addUserErrors.password || addUserErrors.confirmPassword) {
+                              setAddUserErrors((prev) => {
+                                const next = { ...prev }
+                                delete next.password
+                                delete next.confirmPassword
+                                return next
+                              })
+                            }
+                          }}
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          onClick={() => setShowAddUserPassword((p) => !p)}
+                          aria-label={showAddUserPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showAddUserPassword ? (
+                            <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                          ) : (
+                            <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                      {addUserErrors.password && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.password}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="form-label block text-sm font-bold text-gray-900 mb-1">Confirm Password<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>
+                      <div className="relative">
+                        <input
+                          type={showAddUserConfirmPassword ? 'text' : 'password'}
+                          className={`form-input pr-10 ${addUserErrors.confirmPassword ? 'border-red-500' : ''}`}
+                          required
+                          placeholder="Confirm password"
+                          value={formData.confirmPassword}
+                          onChange={(e) => {
+                            setFormData({ ...formData, confirmPassword: e.target.value })
+                            if (addUserErrors.confirmPassword) {
+                              setAddUserErrors((prev) => {
+                                const next = { ...prev }
+                                delete next.confirmPassword
+                                return next
+                              })
+                            }
+                          }}
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          onClick={() => setShowAddUserConfirmPassword((p) => !p)}
+                          aria-label={showAddUserConfirmPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showAddUserConfirmPassword ? (
+                            <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                          ) : (
+                            <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                      {addUserErrors.confirmPassword && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">{addUserErrors.confirmPassword}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Address */}
-                <div className="mt-6">
-                  <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Address
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Street</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={formData.address.street}
-                        onChange={(e) => setFormData((prev) => ({
-                          ...prev,
-                          address: { ...prev.address, street: e.target.value }
-                        }))}
-                        placeholder="Enter street address"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
-                      <select
-                        className="form-input"
-                        value={formData.address.country}
-                        onChange={(e) => setFormData((prev) => ({
-                          ...prev,
-                          address: { ...prev.address, country: e.target.value }
-                        }))}
-                      >
-                        <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
-                        {geo.countries.map((country) => (
-                          <option key={country} value={country}>{country}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
-                      <select
-                        className="form-input disabled:bg-gray-100"
-                        value={formData.address.state}
-                        onChange={(e) => setFormData((prev) => ({
-                          ...prev,
-                          address: { ...prev.address, state: e.target.value }
-                        }))}
-                        disabled={!formData.address.country || geoLoading.states}
-                      >
-                        <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
-                        {geo.states.map((state) => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
-                      <select
-                        className="form-input disabled:bg-gray-100"
-                        value={formData.address.city}
-                        onChange={(e) => setFormData((prev) => ({
-                          ...prev,
-                          address: { ...prev.address, city: e.target.value }
-                        }))}
-                        disabled={!formData.address.state || geoLoading.cities}
-                      >
-                        <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
-                        {geo.cities.map((city) => (
-                          <option key={city} value={city}>{city}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-1">ZIP Code</label>
-                      <input
-                        type="text"
-                        className={`form-input ${addUserErrors['address.zipCode'] ? 'border-red-500' : ''}`}
-                        value={formData.address.zipCode}
-                        onChange={(e) => {
-                          const cleaned = sanitizePostalDigits(e.target.value)
-                          setFormData((prev) => ({
+                  {/* Address */}
+                  <div className="mt-6">
+                    <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Address
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Street</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={formData.address.street}
+                          onChange={(e) => setFormData((prev) => ({
                             ...prev,
-                            address: { ...prev.address, zipCode: cleaned }
-                          }))
-                          if (addUserErrors['address.zipCode']) {
-                            setAddUserErrors((prev) => {
-                              const next = { ...prev }
-                              delete next['address.zipCode']
-                              return next
-                            })
-                          }
-                        }}
-                        placeholder="Enter ZIP code"
-                      />
-                      {(formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) || addUserErrors['address.zipCode'] ? (
-                        <p className="mt-1 text-xs font-semibold text-red-600">
-                          {addUserErrors['address.zipCode'] || OPTIONAL_POSTAL_DIGITS_MESSAGE}
-                        </p>
-                      ) : null}
+                            address: { ...prev.address, street: e.target.value }
+                          }))}
+                          placeholder="Enter street address"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">Country</label>
+                        <select
+                          className="form-input"
+                          value={formData.address.country}
+                          onChange={(e) => setFormData((prev) => ({
+                            ...prev,
+                            address: { ...prev.address, country: e.target.value }
+                          }))}
+                        >
+                          <option value="">{geoLoading.countries ? 'Loading countries...' : 'Select country'}</option>
+                          {geo.countries.map((country) => (
+                            <option key={country} value={country}>{country}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">State</label>
+                        <select
+                          className="form-input disabled:bg-gray-100"
+                          value={formData.address.state}
+                          onChange={(e) => setFormData((prev) => ({
+                            ...prev,
+                            address: { ...prev.address, state: e.target.value }
+                          }))}
+                          disabled={!formData.address.country || geoLoading.states}
+                        >
+                          <option value="">{geoLoading.states ? 'Loading states...' : 'Select state'}</option>
+                          {geo.states.map((state) => (
+                            <option key={state} value={state}>{state}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">City</label>
+                        <select
+                          className="form-input disabled:bg-gray-100"
+                          value={formData.address.city}
+                          onChange={(e) => setFormData((prev) => ({
+                            ...prev,
+                            address: { ...prev.address, city: e.target.value }
+                          }))}
+                          disabled={!formData.address.state || geoLoading.cities}
+                        >
+                          <option value="">{geoLoading.cities ? 'Loading cities...' : 'Select city'}</option>
+                          {geo.cities.map((city) => (
+                            <option key={city} value={city}>{city}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-1">ZIP Code</label>
+                        <input
+                          type="text"
+                          className={`form-input ${addUserErrors['address.zipCode'] ? 'border-red-500' : ''}`}
+                          value={formData.address.zipCode}
+                          onChange={(e) => {
+                            const cleaned = sanitizePostalDigits(e.target.value)
+                            setFormData((prev) => ({
+                              ...prev,
+                              address: { ...prev.address, zipCode: cleaned }
+                            }))
+                            if (addUserErrors['address.zipCode']) {
+                              setAddUserErrors((prev) => {
+                                const next = { ...prev }
+                                delete next['address.zipCode']
+                                return next
+                              })
+                            }
+                          }}
+                          placeholder="Enter ZIP code"
+                        />
+                        {(formData.address.zipCode && !isValidOptionalPostalDigits(formData.address.zipCode)) || addUserErrors['address.zipCode'] ? (
+                          <p className="mt-1 text-xs font-semibold text-red-600">
+                            {addUserErrors['address.zipCode'] || OPTIONAL_POSTAL_DIGITS_MESSAGE}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={closeAddUserModal}
-                    className="btn-secondary"
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Adding...' : 'Add User'}
-                  </button>
-                </div>
-              </form>
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={closeAddUserModal}
+                      className="btn-secondary"
+                      disabled={submitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Adding...' : 'Add User'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
