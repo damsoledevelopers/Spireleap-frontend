@@ -74,6 +74,35 @@ export default function ContactMessagesManagement() {
     })
   }
 
+  /** Opens Gmail compose with to / subject / body prefilled (`su` & `body` are Gmail compose params). */
+  const openGmailReply = (msg) => {
+    if (!msg?.email?.trim()) {
+      toast.error('Email address is not available')
+      return
+    }
+    const to = encodeURIComponent(msg.email.trim())
+    const subjectLine = msg.subject?.trim()
+      ? `Re: ${msg.subject.trim()}`
+      : 'Re: Your inquiry'
+    const su = encodeURIComponent(subjectLine)
+    const bodyLines = [
+      `Hi ${msg.name || 'there'},`,
+      '',
+      '',
+      '----------',
+      'Original message:',
+      `From: ${msg.name || ''} <${msg.email}>`,
+      msg.phone ? `Phone: ${msg.phone}` : null,
+      `Date: ${formatDate(msg.createdAt)}`,
+      `Subject: ${msg.subject || 'No subject'}`,
+      '',
+      msg.message || '(No message body)'
+    ].filter(Boolean)
+    const body = encodeURIComponent(bodyLines.join('\n'))
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   // Filter messages by search term (name, email, phone)
   const filteredMessages = messages.filter(message => {
     const searchLower = searchTerm.toLowerCase()
@@ -305,22 +334,15 @@ export default function ContactMessagesManagement() {
                     Close
                   </button>
                   <button
-                    onClick={() => {
-                      if (!selectedMessage.email) {
-                        toast.error('Email address is not available')
-                        return
-                      }
-                      const subject = encodeURIComponent(`Re: ${selectedMessage.subject || 'Your Inquiry'}`)
-                      const mailtoLink = `mailto:${selectedMessage.email}?subject=${subject}`
-                      window.location.href = mailtoLink
-                    }}
+                    onClick={() => openGmailReply(selectedMessage)}
                     disabled={!selectedMessage.email}
+                    title="Opens Gmail compose in a new tab with To, Subject, and body prefilled"
                     className={`px-4 py-2 rounded-lg transition-colors ${selectedMessage.email
                       ? 'bg-primary-600 text-white hover:bg-primary-700 cursor-pointer'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
                   >
-                    Reply via Email
+                    Reply in Gmail
                   </button>
                 </div>
               </div>
