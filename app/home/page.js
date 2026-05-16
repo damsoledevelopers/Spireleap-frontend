@@ -901,6 +901,9 @@ export default function HomePage() {
                         <option value="villa" className="text-gray-900">Villa</option>
                         <option value="condo" className="text-gray-900">Condo</option>
                         <option value="commercial" className="text-gray-900">Commercial</option>
+                        <option value="off_plan" className="text-gray-900">Off Plan</option>
+                        <option value="ready_to_move" className="text-gray-900">Ready to Move</option>
+                        <option value="under_construction" className="text-gray-900">Under Construction</option>
                       </select>
                       <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                       <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -1381,7 +1384,9 @@ export default function HomePage() {
                       <div className="grid grid-cols-3 gap-3 mb-6">
                         <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
                           <Bed className="h-4 w-4 text-primary-600 mb-1" />
-                          <span className="text-xs font-bold text-gray-700">{property.specifications?.bedrooms || 0} BHK</span>
+                          <span className="text-xs font-bold text-gray-700">
+                            {property.specifications?.isStudio ? 'Studio' : `${property.specifications?.bedrooms || 0} BHK`}
+                          </span>
                         </div>
                         <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
                           <Bath className="h-4 w-4 text-primary-600 mb-1" />

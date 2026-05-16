@@ -52,6 +52,7 @@ export default function PropertiesPage() {
     unfurnished: searchParams.get('unfurnished') || '',
     semiFurnished: searchParams.get('semiFurnished') || '',
     fullyFurnished: searchParams.get('fullyFurnished') || '',
+    studio: searchParams.get('studio') || '',
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
     amenities: searchParams.get('amenities') || '',
@@ -219,6 +220,7 @@ export default function PropertiesPage() {
       unfurnished: searchParams.get('unfurnished') || '',
       semiFurnished: searchParams.get('semiFurnished') || '',
       fullyFurnished: searchParams.get('fullyFurnished') || '',
+    studio: searchParams.get('studio') || '',
       search: searchParams.get('search') || '',
       category: searchParams.get('category') || '',
       amenities: searchParams.get('amenities') || '',
@@ -303,6 +305,7 @@ export default function PropertiesPage() {
       unfurnished: '',
       semiFurnished: '',
       fullyFurnished: '',
+      studio: '',
       search: '',
       category: '',
       amenities: '',
@@ -506,7 +509,7 @@ export default function PropertiesPage() {
             <div className="relative">
               <button
                 onClick={() => setOpenFilter(openFilter === 'spec' ? null : 'spec')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished || filters.studio ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
               >
                 <Bed className="h-4 w-4" />
                 Specification
@@ -519,7 +522,8 @@ export default function PropertiesPage() {
                       filters.livingRoom && `${filters.livingRoom}LR`,
                       filters.unfurnished && 'Unf',
                       filters.semiFurnished && 'Semi',
-                      filters.fullyFurnished && 'Full'
+                      filters.fullyFurnished && 'Full',
+                      filters.studio && 'Studio'
                     ].filter(Boolean).join(', ')}
                   </span>
                 )}
@@ -579,6 +583,10 @@ export default function PropertiesPage() {
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Furnishing Status</label>
                       <div className="flex flex-wrap gap-2">
+                        <label className="flex items-center gap-1 text-xs">
+                          <input type="checkbox" checked={!!filters.studio} onChange={(e) => handleFilterChange('studio', e.target.checked ? '1' : '')} />
+                          Studio
+                        </label>
                         <label className="flex items-center gap-1 text-xs">
                           <input type="checkbox" checked={!!filters.unfurnished} onChange={(e) => handleFilterChange('unfurnished', e.target.checked ? '1' : '')} />
                           Unfurnished

@@ -598,6 +598,15 @@ export default function PropertyDetailPage() {
 
               {/* Specifications */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-t border-b border-gray-200">
+                {property.specifications?.isStudio && (
+                  <div className="flex items-center gap-2">
+                    <Bed className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-500">Studio</p>
+                      <p className="font-semibold">Yes</p>
+                    </div>
+                  </div>
+                )}
                 {property.specifications?.bedrooms && (
                   <div className="flex items-center gap-2">
                     <Bed className="h-5 w-5 text-gray-400" />

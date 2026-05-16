@@ -74,7 +74,8 @@ export default function AdminPropertiesPage() {
     livingRoom: searchParams.get('livingRoom') || '',
     unfurnished: searchParams.get('unfurnished') === '1' ? 'true' : '',
     semiFurnished: searchParams.get('semiFurnished') === '1' ? 'true' : '',
-    fullyFurnished: searchParams.get('fullyFurnished') === '1' ? 'true' : ''
+    fullyFurnished: searchParams.get('fullyFurnished') === '1' ? 'true' : '',
+    studio: searchParams.get('studio') === '1' ? 'true' : ''
   })
   const [agencies, setAgencies] = useState([])
   const [uniqueLocations, setUniqueLocations] = useState({
@@ -171,6 +172,7 @@ export default function AdminPropertiesPage() {
     if (filters.unfurnished) params.set('unfurnished', '1')
     if (filters.semiFurnished) params.set('semiFurnished', '1')
     if (filters.fullyFurnished) params.set('fullyFurnished', '1')
+    if (filters.studio) params.set('studio', '1')
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
     if (pagination.current > 1) params.set('page', pagination.current.toString())
@@ -267,6 +269,9 @@ export default function AdminPropertiesPage() {
       }
       if (filters.fullyFurnished === 'true') {
         params.append('fullyFurnished', '1')
+      }
+      if (filters.studio === 'true') {
+        params.append('studio', '1')
       }
 
       const response = await api.get(`/properties?${params.toString()}`, {
@@ -657,6 +662,9 @@ export default function AdminPropertiesPage() {
                 { value: 'office', label: 'Office' },
                 { value: 'retail', label: 'Retail' },
                 { value: 'warehouse', label: 'Warehouse' },
+                { value: 'off_plan', label: 'Off Plan' },
+                { value: 'ready_to_move', label: 'Ready to Move' },
+                { value: 'under_construction', label: 'Under Construction' },
                 { value: 'other', label: 'Other' }
               ]}
               placeholder="All Types"
@@ -744,14 +752,14 @@ export default function AdminPropertiesPage() {
           <div className="relative">
             <button
               onClick={() => setOpenFilter(openFilter === 'specification' ? null : 'specification')}
-              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished || filters.studio ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
                 }`}
             >
               <Bed className="h-4 w-4" />
               Specification
-              {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
+              {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished || filters.studio) && (
                 <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                  {[filters.bedrooms && `${filters.bedrooms}BR`, filters.bathrooms && `${filters.bathrooms}BA`, filters.balconies && `${filters.balconies} Balc`, filters.livingRoom && `${filters.livingRoom} LR`, filters.unfurnished && 'Unfurn', filters.semiFurnished && 'Semi', filters.fullyFurnished && 'Full'].filter(Boolean).join(', ')}
+                  {[filters.bedrooms && `${filters.bedrooms}BR`, filters.bathrooms && `${filters.bathrooms}BA`, filters.balconies && `${filters.balconies} Balc`, filters.livingRoom && `${filters.livingRoom} LR`, filters.studio && 'Studio', filters.unfurnished && 'Unfurn', filters.semiFurnished && 'Semi', filters.fullyFurnished && 'Full'].filter(Boolean).join(', ')}
                 </span>
               )}
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'specification' ? 'rotate-180' : ''}`} />
@@ -763,10 +771,10 @@ export default function AdminPropertiesPage() {
                   <div className="p-4 space-y-4">
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="font-semibold text-gray-900">Specifications</h3>
-                      {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished) && (
+                      {(filters.bedrooms || filters.bathrooms || filters.minArea || filters.maxArea || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished || filters.studio) && (
                         <button
                           onClick={() => {
-                            setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '', balconies: '', livingRoom: '', unfurnished: '', semiFurnished: '', fullyFurnished: '' }))
+                            setFilters(prev => ({ ...prev, bedrooms: '', bathrooms: '', minArea: '', maxArea: '', balconies: '', livingRoom: '', unfurnished: '', semiFurnished: '', fullyFurnished: '', studio: '' }))
                             setPagination(prev => ({ ...prev, current: 1 }))
                           }}
                           className="text-xs text-primary-600 hover:text-primary-800"
@@ -874,6 +882,18 @@ export default function AdminPropertiesPage() {
                         />
                       </div>
                       <div className="space-y-2 pt-2">
+                        <label className="flex items-center gap-2 text-sm font-bold text-gray-900 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filters.studio === 'true'}
+                            onChange={(e) => {
+                              setFilters(prev => ({ ...prev, studio: e.target.checked ? 'true' : '' }))
+                              setPagination(prev => ({ ...prev, current: 1 }))
+                            }}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          Studio
+                        </label>
                         <label className="block text-sm font-bold text-gray-900">Furnishing</label>
                         <div className="flex flex-col gap-2">
                           <label className="flex items-center gap-2 text-sm text-gray-600">
@@ -1459,6 +1479,9 @@ export default function AdminPropertiesPage() {
           {
             title: 'Specifications',
             items: [
+              ...(detailsProperty.specifications?.isStudio
+                ? [{ label: 'Studio', value: 'Yes' }]
+                : []),
               { label: 'Bedrooms', value: detailsProperty.specifications?.bedrooms ?? 0 },
               { label: 'Bathrooms', value: detailsProperty.specifications?.bathrooms ?? 0 },
               {

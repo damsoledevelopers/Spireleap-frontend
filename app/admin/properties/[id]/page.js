@@ -279,7 +279,7 @@ export default function AdminPropertyViewPage() {
             {/* Specifications */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold mb-4">Specifications</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">                
                 <div className="flex items-center gap-2">
                   <Bed className="h-5 w-5 text-gray-400" />
                   <div>
@@ -318,6 +318,9 @@ export default function AdminPropertyViewPage() {
                 </div>
               )}
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                {specifications.isStudio && (
+                  <p><span className="text-gray-500">Studio:</span> <span className="text-gray-900">Yes</span></p>
+                )}
                 <p><span className="text-gray-500">Balconies:</span> <span className="text-gray-900">{specifications.balconies ?? 0}</span></p>
                 <p><span className="text-gray-500">Living Room:</span> <span className="text-gray-900">{specifications.livingRoom ?? 0}</span></p>
                 <p><span className="text-gray-500">Floors:</span> <span className="text-gray-900">{specifications.floors ?? 'N/A'}</span></p>

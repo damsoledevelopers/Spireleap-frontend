@@ -82,6 +82,7 @@ export default function AdminAddPropertyPage() {
       landmark: ''
     },
     specifications: {
+      isStudio: false,
       bedrooms: '',
       bathrooms: '',
       balconies: '',
@@ -520,6 +521,7 @@ export default function AdminAddPropertyPage() {
           bathrooms: formData.specifications.bathrooms ? parseInt(formData.specifications.bathrooms, 10) : undefined,
           balconies: parseInt(formData.specifications.balconies, 10) || 0,
           livingRoom: parseInt(formData.specifications.livingRoom, 10) || 0,
+          isStudio: !!formData.specifications.isStudio,
           unfurnished: parseInt(formData.specifications.unfurnished, 10) || 0,
           semiFurnished: parseInt(formData.specifications.semiFurnished, 10) || 0,
           fullyFurnished: parseInt(formData.specifications.fullyFurnished, 10) || 0,
@@ -738,7 +740,10 @@ export default function AdminAddPropertyPage() {
                     { value: 'office', label: 'Office' },
                     { value: 'retail', label: 'Retail' },
                     { value: 'warehouse', label: 'Warehouse' },
-                    { value: 'other', label: 'Other' }
+                    { value: 'off_plan', label: 'Off Plan' },
+                    { value: 'ready_to_move', label: 'Ready to Move' },
+                    { value: 'under_construction', label: 'Under Construction' },
+                    { value: 'other', label: 'Other' },
                   ]}
                   placeholder="Select property type"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
@@ -1096,6 +1101,15 @@ export default function AdminAddPropertyPage() {
           {/* Specifications */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
+            <label className="flex items-center gap-2 cursor-pointer mb-4 w-fit">
+              <input
+                type="checkbox"
+                checked={!!formData.specifications.isStudio}
+                onChange={(e) => handleInputChange('specifications.isStudio', e.target.checked)}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
+              />
+              <span className="text-sm font-bold text-gray-900">Studio</span>
+            </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {renderSpecificationStepper('Bedrooms (BHK Type)', 'specifications.bedrooms', formData.specifications.bedrooms)}
               {renderSpecificationStepper('Bathrooms', 'specifications.bathrooms', formData.specifications.bathrooms)}
