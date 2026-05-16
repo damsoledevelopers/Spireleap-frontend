@@ -501,11 +501,12 @@ export function AdminReportsContent() {
                     <div>
                       <span className="text-sm font-medium text-gray-900">New Leads</span>
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.newLeads}</p>
+                      <p className="text-xs text-gray-500 mt-1">( Based on lead status )</p>
                     </div>
                     <div>
                       <span className="text-sm font-medium text-gray-900">Won lead records</span>
                       <p className="text-2xl font-semibold text-gray-900">{reportData.systemStats.convertedLeads}</p>
-                      <p className="text-xs text-gray-500 mt-1">Leads still in DB with booked / closed / converted status</p>
+                      <p className="text-xs text-gray-500 mt-1">( Leads which are booked / closed / converted status )</p>
                     </div>
                   </div>
                 </div>
@@ -862,9 +863,12 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Total Leads</span>
                       <span className="text-2xl font-semibold text-gray-900">{reportData.totalLeads}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">New Leads</span>
-                      <span className="text-2xl font-semibold text-blue-600">{reportData.systemStats.newLeads}</span>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">New Leads</span>
+                        <span className="text-2xl font-semibold text-blue-600">{reportData.systemStats.newLeads}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">( Based on lead status )</p>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">Won lead records</span>
