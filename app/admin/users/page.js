@@ -698,7 +698,7 @@ export default function AdminUsers() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowDatePicker(false)}
                 />
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-[calc(100vw-2rem)] max-w-[500px] sm:w-auto sm:min-w-[500px]">
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
@@ -794,7 +794,8 @@ export default function AdminUsers() {
 
         {/* Admin Users Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full table-fixed divide-y divide-gray-200">
+          <div className="table-scroll">
+          <table className="w-full min-w-[960px] table-fixed divide-y divide-gray-200">
             <colgroup>
               <col className="w-[24%]" />
               <col className="w-[26%]" />
@@ -945,6 +946,7 @@ export default function AdminUsers() {
               )}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -1376,7 +1378,7 @@ export default function AdminUsers() {
                   </div>
                 ) : (
                   // Table View
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                         <tr>

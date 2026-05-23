@@ -318,7 +318,7 @@ export default function CurrencyManagement({ onCurrenciesChange }) {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="max-h-[340px] overflow-y-auto">
+          <div className="table-scroll max-h-[340px] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>

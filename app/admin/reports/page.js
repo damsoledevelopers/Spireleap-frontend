@@ -948,7 +948,7 @@ export function AdminReportsContent() {
                 </button>
               </div>
               <div className="card-body">
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>
@@ -1325,7 +1325,7 @@ export function AdminReportsContent() {
                   <h3 className="text-lg font-medium text-gray-900">Agencies Overview</h3>
                 </div>
                 <div className="card-body p-0">
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gradient-to-r from-primary-600 to-primary-700">
                         <tr>

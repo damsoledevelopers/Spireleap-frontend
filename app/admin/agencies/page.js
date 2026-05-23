@@ -320,7 +320,7 @@ export function AgenciesPageContent() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
-                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
+                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-[calc(100vw-2rem)] max-w-[500px] sm:w-auto sm:min-w-[500px]">
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
                         <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
@@ -398,7 +398,8 @@ export function AgenciesPageContent() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-lg shadow overflow-x-auto">
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="table-scroll">
               <table className="w-full min-w-[1180px] table-fixed divide-y divide-gray-200">
                 <colgroup>
                   <col style={{ width: '3.5rem' }} />
@@ -560,6 +561,7 @@ export function AgenciesPageContent() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Pagination */}

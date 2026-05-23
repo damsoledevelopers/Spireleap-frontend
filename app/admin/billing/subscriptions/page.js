@@ -423,7 +423,7 @@ export default function AdminBillingSubscriptionsPage() {
 
         <div className="card">
           <div className="card-body p-0">
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                   <tr>
@@ -538,7 +538,7 @@ export default function AdminBillingSubscriptionsPage() {
               </div>
 
               <div className="p-6">
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>

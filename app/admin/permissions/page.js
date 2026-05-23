@@ -285,6 +285,7 @@ export default function PermissionsPage() {
                     {/* Matrix */}
                     <div className={isEntityMode ? 'lg:col-span-4' : 'lg:col-span-3'}>
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="table-scroll">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                                     <tr>
@@ -343,6 +344,7 @@ export default function PermissionsPage() {
                                     })}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 </div>

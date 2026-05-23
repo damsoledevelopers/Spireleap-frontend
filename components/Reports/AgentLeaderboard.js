@@ -93,7 +93,7 @@ export default function AgentLeaderboard({ agents = [], period = '30d' }) {
             Agent Leaderboard
           </h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>

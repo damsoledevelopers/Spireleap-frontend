@@ -788,7 +788,7 @@ export default function AgencyReports() {
                 </button>
               </div>
               <div className="card-body">
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>

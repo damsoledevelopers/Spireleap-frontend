@@ -145,7 +145,7 @@ export default function CategoryManagement() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="max-h-[340px] overflow-y-auto scrollbar-hide">
+          <div className="table-scroll max-h-[340px] overflow-y-auto scrollbar-hide">
             <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>

@@ -308,7 +308,7 @@ export default function AdminTransactionsPage() {
                             {showDatePicker && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
-                                    <div className="absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-0 z-50 min-w-[600px] overflow-hidden">
+                                    <div className="absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-0 z-50 w-[calc(100vw-2rem)] max-w-[600px] sm:w-auto sm:min-w-[600px] overflow-hidden">
                                         <div className="flex flex-col md:flex-row">
                                             <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 p-2">
                                                 <div className="flex flex-col gap-1">
@@ -471,7 +471,8 @@ export default function AdminTransactionsPage() {
 
                 {/* Transactions Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <table className="w-full table-fixed text-sm text-left">
+                    <div className="table-scroll">
+                    <table className="w-full min-w-[720px] table-fixed text-sm text-left">
                         <colgroup>
                             <col />
                             <col className="w-32" />
@@ -542,6 +543,7 @@ export default function AdminTransactionsPage() {
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
 

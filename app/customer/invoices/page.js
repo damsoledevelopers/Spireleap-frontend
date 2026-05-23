@@ -274,7 +274,7 @@ export default function MyInvoices() {
                     </div>
                 ) : filteredInvoices.length > 0 ? (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-100">

@@ -1421,7 +1421,7 @@ export default function AdminUserDetailPage() {
                   <p className="text-sm text-gray-400 mt-2 max-w-xs">Once the user inquires about properties, they will appear here in chronological order.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto -mx-8 rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="table-scroll -mx-8 rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="min-w-full border-collapse">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
@@ -1562,7 +1562,7 @@ export default function AdminUserDetailPage() {
                     </button>
                   )}
                 </div>
-                <div className="overflow-x-auto -mx-8">
+                <div className="table-scroll -mx-8">
                   {allTasks && allTasks.length > 0 ? (
                     <table className="w-full">
                       <thead className="bg-gray-50/50">
@@ -1701,7 +1701,7 @@ export default function AdminUserDetailPage() {
                     </button>
                   )}
                 </div>
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   {allReminders && allReminders.length > 0 ? (
                     <table className="w-full">
                       <thead className="bg-gray-50">
@@ -2406,7 +2406,7 @@ export default function AdminUserDetailPage() {
                       )}
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="table-scroll">
                       {group.documents && group.documents.length > 0 ? (
                         <table className="w-full">
                           <thead className="bg-white border-b border-gray-100">
@@ -2585,7 +2585,7 @@ export default function AdminUserDetailPage() {
                   Notes
                 </h2>
               </div>
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 {userData?.notes && userData.notes.length > 0 ? (
                   <table className="w-full">
                     <thead className="bg-gray-50">

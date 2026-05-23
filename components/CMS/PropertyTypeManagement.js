@@ -139,7 +139,7 @@ export default function PropertyTypeManagement() {
       {loading ? (
         <p className="text-sm text-gray-500">Loading property types...</p>
       ) : (
-        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+        <div className="table-scroll border border-gray-200 rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>

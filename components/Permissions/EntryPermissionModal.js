@@ -85,7 +85,8 @@ export default function EntryPermissionModal({
                     </div>
 
                     <div className="border border-gray-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-left">
+                        <div className="table-scroll">
+                        <table className="w-full min-w-[480px] text-left">
                             <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm border-b border-primary-700">
                                 <tr>
                                     <th className="px-6 py-3 text-sm font-bold text-white">Module / Role</th>
@@ -124,6 +125,7 @@ export default function EntryPermissionModal({
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 </div>
 

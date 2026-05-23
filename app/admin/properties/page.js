@@ -581,7 +581,7 @@ export default function AdminPropertiesPage() {
           </div>
         </div>
 
-        <div className="flex justify-between items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Properties</h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -591,16 +591,16 @@ export default function AdminPropertiesPage() {
                     'View properties'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             {/* Search Bar */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search properties by any field..."
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-80"
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full sm:w-80"
               />
             </div>
             {canCreateProperty && (
@@ -1104,7 +1104,7 @@ export default function AdminPropertiesPage() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowDatePicker(false)}
                 />
-                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 min-w-[500px]">
+                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-[calc(100vw-2rem)] max-w-[500px] sm:w-auto sm:min-w-[500px]">
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <label className="block text-sm font-bold text-gray-900 mb-2">From Date</label>
@@ -1186,7 +1186,8 @@ export default function AdminPropertiesPage() {
         ) : (
           <>
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="w-full table-fixed divide-y divide-gray-200">
+              <div className="table-scroll">
+              <table className="w-full min-w-[800px] table-fixed divide-y divide-gray-200">
                 <colgroup>
                   <col className="w-20" />
                   <col className="w-[44%]" />
@@ -1322,6 +1323,7 @@ export default function AdminPropertiesPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Pagination */}

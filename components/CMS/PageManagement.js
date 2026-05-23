@@ -177,6 +177,7 @@ export default function PageManagement() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="table-scroll">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -233,6 +234,7 @@ export default function PageManagement() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

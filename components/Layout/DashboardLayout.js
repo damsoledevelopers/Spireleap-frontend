@@ -17,12 +17,12 @@ export default function DashboardLayout({ children }) {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
       
-      <div className="flex flex-col w-0 flex-1 overflow-hidden">
+      <div className="flex flex-col w-0 flex-1 min-w-0 overflow-hidden">
         <DashboardHeader onMenuClick={() => setSidebarOpen(true)} />
         
-        <main className="flex-1 relative overflow-y-auto focus:outline-none">
+        <main className="flex-1 relative min-w-0 overflow-y-auto overflow-x-hidden focus:outline-none">
           <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 min-w-0">
               {children}
             </div>
           </div>

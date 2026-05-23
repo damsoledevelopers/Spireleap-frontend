@@ -77,7 +77,7 @@ export default function DataTable({
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
             <tr>

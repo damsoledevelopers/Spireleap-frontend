@@ -892,7 +892,8 @@ export default function AdminInquiriesPage() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <table className="w-full table-fixed divide-y divide-gray-200">
+            <div className="table-scroll">
+            <table className="w-full min-w-[960px] table-fixed divide-y divide-gray-200">
               <colgroup>
                 <col className="w-[18%]" />
                 <col className="w-[22%]" />
@@ -1072,6 +1073,7 @@ export default function AdminInquiriesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
 
             {/* Pagination */}
             {inquiries.length > 0 && (

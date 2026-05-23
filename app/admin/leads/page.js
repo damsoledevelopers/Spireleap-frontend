@@ -2241,7 +2241,7 @@ export default function AdminLeadsPage() {
                       className="fixed inset-0 z-40"
                       onClick={() => setShowDatePicker(false)}
                     />
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 min-w-[600px] overflow-hidden">
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 w-[calc(100vw-2rem)] max-w-[600px] sm:w-auto sm:min-w-[600px] overflow-hidden">
                       <div className="flex flex-col md:flex-row">
                         {/* Presets */}
                         <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-2">
@@ -2476,7 +2476,8 @@ export default function AdminLeadsPage() {
                   </div>
                 )}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <table className="w-full table-fixed divide-y divide-gray-200">
+                  <div className="table-scroll">
+                  <table className="w-full min-w-[960px] table-fixed divide-y divide-gray-200">
                     <colgroup>
                       {canBulkActions && <col className="w-12" />}
                       <col className="w-[18%]" />
@@ -2678,6 +2679,7 @@ export default function AdminLeadsPage() {
                         })}
                       </tbody>
                     </table>
+                  </div>
 
                   {/* Pagination */}
                   <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
@@ -2908,7 +2910,7 @@ export default function AdminLeadsPage() {
                 <div className="mb-4 text-sm text-gray-600">
                   Review the leads below. Invalid rows have been filtered out.
                 </div>
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-primary-600 to-primary-700 shadow-sm">
                       <tr>

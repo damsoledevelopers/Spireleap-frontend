@@ -182,7 +182,7 @@ export default function PropertyComparison({ propertyIds = [], onClose }) {
               <p className="text-sm text-gray-400 mt-2">Search and add properties above</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>

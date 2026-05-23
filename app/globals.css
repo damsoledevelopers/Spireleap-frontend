@@ -157,6 +157,12 @@
     @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-b border-gray-100;
   }
 
+  /* Horizontal scroll for wide tables on small screens */
+  .table-scroll {
+    @apply w-full max-w-full overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .badge {
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border-2;
   }
