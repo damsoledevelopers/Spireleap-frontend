@@ -34,6 +34,8 @@ import {
   matchesBedroomFilter,
   matchesBalconyFilter
 } from '../../lib/propertyOptions'
+import MediaImage from '../../components/Common/MediaImage'
+import { resolveMediaUrl } from '../../lib/mediaUrl'
 
 export default function HomePage() {
   const router = useRouter()
@@ -655,8 +657,9 @@ export default function HomePage() {
     formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
 
   const getPrimaryImage = (images) => {
-    const primary = images?.find(img => img.isPrimary)
-    return primary?.url || images?.[0]?.url || '/placeholder-property.jpg'
+    const primary = images?.find((img) => img.isPrimary)
+    const raw = primary?.url || images?.[0]?.url || images?.[0]
+    return resolveMediaUrl(raw) || ''
   }
 
 
@@ -1321,11 +1324,11 @@ export default function HomePage() {
                 >
                   {/* Square Image Container */}
                   <Link href={`/properties/${property.slug || property._id}`} className="relative aspect-square overflow-hidden bg-gray-100 block">
-                    <img
+                    <MediaImage
                       src={getPrimaryImage(property.images)}
                       alt={property.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-                      loading="lazy"
+                      className="w-full h-full min-h-[200px] group-hover:scale-105 transition-transform duration-700 ease-out"
+                      imgClassName="group-hover:scale-105 transition-transform duration-700"
                     />
 
                     {/* Gradient Overlays */}

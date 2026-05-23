@@ -22,7 +22,10 @@ import {
 import {
   buildAgencySelectOptions,
   buildAgentSelectOptions,
+  agencyValueForSubmit,
   agentValueForSubmit,
+  selectValueForAgency,
+  selectValueForAgent,
   NONE_AGENCY_VALUE,
   NONE_AGENT_VALUE
 } from '../../../../lib/agencyAgentOptions'
@@ -62,7 +65,7 @@ export default function AdminAddLeadPage() {
       }
     },
     property: '',
-    agency: '',
+    agency: NONE_AGENCY_VALUE,
     source: 'website',
     status: 'new',
     priority: 'Warm',
@@ -127,21 +130,24 @@ export default function AdminAddLeadPage() {
   }, [formData.contact.address.country, formData.contact.address.state])
 
   useEffect(() => {
-    if (!formData.agency) {
+    if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
+      fetchAgentsByAgency(formData.agency)
+    } else {
       setAgents([])
-      return
+      setFormData((prev) => ({ ...prev, assignedAgent: NONE_AGENT_VALUE }))
     }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await api.get(`/users?role=agent&agency=${formData.agency}`)
-        if (!cancelled) setAgents(res.data.users || [])
-      } catch {
-        if (!cancelled) setAgents([])
-      }
-    })()
-    return () => { cancelled = true }
   }, [formData.agency])
+
+  useEffect(() => {
+    if (!user) return
+    if ((user.role === 'agency_admin' || user.role === 'agent') && user.agency) {
+      const agencyId = typeof user.agency === 'object' ? user.agency._id : user.agency
+      setFormData((prev) => ({ ...prev, agency: agencyId }))
+    }
+    if (user.role === 'agent' && user.id) {
+      setFormData((prev) => ({ ...prev, assignedAgent: user.id }))
+    }
+  }, [user])
 
   // If an existing phone value is present (e.g. prefill), split it into cc + national
   useEffect(() => {
@@ -165,7 +171,7 @@ export default function AdminAddLeadPage() {
       const [dropdownsRes, propertiesRes, agenciesRes] = await Promise.all([
         getDropdownOptions(),
         api.get('/properties?limit=100'),
-        api.get('/agencies')
+        api.get('/agencies?limit=500&isActive=true')
       ])
       setDropdowns({
         budgetCurrencies: dropdownsRes.budgetCurrencies || [],
@@ -175,9 +181,20 @@ export default function AdminAddLeadPage() {
         leadStatuses: dropdownsRes.leadStatuses || []
       })
       setProperties(propertiesRes.data.properties || [])
-      setAgencies(agenciesRes.data.agencies || [])
+      setAgencies(agenciesRes.data?.agencies || [])
     } catch (error) {
       console.error('Error fetching initial data:', error)
+      toast.error('Failed to load agencies list')
+    }
+  }
+
+  const fetchAgentsByAgency = async (agencyId) => {
+    try {
+      const response = await api.get(`/users?role=agent&agency=${agencyId}`)
+      setAgents(response.data.users || [])
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      setAgents([])
     }
   }
 
@@ -382,7 +399,7 @@ export default function AdminAddLeadPage() {
             : formData.contact.alternatePhone
         },
         property: formData.property || undefined,
-        agency: formData.agency || undefined,
+        agency: agencyValueForSubmit(formData.agency),
         assignedAgent: agentValueForSubmit(formData.assignedAgent),
         campaignName: formData.campaignName || undefined,
         inquiry: {
@@ -451,7 +468,7 @@ export default function AdminAddLeadPage() {
           })
         },
         property: formData.property || undefined,
-        agency: formData.agency || undefined,
+        agency: agencyValueForSubmit(formData.agency),
         assignedAgent: agentValueForSubmit(formData.assignedAgent),
         campaignName: formData.campaignName || undefined,
         ignoreDuplicates: true,
@@ -669,18 +686,41 @@ export default function AdminAddLeadPage() {
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center gap-1">
                   <Building className="h-4 w-4" />
-                  Agency<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                  Agency{user?.role === 'super_admin' || user?.role === 'staff' ? ' (optional)' : ''}
                 </label>
                 <SearchableSelect
-                  required
-                  value={String(formData.agency || '')}
+                  value={selectValueForAgency(formData.agency)}
                   onChange={(e) => {
-                    handleInputChange('agency', e.target.value)
-                    handleInputChange('assignedAgent', '')
+                    const selectedValue = e.target.value
+                    setFormData((prev) => ({
+                      ...prev,
+                      agency: selectedValue,
+                      assignedAgent:
+                        selectedValue === NONE_AGENCY_VALUE
+                          ? NONE_AGENT_VALUE
+                          : selectedValue !== prev.agency
+                            ? NONE_AGENT_VALUE
+                            : prev.assignedAgent
+                    }))
                   }}
-                  options={buildAgencySelectOptions(agencies, { includeNone: false })}
-                  placeholder="Select an agency"
-                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
+                  options={
+                    user?.role === 'super_admin' || user?.role === 'staff'
+                      ? buildAgencySelectOptions(agencies, { includeNone: true, noneLabel: 'No agency' })
+                      : user?.agency
+                        ? buildAgencySelectOptions(
+                            [{
+                              _id: typeof user.agency === 'object' ? user.agency._id : user.agency,
+                              name:
+                                user.agencyName ||
+                                (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')
+                            }],
+                            { includeNone: false }
+                          )
+                        : buildAgencySelectOptions(agencies, { includeNone: true, noneLabel: 'No agency' })
+                  }
+                  placeholder="Select agency"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   searchPlaceholder="Search agency..."
                 />
               </div>
@@ -747,11 +787,15 @@ export default function AdminAddLeadPage() {
                   Assign to Agent
                 </label>
                 <SearchableSelect
-                  value={formData.assignedAgent || NONE_AGENT_VALUE}
+                  value={selectValueForAgent(formData.assignedAgent)}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  disabled={!formData.agency}
+                  disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE || user?.role === 'agent'}
                   options={buildAgentSelectOptions(agents, { includeNone: true, noneLabel: 'No agent' })}
-                  placeholder={formData.agency ? 'Select agent (optional)' : 'Select agency first'}
+                  placeholder={
+                    formData.agency && formData.agency !== NONE_AGENCY_VALUE
+                      ? 'Select agent (optional)'
+                      : 'Select agency first'
+                  }
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agent..."
                 />

@@ -16,7 +16,8 @@ import {
   MapPin,
   UserCheck,
   Building,
-  TrendingUp
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAgentsForExport } from '../../../lib/exportUtils'
@@ -35,6 +36,23 @@ import LeadFunnelChart from '../../../components/Reports/Charts/LeadFunnelChart'
 import LeadSourceChart from '../../../components/Reports/Charts/LeadSourceChart'
 import AgentPerformanceChart from '../../../components/Reports/Charts/AgentPerformanceChart'
 import RevenueChart from '../../../components/Reports/Charts/RevenueChart'
+
+function activityIconClass(type) {
+  if (type === 'validation_error' || type === 'system_error') return 'bg-red-100'
+  if (String(type || '').startsWith('property')) return 'bg-green-100'
+  if (String(type || '').startsWith('lead')) return 'bg-purple-100'
+  return 'bg-gray-100'
+}
+
+function ActivityListIcon({ type }) {
+  if (type === 'validation_error' || type === 'system_error') {
+    return <AlertCircle className="h-4 w-4 text-red-600" />
+  }
+  if (type === 'property_added' || String(type || '').startsWith('property')) {
+    return <Package className="h-4 w-4 text-green-600" />
+  }
+  return <FileText className="h-4 w-4 text-purple-600" />
+}
 
 export function AdminReportsContent() {
   const { user, checkPermission } = useAuth()
@@ -391,28 +409,19 @@ export function AdminReportsContent() {
 
               <div className="card">
                 <div className="card-body">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <DollarSign className="h-8 w-8 text-yellow-500" />
+                  <p className="text-sm font-medium text-gray-500">Total property value</p>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+                      <span className="text-sm font-medium text-gray-600 shrink-0">Sale</span>
+                      <span className="text-base sm:text-lg font-semibold text-gray-900 text-right break-all">
+                        {formatAed(reportData.totalSalePropertyValue || 0)}
+                      </span>
                     </div>
-                    <div className="ml-5 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Total property value</dt>
-                        <dd className="mt-2 space-y-2">
-                          <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
-                            <span className="text-sm font-medium text-gray-600">Sale</span>
-                            <span className="text-lg font-semibold text-gray-900">
-                              {formatAed(reportData.totalSalePropertyValue || 0)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
-                            <span className="text-sm font-medium text-gray-600">Rent</span>
-                            <span className="text-lg font-semibold text-gray-900">
-                              {formatAed(reportData.totalRentPropertyValue || 0)}
-                            </span>
-                          </div>                          
-                        </dd>
-                      </dl>
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+                      <span className="text-sm font-medium text-gray-600 shrink-0">Rent</span>
+                      <span className="text-base sm:text-lg font-semibold text-gray-900 text-right break-all">
+                        {formatAed(reportData.totalRentPropertyValue || 0)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -561,19 +570,22 @@ export function AdminReportsContent() {
                         <li key={index} className="py-4">
                           <div className="flex items-center space-x-4">
                             <div className="flex-shrink-0">
-                              <div className="h-8 w-8 bg-gray-300 rounded-full flex items-center justify-center">
-                                <Activity className="h-4 w-4 text-gray-600" />
+                              <div className={`h-8 w-8 rounded-full flex items-center justify-center ${activityIconClass(activity.type)}`}>
+                                <ActivityListIcon type={activity.type} />
                               </div>
                             </div>
                             <div className="flex-1 min-w-0">
                               {activity.link ? (
-                                <Link href={activity.link} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                <Link href={activity.link} className={`text-sm font-medium break-words ${activity.type === 'validation_error' || activity.type === 'system_error' ? 'text-red-700 hover:text-red-900' : 'text-blue-600 hover:text-blue-800'}`}>
                                   {activity.message}
                                 </Link>
                               ) : (
-                                <p className="text-sm font-medium text-gray-900">{activity.message}</p>
+                                <p className={`text-sm font-medium break-words ${activity.type === 'validation_error' || activity.type === 'system_error' ? 'text-red-800' : 'text-gray-900'}`}>{activity.message}</p>
                               )}
-                              <p className="text-sm text-gray-500">by {activity.user}</p>
+                              {activity.description ? (
+                                <p className="text-xs text-gray-500 mt-0.5 break-words">{activity.description}</p>
+                              ) : null}
+                              <p className="text-sm text-gray-500 mt-0.5">by {activity.user}</p>
                             </div>
                             <div className="flex-shrink-0">
                               <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>
@@ -2025,24 +2037,22 @@ export function AdminReportsContent() {
                       <li key={index} className="py-4">
                         <div className="flex items-center space-x-4">
                           <div className="flex-shrink-0">
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${activity.type === 'property_added' ? 'bg-green-100' : 'bg-purple-100'
-                              }`}>
-                              {activity.type === 'property_added' ? (
-                                <Package className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <FileText className="h-4 w-4 text-purple-600" />
-                              )}
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${activityIconClass(activity.type)}`}>
+                              <ActivityListIcon type={activity.type} />
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
                             {activity.link ? (
-                              <Link href={activity.link} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                              <Link href={activity.link} className={`text-sm font-medium break-words ${activity.type === 'validation_error' || activity.type === 'system_error' ? 'text-red-700 hover:text-red-900' : 'text-blue-600 hover:text-blue-800'}`}>
                                 {activity.message}
                               </Link>
                             ) : (
-                              <p className="text-sm font-medium text-gray-900">{activity.message}</p>
+                              <p className={`text-sm font-medium break-words ${activity.type === 'validation_error' || activity.type === 'system_error' ? 'text-red-800' : 'text-gray-900'}`}>{activity.message}</p>
                             )}
-                            <p className="text-sm text-gray-500">by {activity.user}</p>
+                            {activity.description ? (
+                              <p className="text-xs text-gray-500 mt-0.5 break-words">{activity.description}</p>
+                            ) : null}
+                            <p className="text-sm text-gray-500 mt-0.5">by {activity.user}</p>
                           </div>
                           <div className="flex-shrink-0">
                             <span className="text-sm text-gray-500 whitespace-nowrap">{formatActivityDateTime(activity.time)}</span>

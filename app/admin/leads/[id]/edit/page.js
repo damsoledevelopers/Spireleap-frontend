@@ -151,7 +151,7 @@ export default function AdminEditLeadPage() {
         getDropdownOptions(),
         api.get(`/leads/${params.id}`),
         api.get('/properties?limit=100'),
-        api.get('/agencies')
+        api.get('/agencies?limit=500&isActive=true')
       ])
       setDropdowns({
         budgetCurrencies: dropdownsRes.budgetCurrencies || [],
@@ -745,13 +745,28 @@ export default function AdminEditLeadPage() {
                         selectedValue === NONE_AGENCY_VALUE
                           ? NONE_AGENT_VALUE
                           : selectedValue !== prev.agency
-                            ? ''
+                            ? NONE_AGENT_VALUE
                             : prev.assignedAgent
                     }))
                   }}
-                  options={buildAgencySelectOptions(agencies, { includeNone: true })}
-                  placeholder="Select Agency (optional)"
-                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                  disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
+                  options={
+                    user?.role === 'super_admin' || user?.role === 'staff'
+                      ? buildAgencySelectOptions(agencies, { includeNone: true, noneLabel: 'No agency' })
+                      : user?.agency
+                        ? buildAgencySelectOptions(
+                            [{
+                              _id: typeof user.agency === 'object' ? user.agency._id : user.agency,
+                              name:
+                                user.agencyName ||
+                                (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')
+                            }],
+                            { includeNone: false }
+                          )
+                        : buildAgencySelectOptions(agencies, { includeNone: true, noneLabel: 'No agency' })
+                  }
+                  placeholder="Select agency (optional)"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   searchPlaceholder="Search agency..."
                 />
               </div>

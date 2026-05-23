@@ -14,6 +14,7 @@ import SearchableSelect from '../../../components/Common/SearchableSelect'
 import DetailsModal from '../../../components/Common/DetailsModal'
 import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 import { formatPropertyPrice } from '../../../lib/money'
+import MediaImage from '../../../components/Common/MediaImage'
 import { buildAgencySelectOptions } from '../../../lib/agencyAgentOptions'
 import {
   PROPERTY_STATUS_FILTER_OPTIONS,
@@ -1216,20 +1217,18 @@ export default function AdminPropertiesPage() {
                             className="block focus:outline-none"
                             title="View details"
                           >
-                            {property.images && property.images.length > 0 ? (
-                              <img
-                                src={typeof property.images[0] === 'string' ? property.images[0] : (property.images[0]?.url || property.images[0])}
-                                alt={property.title}
-                                className="h-14 w-14 rounded-lg object-cover"
-                                onError={(e) => {
-                                  e.target.style.display = 'none'
-                                  e.target.nextSibling.style.display = 'flex'
-                                }}
-                              />
-                            ) : null}
-                            <div className="h-14 w-14 bg-gray-200 rounded-lg flex items-center justify-center" style={{ display: (property.images && property.images.length > 0) ? 'none' : 'flex' }}>
-                              <Package className="h-6 w-6 text-gray-400" />
-                            </div>
+                            <MediaImage
+                              src={
+                                property.images?.[0]
+                                  ? typeof property.images[0] === 'string'
+                                    ? property.images[0]
+                                    : property.images[0]?.url || property.images[0]
+                                  : ''
+                              }
+                              alt={property.title}
+                              className="h-14 w-14 rounded-lg"
+                              fallbackClassName="h-14 w-14 rounded-lg"
+                            />
                           </button>
                         </td>
                         <td className="px-4 py-4 min-w-0">
@@ -1407,17 +1406,18 @@ export default function AdminPropertiesPage() {
         subtitle={[detailsProperty?.propertyType, detailsProperty?.listingType].filter(Boolean).join(' · ')}
         avatar={
           detailsProperty ? (
-            detailsProperty.images && detailsProperty.images.length > 0 ? (
-              <img
-                src={typeof detailsProperty.images[0] === 'string' ? detailsProperty.images[0] : (detailsProperty.images[0]?.url || detailsProperty.images[0])}
-                alt={detailsProperty.title}
-                className="h-14 w-14 rounded-lg object-cover"
-              />
-            ) : (
-              <div className="h-14 w-14 bg-gray-200 rounded-lg flex items-center justify-center">
-                <Package className="h-7 w-7 text-gray-400" />
-              </div>
-            )
+            <MediaImage
+              src={
+                detailsProperty.images?.[0]
+                  ? typeof detailsProperty.images[0] === 'string'
+                    ? detailsProperty.images[0]
+                    : detailsProperty.images[0]?.url || detailsProperty.images[0]
+                  : ''
+              }
+              alt={detailsProperty.title}
+              className="h-14 w-14 rounded-lg"
+              fallbackClassName="h-14 w-14 rounded-lg"
+            />
           ) : null
         }
         sections={detailsProperty ? [
