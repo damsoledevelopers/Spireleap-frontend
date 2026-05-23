@@ -18,6 +18,7 @@ import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../lib/phoneValidation'
 import {
     sanitizePostalDigits,
     isValidOptionalPostalDigits,
@@ -215,15 +216,12 @@ export default function CustomerProfile() {
                 toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
                 return
             }
-            if (formData.phone && formData.phone.length !== 10) {
-                toast.error('Phone number must be exactly 10 digits')
+            const phoneCheck = validatePhoneField(phoneCountryCode, formData.phone, { required: false })
+            if (!phoneCheck.ok) {
+                toast.error(phoneCheck.message)
                 return
             }
-            const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
-            if (formData.phone && !e164Phone) {
-                toast.error('Enter a valid phone number for the selected country')
-                return
-            }
+            const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.phone)) : ''
             const submitData = {
                 ...formData,
                 phone: e164Phone
@@ -328,16 +326,10 @@ export default function CustomerProfile() {
                                             phoneValue={formData.phone}
                                             onCountryCodeChange={(value) => setPhoneCountryCode(value)}
                                             onPhoneChange={(value) => {
-                                                const digits = String(value || '').replace(/\D/g, '').slice(0, 10)
-                                                setFormData(prev => ({ ...prev, phone: digits }))
+                                                setFormData(prev => ({ ...prev, phone: sanitizeNationalPhoneInput(value) }))
                                             }}
                                             showInlineError={Boolean(formData.phone)}
                                         />
-                                        {formData.phone && formData.phone.length !== 10 && (
-                                            <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                                Phone number must be exactly 10 digits
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
                             </div>

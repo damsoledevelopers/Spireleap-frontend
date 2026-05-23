@@ -9,6 +9,8 @@ import { ArrowLeft, Save, User, Mail, Phone, MapPin, FileText, Building } from '
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import PhoneField from '@/components/Common/PhoneField'
+import SpokenLanguagesPicker from '@/components/Common/SpokenLanguagesPicker'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '@/lib/phoneValidation'
 import SearchableSelect from '@/components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '@/lib/phone'
 import { getDropdownOptions } from '@/lib/dropdownsApi'
@@ -17,6 +19,18 @@ import {
   isValidOptionalPostalDigits,
   OPTIONAL_POSTAL_DIGITS_MESSAGE
 } from '@/lib/postalCode'
+import {
+  buildAgencySelectOptions,
+  buildAgentSelectOptions,
+  agencyValueForSubmit,
+  agentValueForSubmit,
+  agencyValueForSelect,
+  agentValueForSelect,
+  NONE_AGENCY_VALUE,
+  NONE_AGENT_VALUE,
+  selectValueForAgency,
+  selectValueForAgent
+} from '@/lib/agencyAgentOptions'
 
 export default function AdminEditLeadPage() {
   const { user, loading: authLoading } = useAuth()
@@ -28,8 +42,6 @@ export default function AdminEditLeadPage() {
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizePhone = (v) => String(v || '').replace(/\D/g, '').slice(0, 10)
-  const isValidPhone10 = (v) => String(v || '').replace(/\D/g, '').length === 10
   const sanitizeDecimal = (v) => {
     const s = String(v ?? '').replace(/[^\d.]/g, '')
     const firstDot = s.indexOf('.')
@@ -110,11 +122,13 @@ export default function AdminEditLeadPage() {
   }, [user, authLoading, params.id])
 
   useEffect(() => {
-    if (formData.agency) {
+    if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
     } else {
-      // For super admin, fetch all agents
-      fetchAllAgents()
+      setAgents([])
+      if (formData.agency === NONE_AGENCY_VALUE) {
+        setFormData((prev) => ({ ...prev, assignedAgent: NONE_AGENT_VALUE }))
+      }
     }
   }, [formData.agency])
 
@@ -165,24 +179,8 @@ export default function AdminEditLeadPage() {
         await fetchAllAgents()
       }
 
-      // Normalize agency ID from lead - handle both populated object and string ID
-      let normalizedAgencyId = ''
-      if (lead.agency) {
-        if (typeof lead.agency === 'object' && lead.agency._id) {
-          // Agency is populated object
-          normalizedAgencyId = String(lead.agency._id)
-        } else if (typeof lead.agency === 'string') {
-          // Agency is string ID
-          normalizedAgencyId = lead.agency
-        } else {
-          // Fallback: try to convert to string
-          normalizedAgencyId = String(lead.agency)
-        }
-      }
-
-      console.log('Lead Agency:', lead.agency)
-      console.log('Normalized Agency ID:', normalizedAgencyId)
-      console.log('Agencies List:', agenciesList.map(a => ({ id: String(a._id), name: a.name })))
+      const normalizedAgencyId = agencyValueForSelect(lead.agency)
+      const normalizedAgentId = agentValueForSelect(lead.assignedAgent)
 
       // Populate form with lead data
       setFormData({
@@ -206,7 +204,7 @@ export default function AdminEditLeadPage() {
         status: lead.status || 'new',
         priority: lead.priority || 'medium',
         lostReason: lead.lostReason || '',
-        assignedAgent: lead.assignedAgent?._id || lead.assignedAgent || '',
+        assignedAgent: normalizedAgentId,
         agency: normalizedAgencyId,
         booking: {
           unitNumber: lead.booking?.unitNumber || '',
@@ -440,12 +438,14 @@ export default function AdminEditLeadPage() {
     if (!formData.contact.lastName || formData.contact.lastName !== sanitizeName(formData.contact.lastName)) {
       return { ok: false, message: 'Last name must contain only alphabets' }
     }
-    if (!formData.contact.phone || !isValidPhone10(formData.contact.phone)) {
-      return { ok: false, message: 'Phone number must be exactly 10 digits' }
-    }
-    if (formData.contact.alternatePhone && !isValidPhone10(formData.contact.alternatePhone)) {
-      return { ok: false, message: 'Alternate phone number must be exactly 10 digits' }
-    }
+    const phoneCheck = validatePhoneField(phoneCountryCode, formData.contact.phone, { required: true })
+    if (!phoneCheck.ok) return phoneCheck
+    const altPhoneCheck = validatePhoneField(
+      alternatePhoneCountryCode,
+      formData.contact.alternatePhone,
+      { required: false }
+    )
+    if (!altPhoneCheck.ok) return altPhoneCheck
     if (!isValidOptionalPostalDigits(formData.contact.address?.zipCode)) {
       return { ok: false, message: OPTIONAL_POSTAL_DIGITS_MESSAGE }
     }
@@ -470,9 +470,9 @@ export default function AdminEditLeadPage() {
           firstName: formData.contact.firstName,
           lastName: formData.contact.lastName,
           email: formData.contact.email,
-          phone: buildE164Phone(phoneCountryCode, sanitizePhone(formData.contact.phone)),
+          phone: buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.contact.phone)),
           ...(formData.contact.alternatePhone && {
-            alternatePhone: buildE164Phone(alternatePhoneCountryCode, sanitizePhone(formData.contact.alternatePhone))
+            alternatePhone: buildE164Phone(alternatePhoneCountryCode, sanitizeNationalPhoneInput(formData.contact.alternatePhone))
           }),
           address: {
             ...(formData.contact.address.street && { street: formData.contact.address.street }),
@@ -487,8 +487,8 @@ export default function AdminEditLeadPage() {
         campaignName: formData.campaignName || undefined,
         status: formData.status,
         priority: formData.priority,
-        assignedAgent: formData.assignedAgent || undefined,
-        agency: formData.agency || undefined,
+        assignedAgent: agentValueForSubmit(formData.assignedAgent),
+        agency: agencyValueForSubmit(formData.agency),
         ...(formData.status === 'lost' && formData.lostReason && { lostReason: formData.lostReason }),
         booking: {
           ...(formData.booking.unitNumber && { unitNumber: formData.booking.unitNumber }),
@@ -628,7 +628,7 @@ export default function AdminEditLeadPage() {
                   countryCodeValue={phoneCountryCode}
                   phoneValue={formData.contact.phone}
                   onCountryCodeChange={(value) => setPhoneCountryCode(value)}
-                  onPhoneChange={(value) => handleInputChange('contact.phone', sanitizePhone(value))}
+                  onPhoneChange={(value) => handleInputChange('contact.phone', sanitizeNationalPhoneInput(value))}
                 />
               </div>
               <div>
@@ -642,7 +642,7 @@ export default function AdminEditLeadPage() {
                   countryCodeValue={alternatePhoneCountryCode}
                   phoneValue={formData.contact.alternatePhone}
                   onCountryCodeChange={(value) => setAlternatePhoneCountryCode(value)}
-                  onPhoneChange={(value) => handleInputChange('contact.alternatePhone', sanitizePhone(value))}
+                  onPhoneChange={(value) => handleInputChange('contact.alternatePhone', sanitizeNationalPhoneInput(value))}
                   showInlineError={Boolean(formData.contact.alternatePhone)}
                 />
               </div>
@@ -735,17 +735,21 @@ export default function AdminEditLeadPage() {
                   Agency
                 </label>
                 <SearchableSelect
-                  value={formData.agency ? String(formData.agency) : ''}
+                  value={selectValueForAgency(formData.agency)}
                   onChange={(e) => {
                     const selectedValue = e.target.value
-                    console.log('Agency selected:', selectedValue)
-                    setFormData(prev => ({
+                    setFormData((prev) => ({
                       ...prev,
                       agency: selectedValue,
-                      assignedAgent: '' // Reset agent when agency changes
+                      assignedAgent:
+                        selectedValue === NONE_AGENCY_VALUE
+                          ? NONE_AGENT_VALUE
+                          : selectedValue !== prev.agency
+                            ? ''
+                            : prev.assignedAgent
                     }))
                   }}
-                  options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
+                  options={buildAgencySelectOptions(agencies, { includeNone: true })}
                   placeholder="Select Agency (optional)"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agency..."
@@ -850,10 +854,11 @@ export default function AdminEditLeadPage() {
                   Assign to Agent
                 </label>
                 <SearchableSelect
-                  value={formData.assignedAgent}
+                  value={selectValueForAgent(formData.assignedAgent)}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  options={agents.map((a) => ({ value: a._id || a.id, label: `${a.firstName} ${a.lastName}`.trim() }))}
-                  placeholder="Unassigned"
+                  disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE}
+                  options={buildAgentSelectOptions(agents, { includeNone: true, noneLabel: 'No agent' })}
+                  placeholder={formData.agency && formData.agency !== NONE_AGENCY_VALUE ? 'Select agent' : 'Select agency first'}
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agent..."
                 />
@@ -1003,21 +1008,9 @@ export default function AdminEditLeadPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Spoken Languages
-                  </label>
-                  <input
-                    type="text"
-                    value={(formData.inquiry.spokenLanguages || []).join(', ')}
-                    onChange={(e) => {
-                      const next = sanitizeLanguagesInput(e.target.value)
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(Boolean)
-                      handleInputChange('inquiry.spokenLanguages', next)
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="Enter languages"
+                  <SpokenLanguagesPicker
+                    value={formData.inquiry.spokenLanguages || []}
+                    onChange={(next) => handleInputChange('inquiry.spokenLanguages', next)}
                   />
                 </div>
               </div>

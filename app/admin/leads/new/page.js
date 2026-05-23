@@ -9,6 +9,8 @@ import { ArrowLeft, Save, User, Mail, Phone, MapPin, FileText, Building, AlertCi
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import PhoneField from '../../../../components/Common/PhoneField'
+import SpokenLanguagesPicker from '../../../../components/Common/SpokenLanguagesPicker'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../../lib/phoneValidation'
 import SearchableSelect from '../../../../components/Common/SearchableSelect'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../../lib/phone'
 import { getDropdownOptions } from '../../../../lib/dropdownsApi'
@@ -17,6 +19,13 @@ import {
   isValidOptionalPostalDigits,
   OPTIONAL_POSTAL_DIGITS_MESSAGE
 } from '../../../../lib/postalCode'
+import {
+  buildAgencySelectOptions,
+  buildAgentSelectOptions,
+  agentValueForSubmit,
+  NONE_AGENCY_VALUE,
+  NONE_AGENT_VALUE
+} from '../../../../lib/agencyAgentOptions'
 
 export default function AdminAddLeadPage() {
   const { user, loading: authLoading } = useAuth()
@@ -26,8 +35,6 @@ export default function AdminAddLeadPage() {
   const [agents, setAgents] = useState([])
   const [agencies, setAgencies] = useState([])
   const sanitizeName = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
-  const sanitizePhone = (v) => String(v || '').replace(/\D/g, '').slice(0, 10)
-  const isValidPhone10 = (v) => String(v || '').replace(/\D/g, '').length === 10
   const sanitizeDecimal = (v) => {
     // allow digits and one dot, e.g. "123.45"
     const s = String(v ?? '').replace(/[^\d.]/g, '')
@@ -119,6 +126,23 @@ export default function AdminAddLeadPage() {
     fetchCities(formData.contact.address.country, formData.contact.address.state)
   }, [formData.contact.address.country, formData.contact.address.state])
 
+  useEffect(() => {
+    if (!formData.agency) {
+      setAgents([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.get(`/users?role=agent&agency=${formData.agency}`)
+        if (!cancelled) setAgents(res.data.users || [])
+      } catch {
+        if (!cancelled) setAgents([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [formData.agency])
+
   // If an existing phone value is present (e.g. prefill), split it into cc + national
   useEffect(() => {
     const main = splitE164Phone(formData.contact.phone)
@@ -138,10 +162,9 @@ export default function AdminAddLeadPage() {
 
   const fetchInitialData = async () => {
     try {
-      const [dropdownsRes, propertiesRes, agentsRes, agenciesRes] = await Promise.all([
+      const [dropdownsRes, propertiesRes, agenciesRes] = await Promise.all([
         getDropdownOptions(),
         api.get('/properties?limit=100'),
-        api.get('/users?role=agent'),
         api.get('/agencies')
       ])
       setDropdowns({
@@ -152,7 +175,6 @@ export default function AdminAddLeadPage() {
         leadStatuses: dropdownsRes.leadStatuses || []
       })
       setProperties(propertiesRes.data.properties || [])
-      setAgents(agentsRes.data.users || [])
       setAgencies(agenciesRes.data.agencies || [])
     } catch (error) {
       console.error('Error fetching initial data:', error)
@@ -323,12 +345,14 @@ export default function AdminAddLeadPage() {
     if (!formData.contact.lastName || formData.contact.lastName !== sanitizeName(formData.contact.lastName)) {
       return { ok: false, message: 'Last name must contain only alphabets' }
     }
-    if (!formData.contact.phone || !isValidPhone10(formData.contact.phone)) {
-      return { ok: false, message: 'Phone number must be exactly 10 digits' }
-    }
-    if (formData.contact.alternatePhone && !isValidPhone10(formData.contact.alternatePhone)) {
-      return { ok: false, message: 'Alternate phone number must be exactly 10 digits' }
-    }
+    const phoneCheck = validatePhoneField(phoneCountryCode, formData.contact.phone, { required: true })
+    if (!phoneCheck.ok) return phoneCheck
+    const altPhoneCheck = validatePhoneField(
+      alternatePhoneCountryCode,
+      formData.contact.alternatePhone,
+      { required: false }
+    )
+    if (!altPhoneCheck.ok) return altPhoneCheck
     if (!isValidOptionalPostalDigits(formData.contact.address?.zipCode)) {
       return { ok: false, message: OPTIONAL_POSTAL_DIGITS_MESSAGE }
     }
@@ -352,14 +376,14 @@ export default function AdminAddLeadPage() {
         ...formData,
         contact: {
           ...formData.contact,
-          phone: buildE164Phone(phoneCountryCode, sanitizePhone(formData.contact.phone)),
+          phone: buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.contact.phone)),
           alternatePhone: formData.contact.alternatePhone
-            ? buildE164Phone(alternatePhoneCountryCode, sanitizePhone(formData.contact.alternatePhone))
+            ? buildE164Phone(alternatePhoneCountryCode, sanitizeNationalPhoneInput(formData.contact.alternatePhone))
             : formData.contact.alternatePhone
         },
         property: formData.property || undefined,
         agency: formData.agency || undefined,
-        assignedAgent: formData.assignedAgent || undefined,
+        assignedAgent: agentValueForSubmit(formData.assignedAgent),
         campaignName: formData.campaignName || undefined,
         inquiry: {
           ...formData.inquiry,
@@ -421,14 +445,14 @@ export default function AdminAddLeadPage() {
         ...formData,
         contact: {
           ...formData.contact,
-          phone: buildE164Phone(phoneCountryCode, sanitizePhone(formData.contact.phone)),
+          phone: buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.contact.phone)),
           ...(formData.contact.alternatePhone && {
-            alternatePhone: buildE164Phone(alternatePhoneCountryCode, sanitizePhone(formData.contact.alternatePhone))
+            alternatePhone: buildE164Phone(alternatePhoneCountryCode, sanitizeNationalPhoneInput(formData.contact.alternatePhone))
           })
         },
         property: formData.property || undefined,
         agency: formData.agency || undefined,
-        assignedAgent: formData.assignedAgent || undefined,
+        assignedAgent: agentValueForSubmit(formData.assignedAgent),
         campaignName: formData.campaignName || undefined,
         ignoreDuplicates: true,
         inquiry: {
@@ -555,7 +579,7 @@ export default function AdminAddLeadPage() {
                   countryCodeValue={phoneCountryCode}
                   phoneValue={formData.contact.phone}
                   onCountryCodeChange={(value) => setPhoneCountryCode(value)}
-                  onPhoneChange={(value) => handleInputChange('contact.phone', sanitizePhone(value))}
+                  onPhoneChange={(value) => handleInputChange('contact.phone', sanitizeNationalPhoneInput(value))}
                 />
               </div>
             </div>
@@ -650,8 +674,11 @@ export default function AdminAddLeadPage() {
                 <SearchableSelect
                   required
                   value={String(formData.agency || '')}
-                  onChange={(e) => handleInputChange('agency', e.target.value)}
-                  options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
+                  onChange={(e) => {
+                    handleInputChange('agency', e.target.value)
+                    handleInputChange('assignedAgent', '')
+                  }}
+                  options={buildAgencySelectOptions(agencies, { includeNone: false })}
                   placeholder="Select an agency"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agency..."
@@ -720,10 +747,11 @@ export default function AdminAddLeadPage() {
                   Assign to Agent
                 </label>
                 <SearchableSelect
-                  value={formData.assignedAgent}
+                  value={formData.assignedAgent || NONE_AGENT_VALUE}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  options={agents.map((a) => ({ value: a._id || a.id, label: `${a.firstName} ${a.lastName}`.trim() }))}
-                  placeholder="Unassigned"
+                  disabled={!formData.agency}
+                  options={buildAgentSelectOptions(agents, { includeNone: true, noneLabel: 'No agent' })}
+                  placeholder={formData.agency ? 'Select agent (optional)' : 'Select agency first'}
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agent..."
                 />
@@ -886,21 +914,9 @@ export default function AdminAddLeadPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Spoken Languages
-                  </label>
-                  <input
-                    type="text"
-                    value={(formData.inquiry.spokenLanguages || []).join(', ')}
-                    onChange={(e) => {
-                      const next = sanitizeLanguagesInput(e.target.value)
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(Boolean)
-                      handleInputChange('inquiry.spokenLanguages', next)
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="Enter languages"
+                  <SpokenLanguagesPicker
+                    value={formData.inquiry.spokenLanguages || []}
+                    onChange={(next) => handleInputChange('inquiry.spokenLanguages', next)}
                   />
                 </div>
               </div>

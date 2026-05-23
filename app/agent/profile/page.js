@@ -8,6 +8,7 @@ import { User, Save, Upload, Mail, Phone, MapPin, Award, Briefcase } from 'lucid
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../lib/phoneValidation'
 import {
   sanitizePostalDigits,
   isValidOptionalPostalDigits,
@@ -148,8 +149,9 @@ export default function AgentProfilePage() {
         setLoading(false)
         return
       }
-      if (formData.phone && String(formData.phone).length !== 10) {
-        toast.error('Phone number must be exactly 10 digits')
+      const phoneCheck = validatePhoneField(phoneCountryCode, formData.phone, { required: false })
+      if (!phoneCheck.ok) {
+        toast.error(phoneCheck.message)
         setLoading(false)
         return
       }
@@ -164,7 +166,7 @@ export default function AgentProfilePage() {
 
       const submitData = {
         ...formData,
-        phone: formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
+        phone: formData.phone ? buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.phone)) : ''
       }
       const response = await api.put(`/users/${userId}`, submitData)
 
@@ -273,16 +275,10 @@ export default function AgentProfilePage() {
                   phoneValue={formData.phone}
                   onCountryCodeChange={(value) => setPhoneCountryCode(value)}
                   onPhoneChange={(value) => {
-                    const digits = String(value || '').replace(/\D/g, '').slice(0, 10)
-                    handleInputChange('phone', digits)
+                    handleInputChange('phone', sanitizeNationalPhoneInput(value))
                   }}
                   showInlineError={Boolean(formData.phone)}
                 />
-                {formData.phone && String(formData.phone).length !== 10 && (
-                  <p className="mt-1 text-xs font-semibold text-red-600">
-                    Phone number must be exactly 10 digits
-                  </p>
-                )}
               </div>
             </div>
           </div>

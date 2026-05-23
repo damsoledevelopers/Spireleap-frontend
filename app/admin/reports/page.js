@@ -23,6 +23,7 @@ import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAge
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatPercentLabel } from '../../../lib/formatPercent'
+import { formatAed } from '../../../lib/money'
 import {
   REPORT_NA,
   displayReportMetric,
@@ -58,6 +59,8 @@ export function AdminReportsContent() {
     totalLeads: 0,
     totalAgencies: 0,
     totalPropertyValue: 0,
+    totalSalePropertyValue: 0,
+    totalRentPropertyValue: 0,
     usersByRole: {},
     propertiesByStatus: {},
     propertiesByType: {},
@@ -137,6 +140,8 @@ export function AdminReportsContent() {
         ...computedTotals,
         totalAgencies: stats.totalAgencies ?? 0,
         totalPropertyValue: stats.totalPropertyValue || 0,
+        totalSalePropertyValue: stats.totalSalePropertyValue || 0,
+        totalRentPropertyValue: stats.totalRentPropertyValue || 0,
         usersByRole: nextUsersByRole,
         propertiesByStatus: nextPropertiesByStatus,
         propertiesByType: stats.propertiesByType || {},
@@ -393,11 +398,19 @@ export function AdminReportsContent() {
                     <div className="ml-5 w-0 flex-1">
                       <dl>
                         <dt className="text-sm font-medium text-gray-500 truncate">Total property value</dt>
-                        <dd className="mt-1">
-                          <p className="text-2xl font-semibold text-gray-900">
-                            ${Number(reportData.totalPropertyValue || 0).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">Sum of listing prices                          </p>
+                        <dd className="mt-2 space-y-2">
+                          <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                            <span className="text-sm font-medium text-gray-600">Sale</span>
+                            <span className="text-lg font-semibold text-gray-900">
+                              {formatAed(reportData.totalSalePropertyValue || 0)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                            <span className="text-sm font-medium text-gray-600">Rent</span>
+                            <span className="text-lg font-semibold text-gray-900">
+                              {formatAed(reportData.totalRentPropertyValue || 0)}
+                            </span>
+                          </div>                          
                         </dd>
                       </dl>
                     </div>
@@ -761,11 +774,20 @@ export function AdminReportsContent() {
                       <span className="text-sm font-medium text-gray-900">Rented Properties</span>
                       <span className="text-2xl font-semibold text-purple-600">{reportData.systemStats.rentedProperties}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">Total property value</span>
-                      <span className="text-2xl font-semibold text-gray-900">
-                        ${Number(reportData.totalPropertyValue || 0).toLocaleString()}
-                      </span>
+                    <div className="space-y-2 pt-1 border-t border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">Total property value</p>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Sale</span>
+                        <span className="font-semibold text-gray-900">
+                          {formatAed(reportData.totalSalePropertyValue || 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Rent</span>
+                        <span className="font-semibold text-gray-900">
+                          {formatAed(reportData.totalRentPropertyValue || 0)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1270,7 +1292,7 @@ export function AdminReportsContent() {
                             'Conversion Rate (%)': agency.conversionRate,
                             'Total Agents': agency.totalAgents,
                             'Active Agents': agency.activeAgents,
-                            'Total Property Value': `$${agency.totalPropertyValue.toLocaleString()}`
+                            'Total Property Value': formatAed(agency.totalPropertyValue || 0)
                           }))
                           exportToCSV(agencyData, `agencies-analysis-${new Date().toISOString().split('T')[0]}.csv`)
                           toast.success('Agency analysis exported successfully!')

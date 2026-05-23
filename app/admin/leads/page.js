@@ -1412,12 +1412,13 @@ export default function AdminLeadsPage() {
 
   const handleBulkAssign = async () => {
     if (selectedLeads.length === 0 || !bulkAgent) {
-      toast.error('Please select leads and an agent')
+      toast.error('Please select leads and an agent action')
       return
     }
 
     try {
-      const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}/assign`, { assignedAgent: bulkAgent }))
+      const agentPayload = bulkAgent === '__clear__' ? null : bulkAgent
+      const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}/assign`, { assignedAgent: agentPayload }))
       await Promise.all(assignPromises)
       toast.success(`${selectedLeads.length} lead(s) assigned successfully`)
       setSelectedLeads([])
@@ -1435,12 +1436,13 @@ export default function AdminLeadsPage() {
 
   const handleBulkAssignAgency = async () => {
     if (selectedLeads.length === 0 || !bulkAgency) {
-      toast.error('Please select leads and an agency')
+      toast.error('Please select leads and an agency action')
       return
     }
 
     try {
-      const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}`, { agency: bulkAgency }))
+      const agencyPayload = bulkAgency === '__clear__' ? null : bulkAgency
+      const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}`, { agency: agencyPayload }))
       await Promise.all(assignPromises)
       toast.success(`${selectedLeads.length} lead(s) agency assigned successfully`)
       setSelectedLeads([])
@@ -2177,8 +2179,12 @@ export default function AdminLeadsPage() {
                     setFilters(prev => ({ ...prev, agency: selectedAgency }))
                     setPagination(prev => ({ ...prev, page: 1 }))
                   }}
-                  options={agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))}
-                  placeholder="Agency"
+                  options={[
+                    { value: '', label: 'All Agencies' },
+                    { value: 'unassigned', label: 'No agency' },
+                    ...agencies.map((a) => ({ value: a._id ? String(a._id) : '', label: a.name }))
+                  ]}
+                  placeholder="All Agencies"
                   buttonClassName="px-3 h-[42px] border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white min-w-[180px]"
                   searchPlaceholder="Search agency..."
                 />
@@ -2614,9 +2620,12 @@ export default function AdminLeadsPage() {
                                           })
                                         }
                                       }
-                                      return filteredAgents.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
+                                      return [
+                                        { value: '', label: 'No agent' },
+                                        ...filteredAgents.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
+                                      ]
                                     })()}
-                                    placeholder="Unassigned"
+                                    placeholder="No agent"
                                     buttonClassName="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-full bg-white"
                                     searchPlaceholder="Search agent..."
                                   />
@@ -3055,7 +3064,11 @@ export default function AdminLeadsPage() {
                     <SearchableSelect
                       value={bulkAgency}
                       onChange={(e) => setBulkAgency(e.target.value)}
-                      options={agencies.map((a) => ({ value: a._id, label: a.name }))}
+                      options={[
+                        { value: '', label: 'No change' },
+                        { value: '__clear__', label: 'Remove agency' },
+                        ...agencies.map((a) => ({ value: a._id, label: a.name }))
+                      ]}
                       placeholder="Select Agency"
                       buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                       searchPlaceholder="Search agency..."
@@ -3067,7 +3080,11 @@ export default function AdminLeadsPage() {
                     <SearchableSelect
                       value={bulkAgent}
                       onChange={(e) => setBulkAgent(e.target.value)}
-                      options={owners.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))}
+                      options={[
+                        { value: '', label: 'No change' },
+                        { value: '__clear__', label: 'Remove agent' },
+                        ...owners.map((o) => ({ value: o._id, label: `${o.firstName} ${o.lastName}`.trim() }))
+                      ]}
                       placeholder="Select Agent"
                       buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                       searchPlaceholder="Search agent..."

@@ -27,6 +27,13 @@ import {
 import toast from 'react-hot-toast'
 import { useCurrency } from '../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../lib/money'
+import {
+  formatBedroomLabel,
+  BEDROOM_FILTER_OPTIONS,
+  BALCONY_FILTER_OPTIONS,
+  matchesBedroomFilter,
+  matchesBalconyFilter
+} from '../../lib/propertyOptions'
 
 export default function HomePage() {
   const router = useRouter()
@@ -69,7 +76,7 @@ export default function HomePage() {
     minPrice: '',
     maxPrice: '',
     balconies: '',
-    livingRoom: '',
+    bedrooms: '',
     unfurnished: '',
     semiFurnished: '',
     fullyFurnished: ''
@@ -84,9 +91,6 @@ export default function HomePage() {
     const source = homeProperties
     if (!hasAnyAppliedFilter) return source.slice(0, 6)
 
-    const minBalconies = Number(searchFilters.balconies || 0)
-    const minBedrooms = Number(searchFilters.livingRoom || 0)
-
     const wantsUnfurnished = searchFilters.unfurnished === '1'
     const wantsSemi = searchFilters.semiFurnished === '1'
     const wantsFully = searchFilters.fullyFurnished === '1'
@@ -99,8 +103,6 @@ export default function HomePage() {
         const city = normalize(p.location?.city)
 
         const specs = p.specifications || {}
-        const balconies = Number(specs.balconies || 0)
-        const bedrooms = Number(specs.bedrooms || specs.livingRoom || 0)
 
         const matchesType =
           !normalize(searchFilters.propertyType) ||
@@ -114,8 +116,8 @@ export default function HomePage() {
           !normalize(searchFilters.city) ||
           city.includes(normalize(searchFilters.city))
 
-        const matchesBalconies = !minBalconies || balconies >= minBalconies
-        const matchesBedrooms = !minBedrooms || bedrooms >= minBedrooms
+        const matchesBalconies = matchesBalconyFilter(searchFilters.balconies, specs)
+        const matchesBedrooms = matchesBedroomFilter(searchFilters.bedrooms, specs)
 
         const matchesFurnishing =
           !wantsAnyFurnishing ||
@@ -263,7 +265,7 @@ export default function HomePage() {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 250)
     return () => clearTimeout(timer)
-  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.balconies, searchFilters.livingRoom, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
+  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.balconies, searchFilters.bedrooms, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
 
   const fetchWatchlist = async () => {
     try {
@@ -965,8 +967,9 @@ export default function HomePage() {
                         }`}
                       style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
-                      <option value="">Any</option>
-                      {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
+                      {BALCONY_FILTER_OPTIONS.map((o) => (
+                        <option key={o.value || 'any'} value={o.value}>{o.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -974,16 +977,17 @@ export default function HomePage() {
                       Bedroom
                     </label>
                     <select
-                      value={searchFilters.livingRoom}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, livingRoom: e.target.value }))}
-                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.livingRoom
+                      value={searchFilters.bedrooms}
+                      onChange={(e) => setSearchFilters(prev => ({ ...prev, bedrooms: e.target.value }))}
+                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.bedrooms
                         ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
                         : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
                         }`}
                       style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                     >
-                      <option value="">Any</option>
-                      {[1, 2, 3].map(n => <option key={n} value={n}>{n}+</option>)}
+                      {BEDROOM_FILTER_OPTIONS.map((o) => (
+                        <option key={o.value || 'any'} value={o.value}>{o.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="flex flex-wrap items-end gap-5 md:gap-6 pb-1">
@@ -1092,7 +1096,7 @@ export default function HomePage() {
                   minPrice: '',
                   maxPrice: '',
                   balconies: '',
-                  livingRoom: '',
+                  bedrooms: '',
                   unfurnished: '',
                   semiFurnished: '',
                   fullyFurnished: ''
@@ -1385,7 +1389,7 @@ export default function HomePage() {
                         <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">
                           <Bed className="h-4 w-4 text-primary-600 mb-1" />
                           <span className="text-xs font-bold text-gray-700">
-                            {property.specifications?.isStudio ? 'Studio' : `${property.specifications?.bedrooms || 0} BHK`}
+                            {formatBedroomLabel(property.specifications) || `${property.specifications?.bedrooms || 0} BHK`}
                           </span>
                         </div>
                         <div className="flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-3 border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-100 transition-colors duration-300">

@@ -11,6 +11,11 @@ import Footer from '../../components/Layout/Footer'
 import { useCurrency } from '../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../lib/money'
 import SearchableSelect from '../../components/Common/SearchableSelect'
+import {
+  BEDROOM_FILTER_OPTIONS,
+  bedroomFilterToQueryParams,
+  formatBedroomLabel
+} from '../../lib/propertyOptions'
 
 export default function PropertiesPage() {
   const router = useRouter()
@@ -43,7 +48,10 @@ export default function PropertiesPage() {
     area: searchParams.get('area') || '',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
-    bedrooms: searchParams.get('bedrooms') || '',
+    bedrooms:
+      searchParams.get('bedrooms') ||
+      (searchParams.get('studio') === '1' ? 'studio' : '') ||
+      (searchParams.get('bedroomsMin') ? '10plus' : ''),
     bathrooms: searchParams.get('bathrooms') || '',
     minArea: searchParams.get('minArea') || '',
     maxArea: searchParams.get('maxArea') || '',
@@ -52,7 +60,6 @@ export default function PropertiesPage() {
     unfurnished: searchParams.get('unfurnished') || '',
     semiFurnished: searchParams.get('semiFurnished') || '',
     fullyFurnished: searchParams.get('fullyFurnished') || '',
-    studio: searchParams.get('studio') || '',
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
     amenities: searchParams.get('amenities') || '',
@@ -211,7 +218,10 @@ export default function PropertiesPage() {
       area: searchParams.get('area') || '',
       minPrice: searchParams.get('minPrice') || '',
       maxPrice: searchParams.get('maxPrice') || '',
-      bedrooms: searchParams.get('bedrooms') || '',
+      bedrooms:
+      searchParams.get('bedrooms') ||
+      (searchParams.get('studio') === '1' ? 'studio' : '') ||
+      (searchParams.get('bedroomsMin') ? '10plus' : ''),
       bathrooms: searchParams.get('bathrooms') || '',
       minArea: searchParams.get('minArea') || '',
       maxArea: searchParams.get('maxArea') || '',
@@ -220,7 +230,6 @@ export default function PropertiesPage() {
       unfurnished: searchParams.get('unfurnished') || '',
       semiFurnished: searchParams.get('semiFurnished') || '',
       fullyFurnished: searchParams.get('fullyFurnished') || '',
-    studio: searchParams.get('studio') || '',
       search: searchParams.get('search') || '',
       category: searchParams.get('category') || '',
       amenities: searchParams.get('amenities') || '',
@@ -266,8 +275,14 @@ export default function PropertiesPage() {
       setLoading(true)
       const params = new URLSearchParams({
         page: pagination.page,
-        limit: pagination.limit,
-        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+        limit: pagination.limit
+      })
+      Object.entries(filters).forEach(([key, value]) => {
+        if (!value || key === 'bedrooms') return
+        params.set(key, value)
+      })
+      Object.entries(bedroomFilterToQueryParams(filters.bedrooms)).forEach(([key, value]) => {
+        params.set(key, value)
       })
 
       const response = await api.get(`/properties?${params}`)
@@ -305,7 +320,6 @@ export default function PropertiesPage() {
       unfurnished: '',
       semiFurnished: '',
       fullyFurnished: '',
-      studio: '',
       search: '',
       category: '',
       amenities: '',
@@ -389,7 +403,8 @@ export default function PropertiesPage() {
                 const v = e.target.value
                 handleFilterChange('preferredRooms', v)
                 // Map to actual property filter
-                if (v === 'studio') handleFilterChange('bedrooms', '0')
+                if (v === 'studio') handleFilterChange('bedrooms', 'studio')
+                else if (v === '5_plus') handleFilterChange('bedrooms', '10plus')
                 else if (v === '') handleFilterChange('bedrooms', '')
                 else if (!Number.isNaN(Number(v))) handleFilterChange('bedrooms', String(Number(v)))
               }}
@@ -509,21 +524,20 @@ export default function PropertiesPage() {
             <div className="relative">
               <button
                 onClick={() => setOpenFilter(openFilter === 'spec' ? null : 'spec')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished || filters.studio ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.bedrooms || filters.bathrooms || filters.balconies || filters.livingRoom || filters.unfurnished || filters.semiFurnished || filters.fullyFurnished ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
               >
                 <Bed className="h-4 w-4" />
                 Specification
                 {(filters.bedrooms || filters.bathrooms) && (
                   <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
                     {[
-                      filters.bedrooms && `${filters.bedrooms}BR`,
+                      filters.bedrooms && (filters.bedrooms === 'studio' ? 'Studio' : filters.bedrooms === '10plus' ? '10+' : `${filters.bedrooms}BR`),
                       filters.bathrooms && `${filters.bathrooms}BA`,
                       filters.balconies && `${filters.balconies}Blc`,
                       filters.livingRoom && `${filters.livingRoom}LR`,
                       filters.unfurnished && 'Unf',
                       filters.semiFurnished && 'Semi',
-                      filters.fullyFurnished && 'Full',
-                      filters.studio && 'Studio'
+                      filters.fullyFurnished && 'Full'
                     ].filter(Boolean).join(', ')}
                   </span>
                 )}
@@ -539,9 +553,9 @@ export default function PropertiesPage() {
                         onChange={(e) => handleFilterChange('bedrooms', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
-                        <option value="">Any</option>
-                        {(filterOptions.specifications?.bedrooms?.length ? filterOptions.specifications.bedrooms : [1, 2, 3, 4, 5])
-                          .map((n) => <option key={n} value={n}>{n}+</option>)}
+                        {BEDROOM_FILTER_OPTIONS.map((o) => (
+                          <option key={o.value || 'any'} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -583,10 +597,6 @@ export default function PropertiesPage() {
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Furnishing Status</label>
                       <div className="flex flex-wrap gap-2">
-                        <label className="flex items-center gap-1 text-xs">
-                          <input type="checkbox" checked={!!filters.studio} onChange={(e) => handleFilterChange('studio', e.target.checked ? '1' : '')} />
-                          Studio
-                        </label>
                         <label className="flex items-center gap-1 text-xs">
                           <input type="checkbox" checked={!!filters.unfurnished} onChange={(e) => handleFilterChange('unfurnished', e.target.checked ? '1' : '')} />
                           Unfurnished
@@ -773,10 +783,10 @@ export default function PropertiesPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-gray-600 text-sm">
-                      {property.specifications?.bedrooms && (
+                      {formatBedroomLabel(property.specifications) && (
                         <div className="flex items-center gap-1">
                           <Bed className="h-4 w-4" />
-                          <span>{property.specifications.bedrooms}</span>
+                          <span>{formatBedroomLabel(property.specifications)}</span>
                         </div>
                       )}
                       {property.specifications?.bathrooms && (

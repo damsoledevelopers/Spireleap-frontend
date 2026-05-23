@@ -14,6 +14,8 @@ import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
+import { formatBedroomLabel } from '../../../lib/propertyOptions'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../lib/phoneValidation'
 
 const BACKEND_ORIGIN = (() => {
   const prod = 'https://spireleap-backend.onrender.com/api'
@@ -413,12 +415,13 @@ export default function PropertyDetailPage() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const e164Phone = inquiryForm.phone ? buildE164Phone(inquiryPhoneCountryCode, inquiryForm.phone) : ''
-      if (inquiryForm.phone && !e164Phone) {
-        toast.error('Enter a valid phone number for the selected country')
+      const phoneCheck = validatePhoneField(inquiryPhoneCountryCode, inquiryForm.phone, { required: true })
+      if (!phoneCheck.ok) {
+        toast.error(phoneCheck.message)
         setSubmitting(false)
         return
       }
+      const e164Phone = buildE164Phone(inquiryPhoneCountryCode, sanitizeNationalPhoneInput(inquiryForm.phone))
       // Prepare contact data with proper structure
       const leadData = {
         property: property._id,
@@ -598,21 +601,12 @@ export default function PropertyDetailPage() {
 
               {/* Specifications */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-t border-b border-gray-200">
-                {property.specifications?.isStudio && (
-                  <div className="flex items-center gap-2">
-                    <Bed className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500">Studio</p>
-                      <p className="font-semibold">Yes</p>
-                    </div>
-                  </div>
-                )}
-                {property.specifications?.bedrooms && (
+                {formatBedroomLabel(property.specifications) && (
                   <div className="flex items-center gap-2">
                     <Bed className="h-5 w-5 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-500">Bedrooms (BHK Type)</p>
-                      <p className="font-semibold">{property.specifications.bedrooms}</p>
+                      <p className="font-semibold">{formatBedroomLabel(property.specifications)}</p>
                     </div>
                   </div>
                 )}
@@ -969,7 +963,7 @@ export default function PropertyDetailPage() {
                   countryCodeValue={inquiryPhoneCountryCode}
                   phoneValue={inquiryForm.phone}
                   onCountryCodeChange={(value) => setInquiryPhoneCountryCode(value)}
-                  onPhoneChange={(value) => setInquiryForm(prev => ({ ...prev, phone: value }))}
+                  onPhoneChange={(value) => setInquiryForm(prev => ({ ...prev, phone: sanitizeNationalPhoneInput(value) }))}
                 />
                 <textarea
                   placeholder="Message"

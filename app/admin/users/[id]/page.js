@@ -65,6 +65,7 @@ export default function AdminUserDetailPage() {
   const [completingForLeadId, setCompletingForLeadId] = useState(null)
   const [visitCompletionData, setVisitCompletionData] = useState({ feedback: '', interestLevel: 'medium', nextAction: '' })
   const [deletingSiteVisit, setDeletingSiteVisit] = useState(false)
+  const [savingSiteVisit, setSavingSiteVisit] = useState(false)
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [completingVisit, setCompletingVisit] = useState(false)
   const [viewCompletedVisit, setViewCompletedVisit] = useState(null)
@@ -429,41 +430,50 @@ export default function AdminUserDetailPage() {
       const visits = []
       const seenVisitIds = new Set()
 
-      // Fetch site visits only for inquiries belonging to this user (fetched by user ID)
-      for (const inquiry of userInquiries) {
-        const leadId = inquiry.realLeadId || inquiry._id
-        if (!leadId) continue
-
-        try {
-          const leadResponse = await api.get(`/leads/${leadId}`)
-          const lead = leadResponse.data.lead
-          
-          // Verify this lead belongs to the current user by checking email match
-          if (userData?.email && lead?.contact?.email && 
-              lead.contact.email.toLowerCase() !== userData.email.toLowerCase()) {
-            // Skip leads that don't match the user's email
-            continue
+      const leadRows = await Promise.all(
+        userInquiries.map(async (inquiry) => {
+          const leadId = inquiry.realLeadId || inquiry._id
+          if (!leadId) return null
+          try {
+            const leadResponse = await api.get(`/leads/${leadId}`)
+            const lead = leadResponse.data.lead
+            if (
+              userData?.email &&
+              lead?.contact?.email &&
+              lead.contact.email.toLowerCase() !== userData.email.toLowerCase()
+            ) {
+              return null
+            }
+            return { inquiry, leadId, lead }
+          } catch (error) {
+            console.error(`Error fetching lead ${leadId}:`, error)
+            return null
           }
+        })
+      )
 
-          const visitList = (lead.siteVisits && lead.siteVisits.length > 0)
+      for (const row of leadRows) {
+        if (!row) continue
+        const { inquiry, leadId, lead } = row
+        const visitList =
+          lead.siteVisits && lead.siteVisits.length > 0
             ? lead.siteVisits
-            : (lead.siteVisit?.scheduledDate ? [{ ...lead.siteVisit, _id: lead.siteVisit._id }] : [])
+            : lead.siteVisit?.scheduledDate
+              ? [{ ...lead.siteVisit, _id: lead.siteVisit._id }]
+              : []
 
-          visitList.forEach((visit) => {
-            if (visit._id && seenVisitIds.has(visit._id.toString())) return
-            if (visit._id) seenVisitIds.add(visit._id.toString())
+        visitList.forEach((visit) => {
+          if (visit._id && seenVisitIds.has(visit._id.toString())) return
+          if (visit._id) seenVisitIds.add(visit._id.toString())
 
-            const prop = visit.property || inquiry.property
-            visits.push({
-              ...visit,
-              _leadId: leadId,
-              _property: prop,
-              _leadName: inquiry.property?.title || inquiry.property?.slug || 'Lead'
-            })
+          const prop = visit.property || inquiry.property
+          visits.push({
+            ...visit,
+            _leadId: leadId,
+            _property: prop,
+            _leadName: inquiry.property?.title || inquiry.property?.slug || 'Lead'
           })
-        } catch (error) {
-          console.error(`Error fetching lead ${leadId}:`, error)
-        }
+        })
       }
 
       // Sort by scheduled date
@@ -481,6 +491,7 @@ export default function AdminUserDetailPage() {
   }
 
   const handleScheduleSiteVisit = async () => {
+    if (savingSiteVisit) return
     if (!siteVisitData.scheduledDate || !siteVisitData.scheduledTime) {
       toast.error('Please fill in date and time')
       return
@@ -494,29 +505,56 @@ export default function AdminUserDetailPage() {
       return
     }
     const leadId = schedulingForLeadId || siteVisitData.leadId
+    const scheduledDateTime = new Date(`${siteVisitData.scheduledDate}T${siteVisitData.scheduledTime}`)
+    const payload = {
+      scheduledDate: scheduledDateTime.toISOString(),
+      scheduledTime: siteVisitData.scheduledTime,
+      propertyId: siteVisitData.propertyId || undefined
+    }
+    const selectedProperty = properties.find((p) => String(p._id) === String(siteVisitData.propertyId))
+    setSavingSiteVisit(true)
     try {
-      const scheduledDateTime = new Date(`${siteVisitData.scheduledDate}T${siteVisitData.scheduledTime}`)
-      const payload = {
-        scheduledDate: scheduledDateTime.toISOString(),
-        scheduledTime: siteVisitData.scheduledTime,
-        propertyId: siteVisitData.propertyId || undefined
-      }
+      let savedVisit
       if (editingSiteVisitId) {
-        await api.put(`/leads/${leadId}/site-visit/${editingSiteVisitId}`, payload)
+        const res = await api.put(`/leads/${leadId}/site-visit/${editingSiteVisitId}`, payload)
+        savedVisit = res.data?.siteVisit || res.data?.visit || { ...payload, _id: editingSiteVisitId }
         toast.success('Site visit updated successfully')
       } else {
-        await api.post(`/leads/${leadId}/site-visit`, payload)
+        const res = await api.post(`/leads/${leadId}/site-visit`, payload)
+        savedVisit = res.data?.siteVisit || res.data?.visit || {
+          ...payload,
+          _id: res.data?._id || `temp-${Date.now()}`
+        }
         toast.success('Site visit scheduled successfully')
       }
+      const visitRow = {
+        ...savedVisit,
+        scheduledDate: payload.scheduledDate,
+        scheduledTime: payload.scheduledTime,
+        property: selectedProperty || savedVisit?.property,
+        _leadId: leadId,
+        _property: selectedProperty,
+        _leadName: selectedProperty?.title || 'Lead'
+      }
+      setAllSiteVisits((prev) => {
+        if (editingSiteVisitId) {
+          return prev.map((v) =>
+            String(v._id) === String(editingSiteVisitId) ? { ...v, ...visitRow } : v
+          )
+        }
+        return [visitRow, ...prev]
+      })
       setShowSiteVisitModal(false)
       setSiteVisitData({ scheduledDate: '', scheduledTime: '', propertyId: '', leadId: '' })
       setEditingSiteVisitId(null)
       setSchedulingForLeadId(null)
-      await fetchUserInquiries()
-      await fetchUserSiteVisits()
+      fetchUserInquiries()
+      fetchUserSiteVisits()
     } catch (error) {
       console.error('Error saving site visit:', error)
       toast.error(error.response?.data?.message || (editingSiteVisitId ? 'Failed to update site visit' : 'Failed to schedule site visit'))
+    } finally {
+      setSavingSiteVisit(false)
     }
   }
 
@@ -2720,7 +2758,8 @@ export default function AdminUserDetailPage() {
                             setSchedulingForLeadId(selectedProperty.leadId)
                           }
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        disabled={savingSiteVisit}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         required
                       >
                         <option value="">Select a property...</option>
@@ -2745,7 +2784,8 @@ export default function AdminUserDetailPage() {
                       type="date"
                       value={siteVisitData.scheduledDate}
                       onChange={(e) => setSiteVisitData({ ...siteVisitData, scheduledDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      disabled={savingSiteVisit}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -2757,29 +2797,45 @@ export default function AdminUserDetailPage() {
                       type="time"
                       value={siteVisitData.scheduledTime}
                       onChange={(e) => setSiteVisitData({ ...siteVisitData, scheduledTime: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      disabled={savingSiteVisit}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       required
                     />
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t">
                   <button
+                    type="button"
                     onClick={() => {
+                      if (savingSiteVisit) return
                       setShowSiteVisitModal(false)
                       setEditingSiteVisitId(null)
                       setSchedulingForLeadId(null)
                       setSiteVisitData({ scheduledDate: '', scheduledTime: '', propertyId: '', leadId: '' })
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    disabled={savingSiteVisit}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={handleScheduleSiteVisit}
-                    disabled={!siteVisitData.propertyId || !siteVisitData.scheduledDate || !siteVisitData.scheduledTime}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={
+                      savingSiteVisit ||
+                      !siteVisitData.propertyId ||
+                      !siteVisitData.scheduledDate ||
+                      !siteVisitData.scheduledTime
+                    }
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                   >
-                    {editingSiteVisitId ? 'Update' : 'Schedule'} Visit
+                    {savingSiteVisit && (
+                      <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {savingSiteVisit
+                      ? (editingSiteVisitId ? 'Updating…' : 'Scheduling…')
+                      : (editingSiteVisitId ? 'Update' : 'Schedule')}{' '}
+                    Visit
                   </button>
                 </div>
               </div>

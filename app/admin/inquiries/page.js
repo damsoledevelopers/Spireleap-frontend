@@ -304,13 +304,20 @@ export default function AdminInquiriesPage() {
 
       // Add all filters to params including search (backend supports search)
       Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== '') {
-          params.append(key, value)
+        if (!value || value === '') return
+        if (key === 'assignedAgent' && value === '__unassigned__') return
+        if (key === 'assignedAgent') {
+          params.append('owner', value)
+          return
         }
+        params.append(key, value)
       })
 
       const response = await api.get(`/leads?${params}`)
-      const fetchedInquiries = response.data.leads || []
+      let fetchedInquiries = response.data.leads || []
+      if (filters.assignedAgent === '__unassigned__') {
+        fetchedInquiries = fetchedInquiries.filter((inquiry) => !(inquiry.assignedAgent?._id || inquiry.assignedAgent))
+      }
 
       // Update pagination from API response
       if (response.data && response.data.pagination) {
@@ -413,40 +420,23 @@ export default function AdminInquiriesPage() {
   }, [fetchInquiries])
 
   const handleAssignAgent = useCallback(async (leadId, agentId) => {
-    if (!agentId) {
-      toast.error('Please select an agent')
-      return
-    }
-
     try {
       setAssigningAgent(leadId)
-      const response = await api.put(`/leads/${leadId}/assign`, { assignedAgent: agentId })
+      const response = await api.put(`/leads/${leadId}/assign`, {
+        assignedAgent: agentId || null
+      })
 
-      // Update local state immediately for instant feedback
       const updatedLead = response.data.lead
-      if (updatedLead && updatedLead.assignedAgent) {
-        // Ensure assignedAgent is properly set (could be object or ID)
-        const assignedAgentData = updatedLead.assignedAgent
+      const assignedAgentData = updatedLead?.assignedAgent ?? null
 
-        setInquiries(prev => prev.map(inquiry =>
-          inquiry._id === leadId
-            ? {
-              ...inquiry,
-              assignedAgent: assignedAgentData
-            }
-            : inquiry
-        ))
-        setAllInquiries(prev => prev.map(inquiry =>
-          inquiry._id === leadId
-            ? {
-              ...inquiry,
-              assignedAgent: assignedAgentData
-            }
-            : inquiry
-        ))
-      }
+      setInquiries(prev => prev.map(inquiry =>
+        inquiry._id === leadId ? { ...inquiry, assignedAgent: assignedAgentData } : inquiry
+      ))
+      setAllInquiries(prev => prev.map(inquiry =>
+        inquiry._id === leadId ? { ...inquiry, assignedAgent: assignedAgentData } : inquiry
+      ))
 
-      toast.success('Agent assigned successfully')
+      toast.success(agentId ? 'Agent assigned successfully' : 'Agent removed')
 
       // Refresh the inquiries list to get full updated data
       await fetchInquiries()
@@ -827,6 +817,7 @@ export default function AdminInquiriesPage() {
                 }}
                 options={[
                   { value: '', label: 'All Agents' },
+                  { value: '__unassigned__', label: 'No agent' },
                   ...(agents || [])
                     .filter(agent => {
                       // If agency filter is selected, show only agents from that agency
@@ -968,10 +959,7 @@ export default function AdminInquiriesPage() {
                           <SearchableSelect
                             value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
                             onChange={async (e) => {
-                              const selectedAgentId = e.target.value
-                              if (selectedAgentId) {
-                                await handleAssignAgent(inquiry._id, selectedAgentId)
-                              }
+                              await handleAssignAgent(inquiry._id, e.target.value || null)
                             }}
                             disabled={assigningAgent === inquiry._id}
                             buttonClassName="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white w-full disabled:opacity-50 disabled:cursor-not-allowed"
@@ -982,7 +970,7 @@ export default function AdminInquiriesPage() {
                               }
                             }}
                             options={(() => {
-                              const opts = [{ value: '', label: 'Assign Agent...' }]
+                              const opts = [{ value: '', label: 'No agent' }]
                               if (inquiry.assignedAgent && (inquiry.assignedAgent._id || inquiry.assignedAgent)) {
                                 opts.push({
                                   value: inquiry.assignedAgent._id || inquiry.assignedAgent,

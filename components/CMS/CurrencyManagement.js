@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { useConfirmDialog } from '../Common/useConfirmDialog'
 import SearchableSelect from '../Common/SearchableSelect'
 import { ISO_4217_CURRENCIES, findCurrencyByCode } from '../../lib/currencyIso4217'
+import { clearDropdownOptionsCache } from '../../lib/dropdownsApi'
 
 const BASE_CURRENCY_CODE = 'AED'
 
@@ -26,10 +27,11 @@ const emptyForm = {
   status: true
 }
 
-export default function CurrencyManagement() {
+export default function CurrencyManagement({ onCurrenciesChange }) {
   const { checkPermission } = useAuth()
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [currencies, setCurrencies] = useState([])
+  const [hiddenCurrencies, setHiddenCurrencies] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingCurrency, setEditingCurrency] = useState(null)
@@ -189,11 +191,17 @@ export default function CurrencyManagement() {
         })
         toast.success('Currency updated successfully')
       } else {
-        await api.post('/currency', payload)
-        toast.success('Currency created successfully')
+        const createRes = await api.post('/currency', payload)
+        if (createRes.data?.restored) {
+          toast.success(`${payload.currencyCode} was restored and updated`)
+        } else {
+          toast.success('Currency created successfully')
+        }
       }
       closeModal()
+      clearDropdownOptionsCache()
       fetchCurrencies()
+      onCurrenciesChange?.()
     } catch (error) {
       const msg =
         error.response?.data?.message ||
@@ -202,6 +210,18 @@ export default function CurrencyManagement() {
       toast.error(msg)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleRestore = async (currency) => {
+    try {
+      await api.post(`/currency/${currency._id}/restore`)
+      toast.success(`${currency.currencyCode} restored`)
+      clearDropdownOptionsCache()
+      fetchCurrencies()
+      onCurrenciesChange?.()
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to restore currency')
     }
   }
 
@@ -216,7 +236,9 @@ export default function CurrencyManagement() {
     try {
       await api.delete(`/currency/${id}`)
       toast.success('Currency deleted successfully')
+      clearDropdownOptionsCache()
       fetchCurrencies()
+      onCurrenciesChange?.()
     } catch (error) {
       toast.error('Failed to delete currency')
     }
@@ -228,6 +250,8 @@ export default function CurrencyManagement() {
     setCurrencies((prev) => prev.map((c) => (c._id === currency._id ? { ...c, status: nextStatus } : c)))
     try {
       await api.put(`/currency/${currency._id}`, { status: nextStatus })
+      clearDropdownOptionsCache()
+      onCurrenciesChange?.()
       toast.success(`Currency marked ${nextStatus ? 'Active' : 'Inactive'}`)
     } catch (error) {
       // Revert on failure
@@ -261,6 +285,32 @@ export default function CurrencyManagement() {
           </button>
         )}
       </div>
+
+      {hiddenCurrencies.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-medium text-amber-900">
+            {hiddenCurrencies.length} hidden currency record(s) — these do not appear in the list but block duplicate codes.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {hiddenCurrencies.map((c) => (
+              <li key={c._id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-800">
+                <span>
+                  {c.countryName} — {c.currencyCode} ({c.currencyName})
+                </span>
+                {checkPermission('settings', 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(c)}
+                    className="px-3 py-1 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700"
+                  >
+                    Restore
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -402,33 +452,15 @@ export default function CurrencyManagement() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Enter code<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingCurrency}
-                    value={formData.currencyCode}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                        .replace(/[^a-zA-Z0-9]/g, '')
-                        .toUpperCase()
-                        .slice(0, 10)
-                      const cur = findCurrencyByCode(raw)
-                      setFormData((prev) => ({
-                        ...prev,
-                        currencyCode: raw,
-                        currencyName: cur ? cur.name : ''
-                      }))
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 uppercase"
-                    placeholder="e.g. USD"
-                    autoComplete="off"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">ISO code (unique). Editable; updates from currency list when matched.</p>
-                </div>
+                {formData.currencyCode ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Selected code</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                      {String(formData.currencyCode).toUpperCase()}
+                      {formData.currencyName ? ` — ${formData.currencyName}` : ''}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">Current {BASE_CURRENCY_CODE} Rate<span className="text-red-500 ml-0.5" aria-hidden="true">*</span></label>

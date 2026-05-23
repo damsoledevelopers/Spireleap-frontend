@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
+import { formatBedroomLabel } from '../../../../lib/propertyOptions'
 import {
   ArrowLeft,
   Edit,
@@ -284,7 +285,7 @@ export default function AdminPropertyViewPage() {
                   <Bed className="h-5 w-5 text-gray-400" />
                   <div>
                     <p className="text-sm text-gray-500">Bedrooms</p>
-                    <p className="font-semibold">{property.specifications?.bedrooms || 0}</p>
+                    <p className="font-semibold">{formatBedroomLabel(property.specifications) || property.specifications?.bedrooms || 0}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -318,9 +319,6 @@ export default function AdminPropertyViewPage() {
                 </div>
               )}
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                {specifications.isStudio && (
-                  <p><span className="text-gray-500">Studio:</span> <span className="text-gray-900">Yes</span></p>
-                )}
                 <p><span className="text-gray-500">Balconies:</span> <span className="text-gray-900">{specifications.balconies ?? 0}</span></p>
                 <p><span className="text-gray-500">Living Room:</span> <span className="text-gray-900">{specifications.livingRoom ?? 0}</span></p>
                 <p><span className="text-gray-500">Floors:</span> <span className="text-gray-900">{specifications.floors ?? 'N/A'}</span></p>

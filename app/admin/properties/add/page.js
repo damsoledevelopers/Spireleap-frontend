@@ -11,10 +11,28 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import SearchableSelect from '../../../../components/Common/SearchableSelect'
 import {
+  buildAgencySelectOptions,
+  buildAgentSelectOptions,
+  agencyValueForSubmit,
+  agentValueForSubmit,
+  NONE_AGENCY_VALUE,
+  NONE_AGENT_VALUE,
+  agencyAgentFieldsAfterAgencyChange,
+  selectValueForAgency,
+  selectValueForAgent
+} from '../../../../lib/agencyAgentOptions'
+import {
   sanitizePostalDigits,
   isValidOptionalPostalDigits,
   OPTIONAL_POSTAL_DIGITS_MESSAGE
 } from '../../../../lib/postalCode'
+import {
+  PROPERTY_STATUS_FORM_OPTIONS_SUPER,
+  PROPERTY_STATUS_FORM_OPTIONS_AGENCY,
+  BEDROOM_SELECT_OPTIONS,
+  bedroomSelectToSpecs,
+  specsToBedroomSelect
+} from '../../../../lib/propertyOptions'
 
 // Dynamically import Google Maps to avoid SSR issues
 const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
@@ -66,10 +84,11 @@ export default function AdminAddPropertyPage() {
     listingType: 'sale',
     agency: '',
     agent: '',
+    bedroomSelect: '',
     price: {
       sale: '',
       rent: { amount: '', period: 'monthly' },
-      currency: 'USD'
+      currency: 'AED'
     },
     location: {
       address: '',
@@ -131,11 +150,11 @@ export default function AdminAddPropertyPage() {
 
   useEffect(() => {
     // Fetch agents when agency changes
-    if (formData.agency) {
+    if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
     } else {
       setAgents([])
-      setFormData(prev => ({ ...prev, agent: '' }))
+      setFormData(prev => ({ ...prev, agent: prev.agent === NONE_AGENT_VALUE ? NONE_AGENT_VALUE : '' }))
     }
   }, [formData.agency])
 
@@ -268,23 +287,23 @@ export default function AdminAddPropertyPage() {
   const handleInputChange = (field, value) => {
     const keys = field.split('.')
     if (keys.length === 1) {
-      setFormData({ ...formData, [field]: value })
+      setFormData((prev) => ({ ...prev, [field]: value }))
     } else if (keys.length === 2) {
-      setFormData({
-        ...formData,
-        [keys[0]]: { ...formData[keys[0]], [keys[1]]: value }
-      })
+      setFormData((prev) => ({
+        ...prev,
+        [keys[0]]: { ...prev[keys[0]], [keys[1]]: value }
+      }))
     } else if (keys.length === 3) {
-      setFormData({
-        ...formData,
+      setFormData((prev) => ({
+        ...prev,
         [keys[0]]: {
-          ...formData[keys[0]],
+          ...prev[keys[0]],
           [keys[1]]: {
-            ...formData[keys[0]][keys[1]],
+            ...prev[keys[0]][keys[1]],
             [keys[2]]: value
           }
         }
-      })
+      }))
     }
   }
 
@@ -499,15 +518,15 @@ export default function AdminAddPropertyPage() {
       // Clean up form data
       const submitData = {
         ...formData,
-        agency: formData.agency || undefined,
-        agent: formData.agent || undefined,
+        agency: agencyValueForSubmit(formData.agency),
+        agent: agentValueForSubmit(formData.agent),
         price: {
           sale: formData.price.sale ? parseFloat(formData.price.sale) : undefined,
           rent: formData.price.rent.amount ? {
             amount: parseFloat(formData.price.rent.amount),
             period: formData.price.rent.period
           } : undefined,
-          currency: formData.price.currency
+          currency: 'AED'
         },
         regulatoryInformation: {
           ...formData.regulatoryInformation,
@@ -517,11 +536,10 @@ export default function AdminAddPropertyPage() {
         },
         specifications: {
           ...formData.specifications,
-          bedrooms: formData.specifications.bedrooms ? parseInt(formData.specifications.bedrooms, 10) : undefined,
           bathrooms: formData.specifications.bathrooms ? parseInt(formData.specifications.bathrooms, 10) : undefined,
           balconies: parseInt(formData.specifications.balconies, 10) || 0,
           livingRoom: parseInt(formData.specifications.livingRoom, 10) || 0,
-          isStudio: !!formData.specifications.isStudio,
+          ...bedroomSelectToSpecs(formData.bedroomSelect),
           unfurnished: parseInt(formData.specifications.unfurnished, 10) || 0,
           semiFurnished: parseInt(formData.specifications.semiFurnished, 10) || 0,
           fullyFurnished: parseInt(formData.specifications.fullyFurnished, 10) || 0,
@@ -667,19 +685,25 @@ export default function AdminAddPropertyPage() {
                     {user?.role === 'agency_admin' ? <RequiredMark /> : null}
                   </label>
                   <SearchableSelect
-                    value={formData.agency}
-                    onChange={(e) => handleInputChange('agency', e.target.value)}
+                    value={selectValueForAgency(formData.agency)}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setFormData((prev) => ({ ...prev, ...agencyAgentFieldsAfterAgencyChange(prev, v) }))
+                    }}
                     disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
-                    options={[
-                      ...(user?.role === 'super_admin'
-                        ? agencies.map(a => ({ value: a._id, label: a.name }))
-                        : (user?.agency
-                          ? [{
-                            value: typeof user.agency === 'object' ? user.agency._id : user.agency,
-                            label: user.agencyName || (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')
-                          }]
-                          : []))
-                    ]}
+                    options={
+                      user?.role === 'super_admin'
+                        ? buildAgencySelectOptions(agencies, { includeNone: true })
+                        : user?.agency
+                          ? buildAgencySelectOptions(
+                              [{
+                                _id: typeof user.agency === 'object' ? user.agency._id : user.agency,
+                                name: user.agencyName || (typeof user.agency === 'object' ? user.agency.name : 'Your Agency')
+                              }],
+                              { includeNone: false }
+                            )
+                          : []
+                    }
                     placeholder="Select Agency"
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
                     searchPlaceholder="Search agency..."
@@ -688,13 +712,11 @@ export default function AdminAddPropertyPage() {
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">Agent (optional)</label>
                   <SearchableSelect
-                    value={formData.agent}
+                    value={selectValueForAgent(formData.agent)}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
-                    disabled={!formData.agency || user?.role === 'agent'}
-                    options={[
-                      ...agents.map(a => ({ value: a._id, label: `${a.firstName} ${a.lastName}`.trim() }))
-                    ]}
-                    placeholder={formData.agency ? 'Select Agent' : 'Select Agency First'}
+                    disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE || user?.role === 'agent'}
+                    options={buildAgentSelectOptions(agents, { includeNone: true })}
+                    placeholder={formData.agency && formData.agency !== NONE_AGENCY_VALUE ? 'Select Agent' : 'Select Agency First'}
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
                     searchPlaceholder="Search agent..."
                   />
@@ -775,14 +797,7 @@ export default function AdminAddPropertyPage() {
                   onChange={(e) => handleInputChange('status', e.target.value)}
                   disabled={user?.role !== 'super_admin' && user?.role !== 'agency_admin'}
                   options={(user?.role === 'super_admin' || user?.role === 'agency_admin')
-                    ? [
-                      { value: 'active', label: 'Available (Active)' },
-                      { value: 'pending', label: 'Pending Approval' },
-                      { value: 'sold', label: 'Sold' },
-                      { value: 'rented', label: 'Rented' },
-                      { value: 'inactive', label: 'Inactive' },
-                      { value: 'draft', label: 'Draft' }
-                    ]
+                    ? PROPERTY_STATUS_FORM_OPTIONS_SUPER
                     : [{ value: 'pending', label: 'Pending Agency Approval' }]}
                   placeholder="Select status"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
@@ -857,22 +872,9 @@ export default function AdminAddPropertyPage() {
                   </div>
                 </>
               )}
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Currency</label>
-                <SearchableSelect
-                  value={formData.price.currency}
-                  onChange={(e) => handleInputChange('price.currency', e.target.value)}
-                  options={[
-                    { value: 'USD', label: 'USD' },
-                    { value: 'EUR', label: 'EUR' },
-                    { value: 'GBP', label: 'GBP' },
-                    { value: 'INR', label: 'INR' }
-                  ]}
-                  placeholder="Currency"
-                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
-                  searchPlaceholder="Search currency..."
-                />
-              </div>
+              <p className="md:col-span-2 text-sm text-gray-500">
+                All prices are stored in <span className="font-semibold text-gray-700">AED</span>.
+              </p>
             </div>
           </div>
 
@@ -1101,17 +1103,18 @@ export default function AdminAddPropertyPage() {
           {/* Specifications */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
-            <label className="flex items-center gap-2 cursor-pointer mb-4 w-fit">
-              <input
-                type="checkbox"
-                checked={!!formData.specifications.isStudio}
-                onChange={(e) => handleInputChange('specifications.isStudio', e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5 shrink-0"
-              />
-              <span className="text-sm font-bold text-gray-900">Studio</span>
-            </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {renderSpecificationStepper('Bedrooms (BHK Type)', 'specifications.bedrooms', formData.specifications.bedrooms)}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Bedrooms (BHK Type)</label>
+                <SearchableSelect
+                  value={formData.bedroomSelect}
+                  onChange={(e) => handleInputChange('bedroomSelect', e.target.value)}
+                  options={BEDROOM_SELECT_OPTIONS}
+                  placeholder="Select bedrooms"
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  searchPlaceholder="Search..."
+                />
+              </div>
               {renderSpecificationStepper('Bathrooms', 'specifications.bathrooms', formData.specifications.bathrooms)}
               {renderSpecificationStepper('Balconies', 'specifications.balconies', formData.specifications.balconies)}
               {renderSpecificationStepper('Living Room', 'specifications.livingRoom', formData.specifications.livingRoom)}

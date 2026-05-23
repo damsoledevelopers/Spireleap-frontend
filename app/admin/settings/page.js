@@ -24,7 +24,8 @@ import AmenityManagement from '../../../components/CMS/AmenityManagement'
 import CurrencyManagement from '../../../components/CMS/CurrencyManagement'
 import LocationManagement from '../../../components/CMS/LocationManagement'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
-import { getDropdownOptions } from '../../../lib/dropdownsApi'
+import { getDropdownOptions, clearDropdownOptionsCache } from '../../../lib/dropdownsApi'
+import { buildCurrencySelectOptions, ensureCurrencyInOptions } from '../../../lib/currencySelectOptions'
 
 export default function AdminSettings() {
   return <SettingsPageContent />
@@ -50,6 +51,7 @@ export function SettingsPageContent() {
   const [visiblePasswords, setVisiblePasswords] = useState({})
   const [dropdowns, setDropdowns] = useState({
     currencies: [],
+    currencyOptions: [],
     timezones: [],
     languages: [],
     logLevels: [],
@@ -66,9 +68,10 @@ export function SettingsPageContent() {
     general: {
       siteName: 'SPIRELEAP Real Estate',
       siteDescription: 'Real Estate CRM & CMS System',
-      defaultCurrency: 'USD',
+      defaultCurrency: 'AED',
       timezone: 'UTC',
-      language: 'en'
+      language: 'en',
+      spokenLanguageList: 'English, Arabic, Hindi, Urdu, French, Spanish, German'
     },
     security: {
       sessionTimeout: 30,
@@ -104,17 +107,38 @@ export function SettingsPageContent() {
     fetchSettings()
   }, [])
 
+  const loadCurrencyOptions = async () => {
+    clearDropdownOptionsCache()
+    const [dropdownsRes, currencyRes] = await Promise.all([
+      getDropdownOptions(),
+      api.get('/currency').catch(() => ({ data: { currencies: [] } }))
+    ])
+    const currencyList = currencyRes.data?.currencies || []
+    const codesFromDb = currencyList
+      .map((c) => String(c.currencyCode || '').trim().toUpperCase())
+      .filter(Boolean)
+    const codesFromDropdown = dropdownsRes.currencies || []
+    const currencyOptions = buildCurrencySelectOptions(currencyList, [...codesFromDb, ...codesFromDropdown])
+    setDropdowns((prev) => ({
+      ...prev,
+      currencies: currencyOptions.map((o) => o.value),
+      currencyOptions
+    }))
+    return currencyOptions
+  }
+
   const fetchSettings = async () => {
     try {
       setLoading(true)
       const dropdownsRes = await getDropdownOptions()
-      setDropdowns({
-        currencies: dropdownsRes.currencies || [],
+      await loadCurrencyOptions()
+      setDropdowns((prev) => ({
+        ...prev,
         timezones: dropdownsRes.timezones || [],
         languages: dropdownsRes.languages || [],
         logLevels: dropdownsRes.logLevels || [],
         backupFrequencies: dropdownsRes.backupFrequencies || []
-      })
+      }))
       // Fetch settings from API
       const response = await api.get('/settings')
       const apiSettings = response.data.settings || {}
@@ -138,7 +162,11 @@ export function SettingsPageContent() {
             if (key.startsWith(`${category}.`)) {
               fieldName = key.substring(category.length + 1);
             }
-            nestedSettings[category][fieldName] = apiSettings[category][key]
+            let val = apiSettings[category][key]
+            if (fieldName === 'spokenLanguageList' && Array.isArray(val)) {
+              val = val.join(', ')
+            }
+            nestedSettings[category][fieldName] = val
           })
         }
       })
@@ -181,7 +209,14 @@ export function SettingsPageContent() {
       const flatSettings = {}
       Object.keys(settingsToSave).forEach(category => {
         Object.keys(settingsToSave[category]).forEach(key => {
-          flatSettings[`${category}.${key}`] = settingsToSave[category][key]
+          let val = settingsToSave[category][key]
+          if (key === 'spokenLanguageList' && typeof val === 'string') {
+            val = val
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          }
+          flatSettings[`${category}.${key}`] = val
         })
       })
 
@@ -228,9 +263,15 @@ export function SettingsPageContent() {
       fields: [
         { name: 'siteName', label: 'Site Name', type: 'text' },
         { name: 'siteDescription', label: 'Site Description', type: 'textarea' },
-        { name: 'defaultCurrency', label: 'Default Currency', type: 'select', options: dropdowns.currencies },
+        { name: 'defaultCurrency', label: 'Default Currency', type: 'select', optionsKey: 'currencyOptions' },
         { name: 'timezone', label: 'Timezone', type: 'select', options: dropdowns.timezones },
-        { name: 'language', label: 'Language', type: 'select', options: dropdowns.languages }
+        { name: 'language', label: 'Site Language', type: 'select', options: dropdowns.languages },
+        {
+          name: 'spokenLanguageList',
+          label: 'Spoken languages (for leads)',
+          type: 'textarea',
+          hint: 'Comma-separated list shown when selecting spoken languages on leads/inquiries.'
+        }
       ]
     },
     {
@@ -393,18 +434,32 @@ export function SettingsPageContent() {
                         />
                       )}
                       {field.type === 'textarea' && (
-                        <textarea
-                          className="form-input"
-                          rows={3}
-                          value={settings[section.id][field.name]}
-                          onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
-                        />
+                        <>
+                          <textarea
+                            className="form-input"
+                            rows={3}
+                            value={settings[section.id][field.name]}
+                            onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
+                          />
+                          {field.hint ? (
+                            <p className="mt-1 text-xs text-gray-500">{field.hint}</p>
+                          ) : null}
+                        </>
                       )}
                       {field.type === 'select' && (
                         <SearchableSelect
                           value={settings[section.id][field.name]}
                           onChange={(e) => handleInputChange(section.id, field.name, e.target.value)}
-                          options={(field.options || []).map((o) => ({ value: o, label: String(o) }))}
+                          options={ensureCurrencyInOptions(
+                            field.optionsKey && dropdowns[field.optionsKey]?.length
+                              ? dropdowns[field.optionsKey]
+                              : (field.options || []).map((o) =>
+                                  typeof o === 'object' && o !== null
+                                    ? { value: o.value, label: o.label ?? String(o.value) }
+                                    : { value: o, label: String(o) }
+                                ),
+                            settings[section.id][field.name]
+                          )}
                           placeholder="Select..."
                           buttonClassName="form-input w-full"
                           searchPlaceholder="Search..."
@@ -456,7 +511,7 @@ export function SettingsPageContent() {
             <p className="text-sm text-gray-500">Manage supported currencies and INR conversion rates</p>
           </div>
           <div className="card-body">
-            <CurrencyManagement />
+            <CurrencyManagement onCurrenciesChange={loadCurrencyOptions} />
           </div>
         </div>
 

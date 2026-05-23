@@ -6,7 +6,7 @@ import { getDropdownOptions } from '../lib/dropdownsApi'
 const CurrencyContext = createContext(null)
 
 const STORAGE_KEY = 'spireleap:selectedCurrency'
-const DEFAULT_CURRENCY = 'USD'
+const DEFAULT_CURRENCY = 'AED'
 
 export function CurrencyProvider({ children }) {
   const [selectedCurrency, setSelectedCurrencyState] = useState(DEFAULT_CURRENCY)

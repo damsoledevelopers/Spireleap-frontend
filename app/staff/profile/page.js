@@ -8,6 +8,7 @@ import { User, Save, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
+import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../lib/phoneValidation'
 import {
   sanitizePostalDigits,
   isValidOptionalPostalDigits,
@@ -142,17 +143,13 @@ export default function StaffProfilePage() {
         setLoading(false)
         return
       }
-      if (formData.phone && String(formData.phone).length !== 10) {
-        toast.error('Phone number must be exactly 10 digits')
+      const phoneCheck = validatePhoneField(phoneCountryCode, formData.phone, { required: false })
+      if (!phoneCheck.ok) {
+        toast.error(phoneCheck.message)
         setLoading(false)
         return
       }
-      const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, formData.phone) : ''
-      if (formData.phone && !e164Phone) {
-        toast.error('Enter a valid phone number for the selected country')
-        setLoading(false)
-        return
-      }
+      const e164Phone = formData.phone ? buildE164Phone(phoneCountryCode, sanitizeNationalPhoneInput(formData.phone)) : ''
       // Get user ID - handle both id and _id formats
       const userId = user?.id || user?._id
 
@@ -273,16 +270,10 @@ export default function StaffProfilePage() {
                   phoneValue={formData.phone}
                   onCountryCodeChange={(value) => setPhoneCountryCode(value)}
                   onPhoneChange={(value) => {
-                    const digits = String(value || '').replace(/\D/g, '').slice(0, 10)
-                    handleInputChange('phone', digits)
+                    handleInputChange('phone', sanitizeNationalPhoneInput(value))
                   }}
                   showInlineError={Boolean(formData.phone)}
                 />
-                {formData.phone && String(formData.phone).length !== 10 && (
-                  <p className="mt-1 text-xs font-semibold text-red-600">
-                    Phone number must be exactly 10 digits
-                  </p>
-                )}
               </div>
             </div>
           </div>
