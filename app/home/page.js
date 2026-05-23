@@ -1083,7 +1083,7 @@ export default function HomePage() {
               <p className="text-gray-600 mt-2 max-w-2xl">
                 {hasAnyAppliedFilter
                   ? `Showing ${displayedProperties.length} matching properties`
-                  : 'Discover active listings handpicked for you'}
+                  : 'Discover active listings handpicked for you.'}
               </p>
             </div>
 
