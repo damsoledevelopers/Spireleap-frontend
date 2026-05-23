@@ -41,6 +41,7 @@ export default function PropertiesPage() {
   })
   const [filters, setFilters] = useState({
     propertyType: searchParams.get('propertyType') || '',
+    completionStatus: searchParams.get('completionStatus') || '',
     listingType: searchParams.get('listingType') || '',
     city: searchParams.get('city') || '',
     state: searchParams.get('state') || '',
@@ -304,6 +305,7 @@ export default function PropertiesPage() {
   const clearFilters = () => {
     setFilters({
       propertyType: '',
+      completionStatus: '',
       listingType: '',
       city: '',
       state: '',
@@ -376,6 +378,19 @@ export default function PropertiesPage() {
             >
               <option value="">All Types</option>
               {(filterOptions.propertyTypes || []).map((t) => (
+                <option key={t} value={t}>
+                  {String(t).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filters.completionStatus}
+              onChange={(e) => handleFilterChange('completionStatus', e.target.value)}
+              className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium ${filters.completionStatus ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+            >
+              <option value="">All Completion</option>
+              {(filterOptions.completionStatuses || ['off_plan', 'under_construction', 'ready_to_move']).map((t) => (
                 <option key={t} value={t}>
                   {String(t).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                 </option>

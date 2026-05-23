@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   Calendar,
   FileText,
-  Heart
+  Heart,
+  ClipboardCheck
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useCurrency } from '../../contexts/CurrencyContext'
@@ -32,8 +33,10 @@ import {
   BEDROOM_FILTER_OPTIONS,
   BALCONY_FILTER_OPTIONS,
   matchesBedroomFilter,
-  matchesBalconyFilter
+  matchesBalconyFilter,
+  COMPLETION_STATUS_FILTER_OPTIONS
 } from '../../lib/propertyOptions'
+import { fetchPropertyTypeOptions } from '../../lib/propertyTypesApi'
 import MediaImage from '../../components/Common/MediaImage'
 import { resolveMediaUrl } from '../../lib/mediaUrl'
 
@@ -71,8 +74,10 @@ export default function HomePage() {
     blogs: false
   })
   const [windowWidth, setWindowWidth] = useState(0)
+  const [propertyTypeOptions, setPropertyTypeOptions] = useState([])
   const [searchFilters, setSearchFilters] = useState({
     propertyType: '',
+    completionStatus: '',
     listingType: '',
     city: '',
     minPrice: '',
@@ -106,9 +111,17 @@ export default function HomePage() {
 
         const specs = p.specifications || {}
 
+        const completion = normalize(p.completionStatus || '')
+        const legacyCompletion = ['off_plan', 'ready_to_move', 'under_construction'].includes(type) ? type : ''
+
         const matchesType =
           !normalize(searchFilters.propertyType) ||
           type === normalize(searchFilters.propertyType)
+
+        const matchesCompletion =
+          !normalize(searchFilters.completionStatus) ||
+          completion === normalize(searchFilters.completionStatus) ||
+          legacyCompletion === normalize(searchFilters.completionStatus)
 
         const matchesListing =
           !normalize(searchFilters.listingType) ||
@@ -129,6 +142,7 @@ export default function HomePage() {
 
         return (
           matchesType &&
+          matchesCompletion &&
           matchesListing &&
           matchesCity &&
           matchesBalconies &&
@@ -240,6 +254,7 @@ export default function HomePage() {
     fetchAmenities()
     fetchActiveScripts()
     fetchPlans()
+    fetchPropertyTypeOptions(api).then(setPropertyTypeOptions).catch(() => {})
 
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth)
@@ -267,7 +282,7 @@ export default function HomePage() {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 250)
     return () => clearTimeout(timer)
-  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.balconies, searchFilters.bedrooms, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
+  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.completionStatus, searchFilters.balconies, searchFilters.bedrooms, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
 
   const fetchWatchlist = async () => {
     try {
@@ -883,8 +898,8 @@ export default function HomePage() {
               onSubmit={(e) => { e.preventDefault(); }}
             >
               <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/80 p-6 md:p-8 transition-shadow hover:shadow-2xl">
-                {/* Row 1: Property Type | Listing Type | Location */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-5">
+                {/* Row 1: Property Type | Completion | Listing Type | Location */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-5">
                   <div>
                     <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
                       <Building2 className="h-3.5 w-3.5 text-primary-600" />
@@ -901,16 +916,34 @@ export default function HomePage() {
                         style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                       >
                         <option value="" className="text-gray-500">All Property Types</option>
-                        <option value="apartment" className="text-gray-900">Apartment</option>
-                        <option value="house" className="text-gray-900">House</option>
-                        <option value="villa" className="text-gray-900">Villa</option>
-                        <option value="condo" className="text-gray-900">Condo</option>
-                        <option value="commercial" className="text-gray-900">Commercial</option>
-                        <option value="off_plan" className="text-gray-900">Off Plan</option>
-                        <option value="ready_to_move" className="text-gray-900">Ready to Move</option>
-                        <option value="under_construction" className="text-gray-900">Under Construction</option>
+                        {propertyTypeOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value} className="text-gray-900">{opt.label}</option>
+                        ))}
                       </select>
                       <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                      <ClipboardCheck className="h-3.5 w-3.5 text-primary-600" />
+                      Completion Status
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={searchFilters.completionStatus}
+                        onChange={(e) => setSearchFilters(prev => ({ ...prev, completionStatus: e.target.value }))}
+                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.completionStatus
+                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
+                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
+                          }`}
+                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+                      >
+                        {COMPLETION_STATUS_FILTER_OPTIONS.map((opt) => (
+                          <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <ClipboardCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                       <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
@@ -1094,6 +1127,7 @@ export default function HomePage() {
               <button
                 onClick={() => setSearchFilters({
                   propertyType: '',
+                  completionStatus: '',
                   listingType: '',
                   city: '',
                   minPrice: '',

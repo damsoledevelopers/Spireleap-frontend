@@ -33,8 +33,10 @@ import {
   PROPERTY_STATUS_FORM_OPTIONS_AGENCY,
   BEDROOM_SELECT_OPTIONS,
   bedroomSelectToSpecs,
-  specsToBedroomSelect
+  specsToBedroomSelect,
+  COMPLETION_STATUS_FORM_OPTIONS
 } from '@/lib/propertyOptions'
+import { fetchPropertyTypeOptions } from '@/lib/propertyTypesApi'
 
 const GoogleMapPicker = dynamic(() => import('../../../../../components/GoogleMapPicker'), { ssr: false })
 
@@ -49,6 +51,7 @@ export default function AdminEditPropertyPage() {
   const [amenities, setAmenities] = useState([])
   const [agencies, setAgencies] = useState([])
   const [agents, setAgents] = useState([])
+  const [propertyTypeOptions, setPropertyTypeOptions] = useState([])
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
   const sanitizeDigits = (v, maxLen) => {
     const s = String(v ?? '').replace(/\D/g, '')
@@ -85,8 +88,8 @@ export default function AdminEditPropertyPage() {
   useEffect(() => {
     if (formData?.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
-    } else if (formData?.agency === NONE_AGENCY_VALUE) {
-      setAgents([])
+    } else {
+      fetchAllAgents()
     }
   }, [formData?.agency])
 
@@ -193,16 +196,26 @@ export default function AdminEditPropertyPage() {
       ])
 
       const property = propertyRes.data.property
+      const typeOptions = await fetchPropertyTypeOptions(api)
+      setPropertyTypeOptions(typeOptions)
       setCategories(categoriesRes.data.categories || [])
       setAmenities(amenitiesRes.data.amenities || [])
       setAgencies(agenciesRes.data.agencies || [])
+
+      let propertyType = property.propertyType || 'apartment'
+      let completionStatus = property.completionStatus || ''
+      if (['off_plan', 'ready_to_move', 'under_construction'].includes(propertyType)) {
+        completionStatus = propertyType
+        propertyType = 'other'
+      }
 
       // Format property data for form
       setFormData({
         bedroomSelect: specsToBedroomSelect(property.specifications),
         title: property.title || '',
         description: property.description || '',
-        propertyType: property.propertyType || 'apartment',
+        propertyType,
+        completionStatus,
         listingType: property.listingType || 'sale',
         agency: agencyValueForSelect(property.agency),
         agent: agentValueForSelect(property.agent),
@@ -286,9 +299,17 @@ export default function AdminEditPropertyPage() {
         }
       }
 
-      // Fetch agents for the property's agency
       if (property.agency?._id || property.agency) {
         await fetchAgentsByAgency(property.agency?._id || property.agency)
+      } else {
+        await fetchAllAgents()
+      }
+      if (property.agent && typeof property.agent === 'object') {
+        const agentId = property.agent._id
+        setAgents((prev) => {
+          const exists = prev.some((a) => String(a._id) === String(agentId))
+          return exists ? prev : [...prev, property.agent]
+        })
       }
     } catch (error) {
       console.error('Error fetching property:', error)
@@ -302,6 +323,16 @@ export default function AdminEditPropertyPage() {
   const fetchAgentsByAgency = async (agencyId) => {
     try {
       const response = await api.get(`/users?role=agent&agency=${agencyId}`)
+      setAgents(response.data.users || [])
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      setAgents([])
+    }
+  }
+
+  const fetchAllAgents = async () => {
+    try {
+      const response = await api.get('/users?role=agent')
       setAgents(response.data.users || [])
     } catch (error) {
       console.error('Error fetching agents:', error)
@@ -550,6 +581,8 @@ export default function AdminEditPropertyPage() {
         videos: formData.videos.filter(v => v.url)
       }
 
+      delete submitData.bedroomSelect
+      if (!submitData.completionStatus) delete submitData.completionStatus
       if (submitData.category === '' || submitData.category == null) delete submitData.category
 
       if (
@@ -643,9 +676,9 @@ export default function AdminEditPropertyPage() {
                   <SearchableSelect
                     value={selectValueForAgent(formData.agent)}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
-                    disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE || user?.role === 'agent'}
+                    disabled={user?.role === 'agent'}
                     options={buildAgentSelectOptions(agents, { includeNone: true })}
-                    placeholder={formData.agency && formData.agency !== NONE_AGENCY_VALUE ? 'Select Agent' : 'Select Agency First'}
+                    placeholder="Select Agent (optional)"
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
                     searchPlaceholder="Search agent..."
                   />
@@ -674,25 +707,21 @@ export default function AdminEditPropertyPage() {
                   required
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
-                  options={[
-                    { value: 'apartment', label: 'Apartment' },
-                    { value: 'house', label: 'House' },
-                    { value: 'villa', label: 'Villa' },
-                    { value: 'condo', label: 'Condo' },
-                    { value: 'townhouse', label: 'Townhouse' },
-                    { value: 'land', label: 'Land' },
-                    { value: 'commercial', label: 'Commercial' },
-                    { value: 'office', label: 'Office' },
-                    { value: 'retail', label: 'Retail' },
-                    { value: 'warehouse', label: 'Warehouse' },
-                    { value: 'off_plan', label: 'Off Plan' },
-                    { value: 'ready_to_move', label: 'Ready to Move' },
-                    { value: 'under_construction', label: 'Under Construction' },
-                    { value: 'other', label: 'Other' },
-                  ]}
+                  options={propertyTypeOptions}
                   placeholder="Select property type"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                   searchPlaceholder="Search type..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Completion Status</label>
+                <SearchableSelect
+                  value={formData.completionStatus || ''}
+                  onChange={(e) => handleInputChange('completionStatus', e.target.value)}
+                  options={COMPLETION_STATUS_FORM_OPTIONS}
+                  placeholder="Select completion status"
+                  searchable={false}
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                 />
               </div>
               <div>

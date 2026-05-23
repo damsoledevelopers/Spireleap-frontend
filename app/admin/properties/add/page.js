@@ -31,8 +31,10 @@ import {
   PROPERTY_STATUS_FORM_OPTIONS_AGENCY,
   BEDROOM_SELECT_OPTIONS,
   bedroomSelectToSpecs,
-  specsToBedroomSelect
+  specsToBedroomSelect,
+  COMPLETION_STATUS_FORM_OPTIONS
 } from '../../../../lib/propertyOptions'
+import { fetchPropertyTypeOptions } from '../../../../lib/propertyTypesApi'
 
 // Dynamically import Google Maps to avoid SSR issues
 const GoogleMapPicker = dynamic(() => import('../../../../components/GoogleMapPicker'), { ssr: false })
@@ -51,6 +53,7 @@ export default function AdminAddPropertyPage() {
   const [amenities, setAmenities] = useState([])
   const [agencies, setAgencies] = useState([])
   const [agents, setAgents] = useState([])
+  const [propertyTypeOptions, setPropertyTypeOptions] = useState([])
   const sanitizeAlphaText = (v) => String(v || '').replace(/[^a-zA-Z\s.'-]/g, '')
   const sanitizeDigits = (v, maxLen) => {
     const s = String(v ?? '').replace(/\D/g, '')
@@ -81,6 +84,7 @@ export default function AdminAddPropertyPage() {
     title: '',
     description: '',
     propertyType: 'apartment',
+    completionStatus: '',
     listingType: 'sale',
     agency: '',
     agent: '',
@@ -149,12 +153,10 @@ export default function AdminAddPropertyPage() {
   }, [user, authLoading])
 
   useEffect(() => {
-    // Fetch agents when agency changes
     if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
     } else {
-      setAgents([])
-      setFormData(prev => ({ ...prev, agent: prev.agent === NONE_AGENT_VALUE ? NONE_AGENT_VALUE : '' }))
+      fetchAllAgents()
     }
   }, [formData.agency])
 
@@ -261,14 +263,17 @@ export default function AdminAddPropertyPage() {
     if (!user) return
 
     try {
-      const [categoriesRes, amenitiesRes, agenciesRes] = await Promise.all([
+      const [categoriesRes, amenitiesRes, agenciesRes, typeOptions] = await Promise.all([
         api.get('/settings/categories'),
         api.get('/settings/amenities'),
-        api.get('/agencies')
+        api.get('/agencies'),
+        fetchPropertyTypeOptions(api)
       ])
       setCategories(categoriesRes.data.categories || [])
       setAmenities(amenitiesRes.data.amenities || [])
       setAgencies(agenciesRes.data.agencies || [])
+      setPropertyTypeOptions(typeOptions)
+      await fetchAllAgents()
     } catch (error) {
       console.error('Error fetching initial data:', error)
     }
@@ -277,6 +282,16 @@ export default function AdminAddPropertyPage() {
   const fetchAgentsByAgency = async (agencyId) => {
     try {
       const response = await api.get(`/users?role=agent&agency=${agencyId}`)
+      setAgents(response.data.users || [])
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      setAgents([])
+    }
+  }
+
+  const fetchAllAgents = async () => {
+    try {
+      const response = await api.get('/users?role=agent')
       setAgents(response.data.users || [])
     } catch (error) {
       console.error('Error fetching agents:', error)
@@ -576,6 +591,9 @@ export default function AdminAddPropertyPage() {
         status: formData.status || 'active'
       }
 
+      delete submitData.bedroomSelect
+      if (!submitData.completionStatus) delete submitData.completionStatus
+
       if (!submitData.agency) delete submitData.agency
       if (!submitData.agent) delete submitData.agent
 
@@ -714,9 +732,9 @@ export default function AdminAddPropertyPage() {
                   <SearchableSelect
                     value={selectValueForAgent(formData.agent)}
                     onChange={(e) => handleInputChange('agent', e.target.value)}
-                    disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE || user?.role === 'agent'}
+                    disabled={user?.role === 'agent'}
                     options={buildAgentSelectOptions(agents, { includeNone: true })}
-                    placeholder={formData.agency && formData.agency !== NONE_AGENCY_VALUE ? 'Select Agent' : 'Select Agency First'}
+                    placeholder="Select Agent (optional)"
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
                     searchPlaceholder="Search agent..."
                   />
@@ -751,25 +769,21 @@ export default function AdminAddPropertyPage() {
                 <SearchableSelect
                   value={formData.propertyType}
                   onChange={(e) => handleInputChange('propertyType', e.target.value)}
-                  options={[
-                    { value: 'apartment', label: 'Apartment' },
-                    { value: 'house', label: 'House' },
-                    { value: 'villa', label: 'Villa' },
-                    { value: 'condo', label: 'Condo' },
-                    { value: 'townhouse', label: 'Townhouse' },
-                    { value: 'land', label: 'Land' },
-                    { value: 'commercial', label: 'Commercial' },
-                    { value: 'office', label: 'Office' },
-                    { value: 'retail', label: 'Retail' },
-                    { value: 'warehouse', label: 'Warehouse' },
-                    { value: 'off_plan', label: 'Off Plan' },
-                    { value: 'ready_to_move', label: 'Ready to Move' },
-                    { value: 'under_construction', label: 'Under Construction' },
-                    { value: 'other', label: 'Other' },
-                  ]}
+                  options={propertyTypeOptions}
                   placeholder="Select property type"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                   searchPlaceholder="Search type..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Completion Status</label>
+                <SearchableSelect
+                  value={formData.completionStatus || ''}
+                  onChange={(e) => handleInputChange('completionStatus', e.target.value)}
+                  options={COMPLETION_STATUS_FORM_OPTIONS}
+                  placeholder="Select completion status"
+                  searchable={false}
+                  buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                 />
               </div>
               <div>

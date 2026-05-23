@@ -6,6 +6,8 @@ import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { api } from '../../../../lib/api'
 import { getAddressLabeledRows } from '../../../../lib/formatAddress'
+import { resolveMediaUrl } from '../../../../lib/mediaUrl'
+import VisitPhotoUpload from '../../../../components/Common/VisitPhotoUpload'
 import {
   ArrowLeft,
   User,
@@ -37,6 +39,119 @@ import Link from 'next/link'
 import UserDetailOverview from '../../../../components/Users/UserDetailOverview'
 import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
 
+function visitPropertyId(visit) {
+  if (!visit) return ''
+  const p = visit.property || visit._property
+  if (p && typeof p === 'object' && p._id) return String(p._id)
+  return p ? String(p) : ''
+}
+
+function visitsAreSameSiteVisit(a, b) {
+  if (!a || !b) return false
+  if (a._id && b._id && String(a._id) === String(b._id)) return true
+  if (a.status !== b.status) return false
+
+  const aSched = a.scheduledDate ? new Date(a.scheduledDate).getTime() : null
+  const bSched = b.scheduledDate ? new Date(b.scheduledDate).getTime() : null
+  const aDone = a.completedDate ? new Date(a.completedDate).getTime() : null
+  const bDone = b.completedDate ? new Date(b.completedDate).getTime() : null
+
+  if (aSched != null && bSched != null && aSched === bSched) {
+    if (!aDone && !bDone) return true
+    if (aDone != null && bDone != null && aDone === bDone) return true
+  }
+
+  if (a.status === 'scheduled' && b.status === 'scheduled') {
+    const propA = visitPropertyId(a)
+    const propB = visitPropertyId(b)
+    if (propA && propB && propA === propB) {
+      if (aSched != null && bSched != null && aSched !== bSched) return false
+      const timeA = (a.scheduledTime || '').trim()
+      const timeB = (b.scheduledTime || '').trim()
+      if (timeA && timeB && timeA !== timeB) return false
+      return true
+    }
+  }
+
+  return false
+}
+
+function pickBetterSiteVisit(a, b) {
+  if (!a) return b
+  if (!b) return a
+  const aHasDate = a.scheduledDate ? 1 : 0
+  const bHasDate = b.scheduledDate ? 1 : 0
+  if (aHasDate !== bHasDate) return aHasDate > bHasDate ? a : b
+  return a
+}
+
+function dedupeVisitList(visitList) {
+  const out = []
+  for (const visit of visitList) {
+    const idx = out.findIndex((v) => visitsAreSameSiteVisit(v, visit))
+    if (idx === -1) {
+      out.push(visit)
+    } else {
+      out[idx] = pickBetterSiteVisit(out[idx], visit)
+    }
+  }
+  return out
+}
+
+function siteVisitDisplayFingerprint(visit) {
+  const propId = visitPropertyId(visit)
+  const sched = visit?.scheduledDate ? new Date(visit.scheduledDate).getTime() : 0
+  const done = visit?.completedDate ? new Date(visit.completedDate).getTime() : 0
+  const feedback = (visit?.feedback || '').trim()
+  const time = (visit?.scheduledTime || '').trim()
+  if (visit?.status === 'scheduled' && !sched) {
+    return `${propId}|scheduled|${time}`
+  }
+  return `${propId}|${sched}|${done}|${visit?.status || ''}|${feedback}`
+}
+
+function siteVisitRowKey(visit) {
+  if (visit?._id) return `${visit._leadId || 'lead'}:${visit._id}`
+  return `${visit._leadId || 'lead'}:${siteVisitDisplayFingerprint(visit)}`
+}
+
+function isScheduledSiteVisit(visit) {
+  if (!visit) return false
+  if (visit.status === 'completed' || visit.status === 'cancelled') return false
+  if (visit.status === 'scheduled') {
+    return Boolean(visit.scheduledDate || (visit.scheduledTime || '').trim())
+  }
+  return visit.status === 'no_show' || Boolean(visit.scheduledDate)
+}
+
+function resolveVisitLeadId(visit) {
+  const raw = visit?._leadId || visit?.leadId
+  if (!raw) return null
+  const id = String(raw)
+  if (id.includes('_') && id.length > 24) {
+    const base = id.split('_')[0]
+    if (base.length === 24) return base
+  }
+  return id
+}
+
+function resolveVisitId(visit) {
+  const raw = visit?._id || visit?.id
+  return raw ? String(raw) : null
+}
+
+function normalizeSiteVisitRow(visit, leadId, prop, leadName) {
+  const visitId = resolveVisitId(visit)
+  const resolvedLeadId = resolveVisitLeadId({ _leadId: leadId }) || String(leadId)
+  return {
+    ...visit,
+    _id: visitId || visit._id,
+    _leadId: resolvedLeadId,
+    _property: prop,
+    _leadName: leadName
+  }
+}
+
 export default function AdminUserDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -63,8 +178,13 @@ export default function AdminUserDetailPage() {
   const [schedulingForLeadId, setSchedulingForLeadId] = useState(null)
   const [showCompleteVisitModal, setShowCompleteVisitModal] = useState(false)
   const [completingForLeadId, setCompletingForLeadId] = useState(null)
+  const [completingVisitId, setCompletingVisitId] = useState(null)
   const [visitCompletionData, setVisitCompletionData] = useState({ feedback: '', interestLevel: 'medium', nextAction: '' })
-  const [deletingSiteVisit, setDeletingSiteVisit] = useState(false)
+  const [visitCompletionPhoto, setVisitCompletionPhoto] = useState(null)
+  const [visitCompletionPhotoPreview, setVisitCompletionPhotoPreview] = useState(null)
+  const [removeExistingVisitPhoto, setRemoveExistingVisitPhoto] = useState(false)
+  const [imageLightboxUrl, setImageLightboxUrl] = useState(null)
+  const [deletingSiteVisitKey, setDeletingSiteVisitKey] = useState(null)
   const [savingSiteVisit, setSavingSiteVisit] = useState(false)
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [completingVisit, setCompletingVisit] = useState(false)
@@ -132,6 +252,16 @@ export default function AdminUserDetailPage() {
   }, [userInquiries])
 
   useEffect(() => {
+    if (!visitCompletionPhoto) {
+      setVisitCompletionPhotoPreview(null)
+      return undefined
+    }
+    const url = URL.createObjectURL(visitCompletionPhoto)
+    setVisitCompletionPhotoPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [visitCompletionPhoto])
+
+  useEffect(() => {
     if (userData) {
       fetchUserTasksAndReminders()
     }
@@ -178,11 +308,11 @@ export default function AdminUserDetailPage() {
   const fetchUserInquiries = async () => {
     if (!userData?._id && !userData?.id) {
       setUserInquiries([])
-      return
+      return []
     }
     if (!userData?.email) {
       setUserInquiries([])
-      return
+      return []
     }
     try {
       setLoadingInquiries(true)
@@ -236,10 +366,12 @@ export default function AdminUserDetailPage() {
       // Sort by date descending
       allInquiries.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       setUserInquiries(allInquiries)
+      return allInquiries
     } catch (error) {
       console.error('Error fetching user inquiries:', error)
       toast.error('Failed to load inquiries')
       setUserInquiries([])
+      return []
     } finally {
       setLoadingInquiries(false)
     }
@@ -416,24 +548,34 @@ export default function AdminUserDetailPage() {
     }
   }
 
-  const fetchUserSiteVisits = async () => {
+  const fetchUserSiteVisits = async (inquiriesOverride) => {
+    const inquiries = inquiriesOverride ?? userInquiries
     // Ensure we have user data before fetching site visits
     if (!userData?._id && !userData?.id) {
       setAllSiteVisits([])
       return
     }
-    if (!userInquiries || userInquiries.length === 0) {
+    if (!inquiries || inquiries.length === 0) {
       setAllSiteVisits([])
       return
     }
     try {
       const visits = []
       const seenVisitIds = new Set()
+      const seenFingerprints = new Set()
+
+      const leadIdToInquiry = new Map()
+      inquiries.forEach((inquiry) => {
+        const leadId = inquiry.realLeadId || inquiry._id
+        if (!leadId) return
+        const key = String(leadId)
+        if (!leadIdToInquiry.has(key)) {
+          leadIdToInquiry.set(key, inquiry)
+        }
+      })
 
       const leadRows = await Promise.all(
-        userInquiries.map(async (inquiry) => {
-          const leadId = inquiry.realLeadId || inquiry._id
-          if (!leadId) return null
+        [...leadIdToInquiry.entries()].map(async ([leadId, inquiry]) => {
           try {
             const leadResponse = await api.get(`/leads/${leadId}`)
             const lead = leadResponse.data.lead
@@ -455,24 +597,41 @@ export default function AdminUserDetailPage() {
       for (const row of leadRows) {
         if (!row) continue
         const { inquiry, leadId, lead } = row
-        const visitList =
-          lead.siteVisits && lead.siteVisits.length > 0
-            ? lead.siteVisits
-            : lead.siteVisit?.scheduledDate
-              ? [{ ...lead.siteVisit, _id: lead.siteVisit._id }]
-              : []
+        let visitList = [...(lead.siteVisits || [])]
+        const legacyVisit = lead.siteVisit
+        if (legacyVisit && (legacyVisit.scheduledDate || legacyVisit.status || legacyVisit.completedDate)) {
+          const inArray = visitList.some((v) => visitsAreSameSiteVisit(v, legacyVisit))
+          if (!inArray) {
+            visitList.push(legacyVisit)
+          }
+        }
+        visitList = dedupeVisitList(visitList)
 
         visitList.forEach((visit) => {
-          if (visit._id && seenVisitIds.has(visit._id.toString())) return
-          if (visit._id) seenVisitIds.add(visit._id.toString())
+          if (visit.status === 'cancelled') return
 
-          const prop = visit.property || inquiry.property
-          visits.push({
-            ...visit,
-            _leadId: leadId,
-            _property: prop,
-            _leadName: inquiry.property?.title || inquiry.property?.slug || 'Lead'
-          })
+          if (visit._id) {
+            const idKey = String(visit._id)
+            if (seenVisitIds.has(idKey)) return
+            seenVisitIds.add(idKey)
+          }
+          const fingerprint = siteVisitDisplayFingerprint(visit)
+          if (seenFingerprints.has(fingerprint)) return
+          if (visits.some((v) => visitsAreSameSiteVisit(v, visit))) return
+          seenFingerprints.add(fingerprint)
+
+          const prop =
+            visit.property ||
+            inquiry.property ||
+            lead.property
+          visits.push(
+            normalizeSiteVisitRow(
+              visit,
+              leadId,
+              prop,
+              inquiry.property?.title || inquiry.property?.slug || 'Lead'
+            )
+          )
         })
       }
 
@@ -511,45 +670,21 @@ export default function AdminUserDetailPage() {
       scheduledTime: siteVisitData.scheduledTime,
       propertyId: siteVisitData.propertyId || undefined
     }
-    const selectedProperty = properties.find((p) => String(p._id) === String(siteVisitData.propertyId))
     setSavingSiteVisit(true)
     try {
-      let savedVisit
       if (editingSiteVisitId) {
-        const res = await api.put(`/leads/${leadId}/site-visit/${editingSiteVisitId}`, payload)
-        savedVisit = res.data?.siteVisit || res.data?.visit || { ...payload, _id: editingSiteVisitId }
+        await api.put(`/leads/${leadId}/site-visit/${editingSiteVisitId}`, payload)
         toast.success('Site visit updated successfully')
       } else {
-        const res = await api.post(`/leads/${leadId}/site-visit`, payload)
-        savedVisit = res.data?.siteVisit || res.data?.visit || {
-          ...payload,
-          _id: res.data?._id || `temp-${Date.now()}`
-        }
+        await api.post(`/leads/${leadId}/site-visit`, payload)
         toast.success('Site visit scheduled successfully')
       }
-      const visitRow = {
-        ...savedVisit,
-        scheduledDate: payload.scheduledDate,
-        scheduledTime: payload.scheduledTime,
-        property: selectedProperty || savedVisit?.property,
-        _leadId: leadId,
-        _property: selectedProperty,
-        _leadName: selectedProperty?.title || 'Lead'
-      }
-      setAllSiteVisits((prev) => {
-        if (editingSiteVisitId) {
-          return prev.map((v) =>
-            String(v._id) === String(editingSiteVisitId) ? { ...v, ...visitRow } : v
-          )
-        }
-        return [visitRow, ...prev]
-      })
       setShowSiteVisitModal(false)
       setSiteVisitData({ scheduledDate: '', scheduledTime: '', propertyId: '', leadId: '' })
       setEditingSiteVisitId(null)
       setSchedulingForLeadId(null)
-      fetchUserInquiries()
-      fetchUserSiteVisits()
+      const refreshedInquiries = await fetchUserInquiries()
+      await fetchUserSiteVisits(refreshedInquiries)
     } catch (error) {
       console.error('Error saving site visit:', error)
       toast.error(error.response?.data?.message || (editingSiteVisitId ? 'Failed to update site visit' : 'Failed to schedule site visit'))
@@ -562,13 +697,28 @@ export default function AdminUserDetailPage() {
     if (!completingForLeadId) return
     try {
       setCompletingVisit(true)
-      await api.put(`/leads/${completingForLeadId}/site-visit/complete`, visitCompletionData)
+      const formData = new FormData()
+      formData.append('feedback', visitCompletionData.feedback || '')
+      formData.append('interestLevel', visitCompletionData.interestLevel || 'medium')
+      formData.append('nextAction', visitCompletionData.nextAction || '')
+      if (visitCompletionPhoto) {
+        formData.append('photo', visitCompletionPhoto)
+      }
+      if (completingVisitId) {
+        formData.append('visitId', completingVisitId)
+      }
+      await api.put(`/leads/${completingForLeadId}/site-visit/complete`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
       toast.success('Site visit marked as completed')
       setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+      setVisitCompletionPhoto(null)
       setShowCompleteVisitModal(false)
       setCompletingForLeadId(null)
-      await fetchUserInquiries()
-      await fetchUserSiteVisits()
+      setCompletingVisitId(null)
+      setRemoveExistingVisitPhoto(false)
+      const refreshedInquiries = await fetchUserInquiries()
+      await fetchUserSiteVisits(refreshedInquiries)
     } catch (error) {
       console.error('Error completing site visit:', error)
       toast.error(error.response?.data?.message || 'Failed to complete site visit')
@@ -577,40 +727,70 @@ export default function AdminUserDetailPage() {
     }
   }
 
-  const handleDeleteSiteVisit = async (visitId, leadId) => {
+  const handleDeleteSiteVisit = async (visit) => {
+    const leadId = resolveVisitLeadId(visit)
+    const visitId = resolveVisitId(visit)
     if (!(await confirm({ title: 'Delete Site Visit', message: 'Are you sure you want to delete this site visit?', confirmText: 'Delete', tone: 'danger' }))) return
-    if (!leadId) {
-      toast.error('Lead ID not found')
+    if (!leadId || !visitId) {
+      toast.error('Visit or lead ID not found')
       return
     }
+    const deletedSnapshot = { ...visit, _id: visitId, _leadId: leadId }
+    const rowKey = siteVisitRowKey(deletedSnapshot)
     try {
-      setDeletingSiteVisit(true)
+      setDeletingSiteVisitKey(rowKey)
       await api.delete(`/leads/${leadId}/site-visit/${visitId}`)
+      setAllSiteVisits((prev) =>
+        prev.filter((v) => {
+          if (resolveVisitLeadId(v) !== leadId) return true
+          if (resolveVisitId(v) === visitId) return false
+          return !visitsAreSameSiteVisit(v, deletedSnapshot)
+        })
+      )
       toast.success('Site visit deleted successfully')
       setViewCompletedVisit(null)
       setEditingCompletedVisit(null)
-      await fetchUserInquiries()
-      await fetchUserSiteVisits()
+      const refreshedInquiries = await fetchUserInquiries()
+      await fetchUserSiteVisits(refreshedInquiries)
     } catch (error) {
       console.error('Error deleting site visit:', error)
-      toast.error('Failed to delete site visit')
+      toast.error(error.response?.data?.message || 'Failed to delete site visit')
+      const refreshedInquiries = await fetchUserInquiries()
+      await fetchUserSiteVisits(refreshedInquiries)
     } finally {
-      setDeletingSiteVisit(false)
+      setDeletingSiteVisitKey(null)
     }
   }
 
   const handleUpdateCompletionRemarks = async () => {
     if (!editingCompletedVisit) return
-    const leadId = editingCompletedVisit._leadId
-    const visitId = editingCompletedVisit._id
+    const leadId = resolveVisitLeadId(editingCompletedVisit)
+    const visitId = resolveVisitId(editingCompletedVisit)
+    if (!leadId || !visitId) {
+      toast.error('Visit or lead ID not found')
+      return
+    }
     try {
       setUpdatingCompletion(true)
-      await api.put(`/leads/${leadId}/site-visit/${visitId}/completion`, visitCompletionData)
+      const formData = new FormData()
+      formData.append('feedback', visitCompletionData.feedback || '')
+      formData.append('interestLevel', visitCompletionData.interestLevel || 'medium')
+      formData.append('nextAction', visitCompletionData.nextAction || '')
+      if (visitCompletionPhoto) {
+        formData.append('photo', visitCompletionPhoto)
+      } else if (removeExistingVisitPhoto) {
+        formData.append('removePhoto', 'true')
+      }
+      await api.put(`/leads/${leadId}/site-visit/${visitId}/completion`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
       toast.success('Completion remarks updated')
       setEditingCompletedVisit(null)
       setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
-      await fetchUserInquiries()
-      await fetchUserSiteVisits()
+      setVisitCompletionPhoto(null)
+      setRemoveExistingVisitPhoto(false)
+      const refreshedInquiries = await fetchUserInquiries()
+      await fetchUserSiteVisits(refreshedInquiries)
     } catch (error) {
       console.error('Error updating completion remarks:', error)
       toast.error(error.response?.data?.message || 'Failed to update remarks')
@@ -618,6 +798,14 @@ export default function AdminUserDetailPage() {
       setUpdatingCompletion(false)
     }
   }
+
+  const editVisitPhotoPreviewUrl =
+    visitCompletionPhotoPreview ||
+    (editingCompletedVisit?.completionPhoto && !removeExistingVisitPhoto
+      ? resolveMediaUrl(editingCompletedVisit.completionPhoto)
+      : null)
+
+  const completeVisitPhotoPreviewUrl = visitCompletionPhotoPreview || null
 
   const handleUploadDocuments = async () => {
     if (!selectedFiles || selectedFiles.length === 0) {
@@ -1647,8 +1835,10 @@ export default function AdminUserDetailPage() {
               ) : (
                 <>
                   {(() => {
-                    const scheduledVisits = allSiteVisits.filter(v => v.status !== 'completed')
-                    return scheduledVisits.length > 0 ? (
+                    const scheduledVisits = allSiteVisits.filter(isScheduledSiteVisit)
+                    return (
+                    <>
+                    {scheduledVisits.length > 0 ? (
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold text-gray-700">Scheduled Visits</h3>
                       {scheduledVisits.map((visit) => {
@@ -1720,8 +1910,8 @@ export default function AdminUserDetailPage() {
                                     Update
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteSiteVisit(visit._id, visit._leadId)}
-                                    disabled={deletingSiteVisit}
+                                    onClick={() => handleDeleteSiteVisit(visit)}
+                                    disabled={deletingSiteVisitKey === siteVisitRowKey(visit)}
                                     className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1.5 text-sm font-medium disabled:opacity-50 transition-colors"
                                   >
                                     <XCircle className="h-4 w-4" />
@@ -1730,7 +1920,9 @@ export default function AdminUserDetailPage() {
                                   <button
                                     onClick={() => {
                                       setCompletingForLeadId(visit._leadId)
+                                      setCompletingVisitId(visit._id ? String(visit._id) : null)
                                       setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+                                      setVisitCompletionPhoto(null)
                                       setShowCompleteVisitModal(true)
                                     }}
                                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1.5 text-sm font-medium transition-colors"
@@ -1746,13 +1938,13 @@ export default function AdminUserDetailPage() {
                       })}
                     </div>
                   ) : (
-                    <div className="text-center py-16 px-4">
-                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                        <Calendar className="h-8 w-8 text-gray-400" />
-                      </div>
-                      <p className="text-gray-600 font-medium mb-1">No site visits scheduled</p>
-                      <p className="text-sm text-gray-500">Click "Schedule Visit" to schedule a new site visit for this user.</p>
+                    <div className="text-center py-12 px-4 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                      <Calendar className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 font-medium mb-1">No scheduled visits</p>
+                      <p className="text-sm text-gray-500">Click &quot;Schedule Visit&quot; to add one.</p>
                     </div>
+                  )}
+                    </>
                   )
                   })()}
                 </>
@@ -1781,30 +1973,49 @@ export default function AdminUserDetailPage() {
                           const completedDate = visit.completedDate ? new Date(visit.completedDate).toLocaleString() : ''
                           return (
                             <div
-                              key={visit._id || `${visit._leadId}-${visit.scheduledDate}`}
+                              key={siteVisitRowKey(visit)}
                               className="p-5 rounded-lg border border-gray-200 bg-white shadow-sm"
                             >
-                              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h4 className="font-semibold text-gray-900 text-lg">{propName}</h4>
-                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">COMPLETED</span>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-sm text-gray-600 mt-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <Calendar className="h-4 w-4 text-gray-400" />
-                                      <span>Visited: {visitDate}</span>
+                              <div className="flex flex-col gap-4">
+                                <div className="flex items-start gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                      <h4 className="font-semibold text-gray-900 text-lg">{propName}</h4>
+                                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">COMPLETED</span>
                                     </div>
-                                    {completedDate && (
-                                      <div className="flex items-center gap-1.5 text-gray-500">
-                                        <CheckCircle className="h-4 w-4 text-gray-400" />
-                                        <span>Completed: {completedDate}</span>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                                      <div className="flex items-center gap-1.5">
+                                        <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                                        <span>Visited: {visitDate}</span>
                                       </div>
+                                      {completedDate && (
+                                        <div className="flex items-center gap-1.5 text-gray-500">
+                                          <CheckCircle className="h-4 w-4 text-gray-400 shrink-0" />
+                                          <span>Completed: {completedDate}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {visit.feedback && (
+                                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">{visit.feedback}</p>
                                     )}
                                   </div>
+                                  {visit.completionPhoto && (
+                                    <button
+                                      type="button"
+                                      title="Preview visit photo"
+                                      onClick={() => setImageLightboxUrl(resolveMediaUrl(visit.completionPhoto))}
+                                      className="shrink-0 rounded-lg border border-gray-200 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-shadow"
+                                    >
+                                      <img
+                                        src={resolveMediaUrl(visit.completionPhoto)}
+                                        alt={`${propName} visit`}
+                                        className="h-16 w-16 object-cover"
+                                      />
+                                    </button>
+                                  )}
                                 </div>
                                 {canEditUser && (
-                                  <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
                                     <button
                                       onClick={() => setViewCompletedVisit(visit)}
                                       className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 text-sm font-medium transition-colors"
@@ -1820,6 +2031,8 @@ export default function AdminUserDetailPage() {
                                           interestLevel: visit.interestLevel || 'medium',
                                           nextAction: visit.nextAction || ''
                                         })
+                                        setVisitCompletionPhoto(null)
+                                        setRemoveExistingVisitPhoto(false)
                                       }}
                                       className="px-4 py-2 border border-primary-600 text-primary-600 rounded-lg hover:bg-primary-50 flex items-center gap-1.5 text-sm font-medium transition-colors"
                                     >
@@ -1827,8 +2040,8 @@ export default function AdminUserDetailPage() {
                                       Update
                                     </button>
                                     <button
-                                      onClick={() => handleDeleteSiteVisit(visit._id, visit._leadId)}
-                                      disabled={deletingSiteVisit}
+                                      onClick={() => handleDeleteSiteVisit(visit)}
+                                      disabled={deletingSiteVisitKey === siteVisitRowKey(visit)}
                                       className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1.5 text-sm font-medium disabled:opacity-50 transition-colors"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -2853,14 +3066,22 @@ export default function AdminUserDetailPage() {
                   onClick={() => {
                     setShowCompleteVisitModal(false)
                     setCompletingForLeadId(null)
+                    setCompletingVisitId(null)
                     setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+                    setVisitCompletionPhoto(null)
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <XCircle className="h-6 w-6" />
                 </button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <VisitPhotoUpload
+                  file={visitCompletionPhoto}
+                  previewUrl={completeVisitPhotoPreviewUrl}
+                  onFileChange={setVisitCompletionPhoto}
+                  onPreviewClick={setImageLightboxUrl}
+                />
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
                     Feedback
@@ -2906,7 +3127,10 @@ export default function AdminUserDetailPage() {
                   onClick={() => {
                     setShowCompleteVisitModal(false)
                     setCompletingForLeadId(null)
+                    setCompletingVisitId(null)
                     setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+                    setVisitCompletionPhoto(null)
+                    setRemoveExistingVisitPhoto(false)
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
@@ -2926,9 +3150,9 @@ export default function AdminUserDetailPage() {
 
         {/* View Completed Visit (Remarks) Modal */}
         {viewCompletedVisit && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
-              <div className="flex items-center justify-between p-6 border-b">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b shrink-0">
                 <h2 className="text-xl font-bold text-gray-900">Visit Remarks</h2>
                 <button
                   onClick={() => setViewCompletedVisit(null)}
@@ -2937,24 +3161,47 @@ export default function AdminUserDetailPage() {
                   <XCircle className="h-6 w-6" />
                 </button>
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1">Property</p>
-                  <p className="text-gray-900">
-                    {viewCompletedVisit._property?.title || viewCompletedVisit._property?.slug || viewCompletedVisit.property?.title || viewCompletedVisit.property?.slug || '—'}
-                  </p>
+              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Property</p>
+                    <p className="text-gray-900 font-semibold text-lg">
+                      {viewCompletedVisit._property?.title || viewCompletedVisit._property?.slug || viewCompletedVisit.property?.title || viewCompletedVisit.property?.slug || '—'}
+                    </p>
+                    {viewCompletedVisit.completedDate && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Completed {new Date(viewCompletedVisit.completedDate).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  {viewCompletedVisit.completionPhoto && (
+                    <button
+                      type="button"
+                      title="Click to preview full size"
+                      onClick={() => setImageLightboxUrl(resolveMediaUrl(viewCompletedVisit.completionPhoto))}
+                      className="shrink-0 rounded-lg border border-gray-200 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-shadow"
+                    >
+                      <img
+                        src={resolveMediaUrl(viewCompletedVisit.completionPhoto)}
+                        alt="Site visit"
+                        className="h-20 w-20 object-cover cursor-zoom-in"
+                      />
+                    </button>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">Feedback</label>
-                  <p className="text-gray-900 whitespace-pre-wrap">{viewCompletedVisit.feedback || '—'}</p>
+                  <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">{viewCompletedVisit.feedback || '—'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1">Interest Level</label>
-                  <p className="text-gray-900 capitalize">{viewCompletedVisit.interestLevel ? viewCompletedVisit.interestLevel.replace('_', ' ') : '—'}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1">Next Action</label>
-                  <p className="text-gray-900">{viewCompletedVisit.nextAction || '—'}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Interest Level</label>
+                    <p className="text-gray-900 capitalize">{viewCompletedVisit.interestLevel ? viewCompletedVisit.interestLevel.replace('_', ' ') : '—'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-1">Next Action</label>
+                    <p className="text-gray-900">{viewCompletedVisit.nextAction || '—'}</p>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end p-6 border-t">
@@ -2971,21 +3218,47 @@ export default function AdminUserDetailPage() {
 
         {/* Update Completion Remarks Modal */}
         {editingCompletedVisit && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-              <div className="flex items-center justify-between p-6 border-b">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b shrink-0">
                 <h2 className="text-xl font-bold text-gray-900">Update Completion Remarks</h2>
                 <button
                   onClick={() => {
                     setEditingCompletedVisit(null)
                     setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+                    setVisitCompletionPhoto(null)
+                    setRemoveExistingVisitPhoto(false)
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <XCircle className="h-6 w-6" />
                 </button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                <VisitPhotoUpload
+                  file={visitCompletionPhoto}
+                  previewUrl={editVisitPhotoPreviewUrl}
+                  existingPhotoUrl={
+                    editingCompletedVisit?.completionPhoto && !removeExistingVisitPhoto
+                      ? resolveMediaUrl(editingCompletedVisit.completionPhoto)
+                      : null
+                  }
+                  onFileChange={(f) => {
+                    setVisitCompletionPhoto(f)
+                    if (f) setRemoveExistingVisitPhoto(false)
+                  }}
+                  onClearExisting={() => {
+                    setRemoveExistingVisitPhoto(true)
+                    setVisitCompletionPhoto(null)
+                  }}
+                  showRemoveExisting={
+                    !!editingCompletedVisit?.completionPhoto &&
+                    !visitCompletionPhoto &&
+                    !removeExistingVisitPhoto
+                  }
+                  onPreviewClick={setImageLightboxUrl}
+                  label="Visit Photo"
+                />
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">Feedback</label>
                   <textarea
@@ -3020,11 +3293,13 @@ export default function AdminUserDetailPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-end gap-3 p-6 border-t">
+              <div className="flex items-center justify-end gap-3 p-6 border-t shrink-0">
                 <button
                   onClick={() => {
                     setEditingCompletedVisit(null)
                     setVisitCompletionData({ feedback: '', interestLevel: 'medium', nextAction: '' })
+                    setVisitCompletionPhoto(null)
+                    setRemoveExistingVisitPhoto(false)
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
@@ -3437,6 +3712,30 @@ export default function AdminUserDetailPage() {
         )}
         </div>
       </div>
+      {imageLightboxUrl && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image preview"
+          onClick={() => setImageLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setImageLightboxUrl(null)}
+            className="absolute top-4 right-4 text-white/90 hover:text-white p-1"
+            aria-label="Close preview"
+          >
+            <XCircle className="h-8 w-8" />
+          </button>
+          <img
+            src={imageLightboxUrl}
+            alt="Preview"
+            className="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       <ConfirmDialog />
     </DashboardLayout>
   )

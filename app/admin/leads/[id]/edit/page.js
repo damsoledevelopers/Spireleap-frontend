@@ -125,10 +125,7 @@ export default function AdminEditLeadPage() {
     if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
     } else {
-      setAgents([])
-      if (formData.agency === NONE_AGENCY_VALUE) {
-        setFormData((prev) => ({ ...prev, assignedAgent: NONE_AGENT_VALUE }))
-      }
+      fetchAllAgents()
     }
   }, [formData.agency])
 
@@ -181,6 +178,18 @@ export default function AdminEditLeadPage() {
 
       const normalizedAgencyId = agencyValueForSelect(lead.agency)
       const normalizedAgentId = agentValueForSelect(lead.assignedAgent)
+
+      if (
+        normalizedAgentId &&
+        normalizedAgentId !== NONE_AGENT_VALUE &&
+        lead.assignedAgent &&
+        typeof lead.assignedAgent === 'object'
+      ) {
+        setAgents((prev) => {
+          const exists = prev.some((a) => String(a._id) === String(normalizedAgentId))
+          return exists ? prev : [...prev, lead.assignedAgent]
+        })
+      }
 
       // Populate form with lead data
       setFormData({
@@ -741,12 +750,7 @@ export default function AdminEditLeadPage() {
                     setFormData((prev) => ({
                       ...prev,
                       agency: selectedValue,
-                      assignedAgent:
-                        selectedValue === NONE_AGENCY_VALUE
-                          ? NONE_AGENT_VALUE
-                          : selectedValue !== prev.agency
-                            ? NONE_AGENT_VALUE
-                            : prev.assignedAgent
+                      assignedAgent: selectedValue !== prev.agency ? NONE_AGENT_VALUE : prev.assignedAgent
                     }))
                   }}
                   disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
@@ -871,9 +875,8 @@ export default function AdminEditLeadPage() {
                 <SearchableSelect
                   value={selectValueForAgent(formData.assignedAgent)}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE}
                   options={buildAgentSelectOptions(agents, { includeNone: true, noneLabel: 'No agent' })}
-                  placeholder={formData.agency && formData.agency !== NONE_AGENCY_VALUE ? 'Select agent' : 'Select agency first'}
+                  placeholder="Select agent (optional)"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agent..."
                 />

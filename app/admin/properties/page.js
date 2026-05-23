@@ -20,8 +20,10 @@ import {
   PROPERTY_STATUS_FILTER_OPTIONS,
   BEDROOM_FILTER_OPTIONS,
   bedroomFilterToQueryParams,
-  formatBedroomLabel
+  formatBedroomLabel,
+  COMPLETION_STATUS_FILTER_OPTIONS
 } from '../../../lib/propertyOptions'
+import { fetchPropertyTypeOptions } from '../../../lib/propertyTypesApi'
 
 export default function AdminPropertiesPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
@@ -67,6 +69,7 @@ export default function AdminPropertiesPage() {
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
     propertyType: searchParams.get('propertyType') || '',
+    completionStatus: searchParams.get('completionStatus') || '',
     listingType: searchParams.get('listingType') || '',
     agency: searchParams.get('agency') || '',
     city: searchParams.get('city') || '',
@@ -89,6 +92,7 @@ export default function AdminPropertiesPage() {
     fullyFurnished: searchParams.get('fullyFurnished') === '1' ? 'true' : ''
   })
   const [agencies, setAgencies] = useState([])
+  const [propertyTypeFilterOptions, setPropertyTypeFilterOptions] = useState([{ value: '', label: 'All Types' }])
   const [uniqueLocations, setUniqueLocations] = useState({
     cities: [],
     states: [],
@@ -122,6 +126,9 @@ export default function AdminPropertiesPage() {
       fetchAgencies()
     }
     fetchUniqueLocations()
+    fetchPropertyTypeOptions(api).then((opts) => {
+      setPropertyTypeFilterOptions([{ value: '', label: 'All Types' }, ...opts])
+    }).catch(() => {})
   }, [isSuperAdmin, isAgencyAdmin])
 
   // Sync state with URL changes (handles browser back/forward)
@@ -129,6 +136,7 @@ export default function AdminPropertiesPage() {
     setFilters({
       status: searchParams.get('status') || '',
       propertyType: searchParams.get('propertyType') || '',
+      completionStatus: searchParams.get('completionStatus') || '',
       listingType: searchParams.get('listingType') || '',
       agency: searchParams.get('agency') || '',
       city: searchParams.get('city') || '',
@@ -168,6 +176,7 @@ export default function AdminPropertiesPage() {
     if (searchInput) params.set('search', searchInput)
     if (filters.status) params.set('status', filters.status)
     if (filters.propertyType) params.set('propertyType', filters.propertyType)
+    if (filters.completionStatus) params.set('completionStatus', filters.completionStatus)
     if (filters.listingType) params.set('listingType', filters.listingType)
     if (filters.agency) params.set('agency', filters.agency)
     if (filters.city) params.set('city', filters.city)
@@ -231,6 +240,9 @@ export default function AdminPropertiesPage() {
       }
       if (filters.propertyType && filters.propertyType.trim()) {
         params.append('propertyType', filters.propertyType.trim())
+      }
+      if (filters.completionStatus && filters.completionStatus.trim()) {
+        params.append('completionStatus', filters.completionStatus.trim())
       }
       if (filters.listingType && filters.listingType.trim()) {
         params.append('listingType', filters.listingType.trim())
@@ -624,29 +636,25 @@ export default function AdminPropertiesPage() {
                 setFilters(prev => ({ ...prev, propertyType: e.target.value }))
                 setPagination(prev => ({ ...prev, current: 1 }))
               }}
-              options={[
-                { value: '', label: 'All Types' },
-                { value: 'apartment', label: 'Apartment' },
-                { value: 'house', label: 'House' },
-                { value: 'villa', label: 'Villa' },
-                { value: 'condo', label: 'Condo' },
-                { value: 'townhouse', label: 'Townhouse' },
-                { value: 'land', label: 'Land' },
-                { value: 'commercial', label: 'Commercial' },
-                { value: 'office', label: 'Office' },
-                { value: 'retail', label: 'Retail' },
-                { value: 'warehouse', label: 'Warehouse' },
-                { value: 'off_plan', label: 'Off Plan' },
-                { value: 'ready_to_move', label: 'Ready to Move' },
-                { value: 'under_construction', label: 'Under Construction' },
-                { value: 'other', label: 'Other' }
-              ]}
+              options={propertyTypeFilterOptions}
               placeholder="All Types"
               buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-medium bg-white min-w-[170px] ${filters.propertyType ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'
                 }`}
               searchPlaceholder="Search type..."
             />
           </div>
+
+          <SearchableSelect
+            value={filters.completionStatus}
+            onChange={(e) => {
+              setFilters(prev => ({ ...prev, completionStatus: e.target.value }))
+              setPagination(prev => ({ ...prev, current: 1 }))
+            }}
+            options={COMPLETION_STATUS_FILTER_OPTIONS}
+            placeholder="Completion Status"
+            searchable={false}
+            buttonClassName={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[190px] ${filters.completionStatus ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
+          />
 
           {/* Price Filter Button */}
           <div className="relative">

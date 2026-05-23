@@ -21,6 +21,7 @@ import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import CategoryManagement from '../../../components/CMS/CategoryManagement'
 import AmenityManagement from '../../../components/CMS/AmenityManagement'
+import PropertyTypeManagement from '../../../components/CMS/PropertyTypeManagement'
 import CurrencyManagement from '../../../components/CMS/CurrencyManagement'
 import LocationManagement from '../../../components/CMS/LocationManagement'
 import SearchableSelect from '../../../components/Common/SearchableSelect'
@@ -490,9 +491,13 @@ export function SettingsPageContent() {
         <div className="card">
           <div className="card-header">
             <h3 className="text-lg font-medium text-gray-900">Property Metadata</h3>
-            <p className="text-sm text-gray-500">Manage categories and amenities used across the site</p>
+            <p className="text-sm text-gray-500">Manage property types which are used across the site</p>
           </div>
           <div className="card-body space-y-8">
+            <div>
+              <h4 className="text-base font-semibold text-gray-900 mb-3">Property Types</h4>
+              <PropertyTypeManagement />
+            </div>
             <div>
               <h4 className="text-base font-semibold text-gray-900 mb-3">Categories</h4>
               <CategoryManagement />

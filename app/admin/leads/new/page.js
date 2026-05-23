@@ -133,8 +133,7 @@ export default function AdminAddLeadPage() {
     if (formData.agency && formData.agency !== NONE_AGENCY_VALUE) {
       fetchAgentsByAgency(formData.agency)
     } else {
-      setAgents([])
-      setFormData((prev) => ({ ...prev, assignedAgent: NONE_AGENT_VALUE }))
+      fetchAllAgents()
     }
   }, [formData.agency])
 
@@ -182,6 +181,7 @@ export default function AdminAddLeadPage() {
       })
       setProperties(propertiesRes.data.properties || [])
       setAgencies(agenciesRes.data?.agencies || [])
+      await fetchAllAgents()
     } catch (error) {
       console.error('Error fetching initial data:', error)
       toast.error('Failed to load agencies list')
@@ -191,6 +191,16 @@ export default function AdminAddLeadPage() {
   const fetchAgentsByAgency = async (agencyId) => {
     try {
       const response = await api.get(`/users?role=agent&agency=${agencyId}`)
+      setAgents(response.data.users || [])
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      setAgents([])
+    }
+  }
+
+  const fetchAllAgents = async () => {
+    try {
+      const response = await api.get('/users?role=agent')
       setAgents(response.data.users || [])
     } catch (error) {
       console.error('Error fetching agents:', error)
@@ -695,12 +705,7 @@ export default function AdminAddLeadPage() {
                     setFormData((prev) => ({
                       ...prev,
                       agency: selectedValue,
-                      assignedAgent:
-                        selectedValue === NONE_AGENCY_VALUE
-                          ? NONE_AGENT_VALUE
-                          : selectedValue !== prev.agency
-                            ? NONE_AGENT_VALUE
-                            : prev.assignedAgent
+                      assignedAgent: selectedValue !== prev.agency ? NONE_AGENT_VALUE : prev.assignedAgent
                     }))
                   }}
                   disabled={user?.role === 'agency_admin' || user?.role === 'agent'}
@@ -789,13 +794,9 @@ export default function AdminAddLeadPage() {
                 <SearchableSelect
                   value={selectValueForAgent(formData.assignedAgent)}
                   onChange={(e) => handleInputChange('assignedAgent', e.target.value)}
-                  disabled={!formData.agency || formData.agency === NONE_AGENCY_VALUE || user?.role === 'agent'}
+                  disabled={user?.role === 'agent'}
                   options={buildAgentSelectOptions(agents, { includeNone: true, noneLabel: 'No agent' })}
-                  placeholder={
-                    formData.agency && formData.agency !== NONE_AGENCY_VALUE
-                      ? 'Select agent (optional)'
-                      : 'Select agency first'
-                  }
+                  placeholder="Select agent (optional)"
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                   searchPlaceholder="Search agent..."
                 />
