@@ -236,7 +236,7 @@ export default function AdminTransactionsPage() {
 
                 {/* Filters */}
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3 overflow-visible">
                         {/* Search */}
                         <div className="relative w-full md:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -308,7 +308,7 @@ export default function AdminTransactionsPage() {
                             {showDatePicker && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
-                                    <div className="absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-0 z-50 w-[calc(100vw-2rem)] max-w-[600px] sm:w-auto sm:min-w-[600px] overflow-hidden">
+                                    <div className="filter-popover filter-popover-end filter-popover-xl p-0 overflow-hidden shadow-xl">
                                         <div className="flex flex-col md:flex-row">
                                             <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 p-2">
                                                 <div className="flex flex-col gap-1">
@@ -330,9 +330,9 @@ export default function AdminTransactionsPage() {
                                                     ))}
                                                 </div>
                                             </div>
-                                            <div className="flex-1 p-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex-1">
+                                            <div className="flex-1 p-4 min-w-0">
+                                                <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                                                    <div className="flex-1 min-w-0">
                                                         <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
                                                         <input
                                                             type="date"
@@ -348,7 +348,7 @@ export default function AdminTransactionsPage() {
                                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                                                         />
                                                     </div>
-                                                    <div className="flex-1">
+                                                    <div className="flex-1 min-w-0">
                                                         <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
                                                         <input
                                                             type="date"
@@ -419,7 +419,7 @@ export default function AdminTransactionsPage() {
                             {showPricePicker && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setShowPricePicker(false)} />
-                                    <div className="absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 z-50 min-w-[300px]">
+                                    <div className="filter-popover filter-popover-end filter-popover-sm p-4 shadow-xl">
                                         <h3 className="text-sm font-semibold text-gray-900 mb-4">Budget Range</h3>
                                         <div className="space-y-4">
                                             <div className="flex gap-4">

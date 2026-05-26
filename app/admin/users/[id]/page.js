@@ -22,7 +22,7 @@ import {
   MessageSquare,
   Activity,
   Edit,
-  DollarSign,
+  ClipboardList,
   Eye,
   Building,
   CheckCircle,
@@ -152,6 +152,254 @@ function normalizeSiteVisitRow(visit, leadId, prop, leadName) {
   }
 }
 
+function formatPlainAmount(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+/** Digits and at most one decimal point — for admin payment amount fields */
+function sanitizeNumericAmountInput(raw) {
+  if (raw == null) return ''
+  let s = String(raw).replace(/[^\d.]/g, '')
+  const dot = s.indexOf('.')
+  if (dot !== -1) {
+    s = `${s.slice(0, dot + 1)}${s.slice(dot + 1).replace(/\./g, '')}`
+  }
+  return s
+}
+
+function parseApiErrorMessage(error, fallback) {
+  const data = error?.response?.data
+  if (!data) return fallback
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  if (Array.isArray(data.errors)) {
+    return data.errors
+      .map((e) => {
+        if (e.path === 'amountPaid' || e.msg === 'Invalid value') {
+          return 'Please enter a valid payment amount (numbers only).'
+        }
+        return e.msg || e.message || 'Invalid input'
+      })
+      .join(' ')
+  }
+  return fallback
+}
+
+function formatPropertyPriceLabel(property) {
+  if (!property?.price) return 'N/A'
+  if (typeof property.price === 'object') {
+    if (property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
+      const n = Number(property.price.sale)
+      return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+    }
+    if (property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
+      const n = Number(property.price.rent.amount)
+      return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+    }
+    return 'N/A'
+  }
+  const n = Number(property.price)
+  return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+}
+
+function BookingPropertyCard({
+  property,
+  transaction,
+  type,
+  userCreatedAt,
+  canEditUser,
+  approvalDraft = { amountPaid: '', note: '' },
+  onDraftChange,
+  onApprove,
+  onReject,
+  onFinalize,
+  processingApproval
+}) {
+  if (!property) return null
+
+  const existingPaid = Number(transaction?.amountPaid ?? transaction?.paymentDetails?.amountPaid ?? 0)
+  const pendingDue = Number(transaction?.pendingAmount ?? transaction?.paymentDetails?.dueAmount ?? 0)
+  const isPendingReview = transaction && ['pending_approval', 'pending'].includes(transaction.status)
+  const isInstallmentReview = isPendingReview && existingPaid > 0
+
+  return (
+    <div className="group transition-all">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+        <div className="w-full sm:w-48 md:w-56 h-40 sm:h-36 flex-shrink-0 bg-gray-100 rounded-2xl overflow-hidden shadow-sm group-hover:shadow-md transition-shadow relative">
+          {property.images && property.images.length > 0 ? (
+            <img
+              src={typeof property.images[0] === 'string'
+                ? property.images[0]
+                : property.images[0]?.url || '/placeholder-property.jpg'}
+              alt={property.title || 'Property'}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              onError={(e) => { e.target.src = '/placeholder-property.jpg' }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
+              <Building className="h-10 w-10 text-gray-200" />
+            </div>
+          )}
+          <div className="absolute top-3 left-3">
+            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${type === 'booked' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'}`}>
+              {type === 'booked' ? 'Finalized' : 'Interested'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col xs:flex-row items-start justify-between gap-3 sm:gap-4">
+            <div className="min-w-0 w-full">
+              <h4 className="font-black text-lg sm:text-xl text-gray-900 break-words">
+                {property.title || property.slug || 'Property Name'}
+              </h4>
+              {property.location && (
+                <p className="text-sm font-bold text-gray-400 flex items-center gap-1.5 mt-2">
+                  <MapPin className="h-4 w-4 text-gray-300" />
+                  {property.location.city || property.location.address || 'Location'}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 group-hover:bg-white group-hover:border-[#700E08]/20 transition-all">
+                <p className="text-xl font-black text-gray-900 leading-none">
+                  {formatPropertyPriceLabel(property)}
+                </p>
+                {property.price?.rent?.amount && <p className="text-[10px] font-bold text-gray-400 text-right mt-1">/ month</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
+              <Calendar className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-tight">
+                {new Date(transaction?.transactionDate || transaction?.createdAt || userCreatedAt).toLocaleDateString()}
+              </span>
+            </div>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${transaction?.status === 'completed' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'
+              }`}>
+              <div className={`h-1.5 w-1.5 rounded-full ${transaction?.status === 'completed' ? 'bg-green-500' : 'bg-gray-400'
+                }`} />
+              <span className="text-[11px] font-black uppercase tracking-tight">
+                {transaction ? transaction.status?.replace('_', ' ') : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {transaction && (
+        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 text-sm">
+          <div>
+            <span className="text-gray-500 block text-xs">Total</span>
+            <span className="font-medium">{formatPlainAmount(transaction.amount || 0)}</span>
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Paid</span>
+            <span className="font-medium text-green-700">{formatPlainAmount(transaction.amountPaid ?? transaction.paymentDetails?.amountPaid ?? 0)}</span>
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Pending</span>
+            <span className="font-medium text-amber-700">{formatPlainAmount(transaction.pendingAmount ?? transaction.paymentDetails?.dueAmount ?? transaction.amount ?? 0)}</span>
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Proof</span>
+            {(transaction.documents || []).filter((d) => d.url).length > 0 ? (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {(transaction.documents || []).filter((d) => d.url).map((d, i) => (
+                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 underline">
+                    {d.name || 'View'}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-red-600">Not uploaded</span>
+            )}
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Status</span>
+            <span className="capitalize font-medium">{transaction.status?.replace('_', ' ')}</span>
+          </div>
+        </div>
+      )}
+
+      {type === 'booked' && isPendingReview && canEditUser && (
+        <div className="mt-4 p-4 rounded-xl border border-amber-100 bg-amber-50/50 space-y-3">
+          <p className="text-sm font-bold text-amber-900">
+            {isInstallmentReview ? 'Review next payment proof' : 'Review booking request'}
+          </p>
+          {isInstallmentReview && (
+            <p className="text-xs text-amber-800">
+              Already paid: {formatPlainAmount(existingPaid)} · Balance: {formatPlainAmount(pendingDue)}
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder={isInstallmentReview ? 'Amount for this payment' : 'Amount received (optional)'}
+              value={approvalDraft.amountPaid}
+              onChange={(e) => onDraftChange?.('amountPaid', sanitizeNumericAmountInput(e.target.value))}
+              className="w-full sm:max-w-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+              aria-label="Payment amount"
+            />
+            <input
+              type="text"
+              placeholder="Admin note (optional)"
+              value={approvalDraft.note}
+              onChange={(e) => onDraftChange?.('note', e.target.value)}
+              className="w-full sm:flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={onApprove}
+              disabled={processingApproval}
+              className="w-full sm:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={onReject}
+              disabled={processingApproval}
+              className="w-full sm:w-auto px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
+
+      {type === 'booked' && transaction && transaction.status === 'approved' && canEditUser && (
+        <div className="mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
+          {pendingDue > 0 ? (
+            <p className="text-sm text-blue-900">
+              Balance due: <span className="font-bold">{formatPlainAmount(pendingDue)}</span>.
+              Customer can upload the next payment proof from <span className="font-semibold">Payments due</span> on their account.
+            </p>
+          ) : (
+            <p className="text-sm text-blue-900">Fully paid. You can finalize and generate the invoice.</p>
+          )}
+          {pendingDue <= 0 && (
+            <button
+              type="button"
+              onClick={onFinalize}
+              className="w-full sm:w-auto px-4 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-bold"
+            >
+              Finalize & invoice
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminUserDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -228,6 +476,11 @@ export default function AdminUserDetailPage() {
     transactionReference: '',
     notes: ''
   })
+  const [approvalDrafts, setApprovalDrafts] = useState({})
+  const [approvalAlert, setApprovalAlert] = useState(null)
+  const [processingApproval, setProcessingApproval] = useState(false)
+  const [rejectingTransaction, setRejectingTransaction] = useState(null)
+  const [rejectNote, setRejectNote] = useState('')
 
   const canEditUser = checkPermission('users', 'edit')
 
@@ -1027,17 +1280,116 @@ export default function AdminUserDetailPage() {
     setShowBookingModal(true)
   }
 
-  const handleFinalizeBooking = (transaction) => {
-    if (!transaction.customerConfirmed) {
-      toast.error('Customer has not confirmed this booking yet')
+  const getApprovalDraft = (txId) => approvalDrafts[txId] || { amountPaid: '', note: '' }
+
+  const setApprovalDraftField = (txId, field, value) => {
+    const nextValue = field === 'amountPaid' ? sanitizeNumericAmountInput(value) : value
+    setApprovalDrafts((prev) => ({
+      ...prev,
+      [txId]: { ...(prev[txId] || { amountPaid: '', note: '' }), [field]: nextValue }
+    }))
+  }
+
+  const handleApproveBooking = async (transaction) => {
+    if (!transaction?._id) return
+    const hasProof = (transaction.documents || []).some((d) => d.url)
+    if (!hasProof) {
+      toast.error('Customer must upload proof (PDF or image) before approval')
       return
     }
-    // Set the transaction and calculate initial values
+    const draft = getApprovalDraft(transaction._id)
+    const existingPaid = Number(transaction.amountPaid ?? transaction.paymentDetails?.amountPaid ?? 0)
+    const isNextPayment = existingPaid > 0
+    const ok = await confirm({
+      title: isNextPayment ? 'Confirm payment' : 'Approve booking',
+      message: isNextPayment
+        ? `Add ${formatPlainAmount(draft.amountPaid || 0)} to amount already paid (${formatPlainAmount(existingPaid)})?`
+        : `Approve this booking${draft.amountPaid ? ` with ${formatPlainAmount(draft.amountPaid)} received` : ''}?`,
+      confirmText: 'Approve',
+      tone: 'primary'
+    })
+    if (!ok) return
+
+    const amountStr = String(draft.amountPaid ?? '').trim()
+    if (isNextPayment && !amountStr) {
+      setApprovalAlert({
+        title: 'Amount required',
+        message: 'Enter the payment amount for this installment (numbers only).'
+      })
+      return
+    }
+
+    const payload = { adminNote: draft.note?.trim() || undefined }
+    if (amountStr !== '') {
+      const amount = Number(amountStr)
+      if (!Number.isFinite(amount) || amount < 0) {
+        setApprovalAlert({
+          title: 'Invalid amount',
+          message: 'Please enter a valid payment amount using numbers only.'
+        })
+        return
+      }
+      payload.amountPaid = amount
+    }
+
+    try {
+      setProcessingApproval(true)
+      await api.post(`/transactions/${transaction._id}/approve`, payload)
+      toast.success(isNextPayment ? 'Payment recorded' : 'Booking approved')
+      setApprovalDrafts((prev) => {
+        const next = { ...prev }
+        delete next[transaction._id]
+        return next
+      })
+      await fetchUserTransactions()
+    } catch (error) {
+      setApprovalAlert({
+        title: 'Could not approve booking',
+        message: parseApiErrorMessage(error, 'Failed to approve booking. Please check the amount and try again.')
+      })
+    } finally {
+      setProcessingApproval(false)
+    }
+  }
+
+  const handleRejectBooking = async () => {
+    if (!rejectingTransaction?._id) return
+    if (!rejectNote.trim()) {
+      toast.error('Rejection note is required')
+      return
+    }
+    const ok = await confirm({
+      title: 'Reject booking',
+      message: 'The customer will see your note. Continue?',
+      confirmText: 'Reject',
+      tone: 'danger'
+    })
+    if (!ok) return
+    try {
+      setProcessingApproval(true)
+      await api.post(`/transactions/${rejectingTransaction._id}/reject`, { adminNote: rejectNote.trim() })
+      toast.success('Booking rejected')
+      setRejectingTransaction(null)
+      setRejectNote('')
+      await fetchUserTransactions()
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reject booking')
+    } finally {
+      setProcessingApproval(false)
+    }
+  }
+
+  const handleFinalizeBooking = (transaction) => {
+    if (!['approved', 'pending'].includes(transaction.status)) {
+      toast.error('Finalize is only for approved or legacy pending bookings')
+      return
+    }
     const totalAmount = Number(transaction.amount || 0)
+    const alreadyPaid = Number(transaction.amountPaid ?? transaction.paymentDetails?.amountPaid ?? 0)
     setFinalizingTransaction(transaction)
     setFinalizationData({
-      amountPaid: '',
-      dueAmount: totalAmount.toString(),
+      amountPaid: alreadyPaid > 0 ? String(alreadyPaid) : '',
+      dueAmount: String(Math.max(0, totalAmount - alreadyPaid)),
       paymentDate: new Date().toISOString().split('T')[0],
       paymentMethod: transaction.paymentMethod || 'bank_transfer',
       transactionReference: '',
@@ -1237,7 +1589,7 @@ export default function AdminUserDetailPage() {
     { id: 'activities', label: 'Activities', icon: MessageSquare },
     { id: 'siteVisit', label: 'Site Visit', icon: Calendar },
     { id: 'completedVisits', label: 'Completed Visits', icon: CheckCircle },
-    { id: 'booking', label: 'Booking', icon: DollarSign },
+    { id: 'booking', label: 'Booking', icon: ClipboardList },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'notes', label: 'Notes', icon: FileText }
   ]
@@ -2071,242 +2423,72 @@ export default function AdminUserDetailPage() {
 
           {/* Booking Tab */}
           {activeTab === 'booking' && (() => {
-            // Get ONLY completed transactions for the Booked section
             const bookedProperties = transactions.filter(t => t.status === 'completed')
+            const pendingApprovalTransactions = transactions.filter(t =>
+              ['pending_approval', 'pending'].includes(t.status)
+            )
+            const approvedTransactions = transactions.filter(t => t.status === 'approved')
 
-            // Get pending transactions to show in Interested section
-            const pendingTransactions = transactions.filter(t => t.status === 'pending')
-
-            // Get interested/inquired properties from userInquiries
-            const interestedProperties = []
-            userInquiries.forEach(inq => {
-              if (inq.property && (inq.property.title || inq.property.slug || inq.property._id)) {
-                // Check if it's already in interestedProperties
-                const propId = inq.property._id || inq.property
-                if (!interestedProperties.some(ip => (ip.property?._id || ip.property) === propId)) {
-                  interestedProperties.push({
-                    property: inq.property,
-                    date: inq.createdAt,
-                    leadId: inq.realLeadId || inq._id
-                  })
-                }
-              }
-            })
-
-            // Filter out properties that are already finalized
-            const filteredInterested = interestedProperties.filter(ip =>
-              !bookedProperties.some(t => (t.property?._id || t.property) === (ip.property?._id || ip.property))
+            const renderBookingCard = (t) => (
+              <BookingPropertyCard
+                property={t.property}
+                transaction={t}
+                type="booked"
+                userCreatedAt={userData.createdAt}
+                canEditUser={canEditUser}
+                approvalDraft={getApprovalDraft(t._id)}
+                onDraftChange={(field, value) => setApprovalDraftField(t._id, field, value)}
+                onApprove={() => handleApproveBooking(t)}
+                onReject={() => { setRejectingTransaction(t); setRejectNote('') }}
+                onFinalize={() => handleFinalizeBooking(t)}
+                processingApproval={processingApproval}
+              />
             )
 
-            const PropertyCard = ({ property, transaction, interaction, type }) => {
-              if (!property) return null
-
-              return (
-                <div className="group transition-all">
-                  <div className="flex flex-col md:flex-row gap-6">
-                    {/* Property Image */}
-                    <div className="w-full md:w-56 h-36 flex-shrink-0 bg-gray-100 rounded-2xl overflow-hidden shadow-sm group-hover:shadow-md transition-shadow relative">
-                      {property.images && property.images.length > 0 ? (
-                        <img
-                          src={typeof property.images[0] === 'string'
-                            ? property.images[0]
-                            : property.images[0]?.url || '/placeholder-property.jpg'}
-                          alt={property.title || 'Property'}
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                          onError={(e) => { e.target.src = '/placeholder-property.jpg' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
-                          <Building className="h-10 w-10 text-gray-200" />
-                        </div>
-                      )}
-                      <div className="absolute top-3 left-3">
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${type === 'booked' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'}`}>
-                          {type === 'booked' ? 'Finalized' : 'Interested'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h4 className="font-black text-xl text-gray-900 truncate">
-                            {property.title || property.slug || 'Property Name'}
-                          </h4>
-                          {property.location && (
-                            <p className="text-sm font-bold text-gray-400 flex items-center gap-1.5 mt-2">
-                              <MapPin className="h-4 w-4 text-gray-300" />
-                              {property.location.city || property.location.address || 'Location'}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-2 shrink-0">
-                          <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 group-hover:bg-white group-hover:border-[#700E08]/20 transition-all">
-                            <p className="text-xl font-black text-gray-900 leading-none">
-                              {property.price
-                                ? (typeof property.price === 'object'
-                                  ? (() => {
-                                    const toRupee = (value) => {
-                                      const numeric = Number(value)
-                                      return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : null
-                                    }
-                                    if (property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
-                                      return toRupee(property.price.sale) || 'N/A'
-                                    }
-                                    if (property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
-                                      return toRupee(property.price.rent.amount) || 'N/A'
-                                    }
-                                    return 'N/A'
-                                  })()
-                                  : (() => {
-                                    const numeric = Number(property.price)
-                                    return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : 'N/A'
-                                  })())
-                                : 'N/A'}
-                            </p>
-                            {property.price?.rent?.amount && <p className="text-[10px] font-bold text-gray-400 text-right mt-1">/ month</p>}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
-                          <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                          <span className="text-[11px] font-black text-gray-500 uppercase tracking-tight">
-                            {new Date(transaction?.transactionDate || interaction?.date || userData.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${(transaction?.status || interaction?.action) === 'completed' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'
-                          }`}>
-                          <div className={`h-1.5 w-1.5 rounded-full ${(transaction?.status || interaction?.action) === 'completed' ? 'bg-green-500' : 'bg-gray-400'
-                            }`} />
-                          <span className="text-[11px] font-black uppercase tracking-tight">
-                            {transaction ? transaction.status : (interaction?.action || 'Initial Inquiry')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Transaction Details if available */}
-                  {transaction && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500 block text-xs">Transaction Amount</span>
-                        <span className="font-medium">₹{Number(transaction.amount || 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block text-xs">Method</span>
-                        <span className="capitalize">{transaction.paymentMethod?.replace('_', ' ') || '-'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block text-xs">Transaction ID</span>
-                        <span className="font-mono text-[10px]">{transaction.transactionId || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block text-xs">Property Type</span>
-                        <span className="capitalize">{property.type || '-'}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Finalize Button for Admin */}
-                  {type === 'booked' && transaction && transaction.status === 'pending' && (
-                    <div className={`mt-4 p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 ${transaction.customerConfirmed ? 'bg-green-50 border-green-100' : 'bg-blue-50 border-blue-100'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full ${transaction.customerConfirmed ? 'bg-green-100' : 'bg-blue-100'}`}>
-                          {transaction.customerConfirmed ? (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <Clock className="h-5 w-5 text-blue-600" />
-                          )}
-                        </div>
-                        <div>
-                          <p className={`text-sm font-bold ${transaction.customerConfirmed ? 'text-green-800' : 'text-blue-800'}`}>
-                            {transaction.customerConfirmed ? 'Confirmed by Customer' : 'Awaiting Customer Confirmation'}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {transaction.customerConfirmed
-                              ? 'The customer has accepted this booking. You can now finalize it.'
-                              : 'The customer needs to confirm this booking from their dashboard.'}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleFinalizeBooking(transaction)}
-                        disabled={!transaction.customerConfirmed}
-                        className="px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-extrabold transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Finalize & Invoice
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            }
-
             return (
-              <div className="space-y-8">
-                {/* Interested Properties Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-8">
-                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-50">
-                    <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
-                      <div className="p-2 bg-blue-50 rounded-lg">
-                        <Building className="h-6 w-6 text-blue-600" />
-                      </div>
-                      Interested Properties
-                    </h2>
-                  </div>
-                  <div className="space-y-6">
-                    {filteredInterested.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-6">
-                        {filteredInterested.map((ip, idx) => {
-                          const pendingTx = pendingTransactions.find(t => (t.property?._id || t.property) === (ip.property?._id || ip.property))
-                          return (
-                            <div key={ip.property?._id || idx} className="bg-gray-50/30 p-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6 transition-all hover:shadow-md">
-                              <div className="flex-1 w-full">
-                                <PropertyCard
-                                  property={ip.property}
-                                  transaction={pendingTx}
-                                  interaction={ip}
-                                  type={pendingTx ? "booked" : "interested"}
-                                />
-                              </div>
-                              {!pendingTx && canEditUser && (
-                                <button
-                                  onClick={() => handleConfirmProperty(ip.property)}
-                                  className="px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-black transition-all shadow-lg shadow-green-200/50 active:scale-95 whitespace-nowrap"
-                                >
-                                  <CheckCircle className="h-5 w-5" />
-                                  Initiate Booking
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="p-6 bg-gray-50 rounded-3xl mb-4">
-                          <Building className="h-12 w-12 text-gray-200" />
+              <div className="space-y-6 sm:space-y-8">
+                {pendingApprovalTransactions.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden p-4 sm:p-8">
+                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-4 sm:mb-6">Booking requests (awaiting review)</h2>
+                    <div className="space-y-4 sm:space-y-6">
+                      {pendingApprovalTransactions.map((t, idx) => (
+                        <div key={t._id || idx} className="bg-amber-50/30 p-4 sm:p-6 rounded-2xl border border-amber-100">
+                          {renderBookingCard(t)}
                         </div>
-                        <p className="text-xl font-extrabold text-gray-400">No Potential Properties</p>
-                        <p className="text-sm text-gray-400 mt-1 max-w-xs font-medium">This customer has not expressed interest in any properties yet.</p>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {pendingApprovalTransactions.length === 0 && approvedTransactions.length === 0 && bookedProperties.length === 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                    <Building className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+                    <p className="text-lg font-bold text-gray-500">No booking requests yet</p>
+                    <p className="text-sm text-gray-400 mt-1">When the customer books a property and uploads proof, it will appear here for review.</p>
+                  </div>
+                )}
+
+                {approvedTransactions.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden p-4 sm:p-8">
+                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-4 sm:mb-6">Approved — payment in progress</h2>
+                    <div className="space-y-4 sm:space-y-6">
+                      {approvedTransactions.map((t, idx) => (
+                        <div key={t._id || idx} className="bg-blue-50/20 p-4 sm:p-6 rounded-2xl border border-blue-100">
+                          {renderBookingCard(t)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Booked Properties Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-8">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-4 sm:p-8">
                   <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-50">
-                    <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
-                      <div className="p-2 bg-green-50 rounded-lg">
-                        <DollarSign className="h-6 w-6 text-green-600" />
+                    <h2 className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+                      <div className="p-2 bg-green-50 rounded-lg shrink-0">
+                        <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                       </div>
-                      Success Pipeline
+                      <span>Completed bookings</span>
                     </h2>
                   </div>
                   <div className="space-y-6">
@@ -2314,18 +2496,14 @@ export default function AdminUserDetailPage() {
                       <div className="grid grid-cols-1 gap-6">
                         {bookedProperties.map((t, idx) => (
                           <div key={t._id || idx} className="bg-green-50/10 p-6 rounded-2xl border border-green-100/50 shadow-sm">
-                            <PropertyCard
-                              property={t.property}
-                              transaction={t}
-                              type="booked"
-                            />
+                            {renderBookingCard(t)}
                           </div>
                         ))}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-24 text-center">
                         <div className="p-6 bg-gray-50 rounded-3xl mb-4">
-                          <DollarSign className="h-12 w-12 text-gray-200" />
+                          <ClipboardList className="h-12 w-12 text-gray-200" />
                         </div>
                         <p className="text-xl font-extrabold text-gray-400">No Finalized Bookings</p>
                         <p className="text-sm text-gray-400 mt-1 max-w-xs font-medium">Once a sale or lease is finalized, it will appear in the success pipeline.</p>
@@ -3701,7 +3879,7 @@ export default function AdminUserDetailPage() {
                     </>
                   ) : (
                     <>
-                      <DollarSign className="h-4 w-4" />
+                      <CheckCircle className="h-4 w-4" />
                       Finalize & Generate Invoice
                     </>
                   )}
@@ -3734,6 +3912,64 @@ export default function AdminUserDetailPage() {
             className="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+      {approvalAlert && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" role="alertdialog" aria-labelledby="approval-alert-title">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="p-2 rounded-full bg-red-50 text-red-600 shrink-0">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 id="approval-alert-title" className="text-lg font-bold text-gray-900">
+                  {approvalAlert.title}
+                </h3>
+                <p className="text-sm text-gray-600 mt-2">{approvalAlert.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setApprovalAlert(null)}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-bold hover:bg-primary-700"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {rejectingTransaction && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Reject booking</h3>
+            <p className="text-sm text-gray-500 mb-4">Customer will see this note.</p>
+            <textarea
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg p-3 text-sm"
+              placeholder="Reason for rejection (required)"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setRejectingTransaction(null)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectBooking}
+                disabled={processingApproval}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
         </div>
       )}
       <ConfirmDialog />

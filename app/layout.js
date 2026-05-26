@@ -19,7 +19,7 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           <CurrencyProvider>
             <WidgetCleaner />
-            <div id="app-content-wrapper" className="min-h-screen min-w-0 overflow-x-hidden">
+            <div id="app-content-wrapper" className="min-h-screen min-w-0">
               {children}
               <Toaster
                 position="top-right"

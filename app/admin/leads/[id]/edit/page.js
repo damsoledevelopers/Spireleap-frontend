@@ -1,9 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCurrency } from '@/contexts/CurrencyContext'
+import {
+  DEFAULT_BUDGET_CURRENCY,
+  resolveBudgetCurrencyOptions
+} from '@/lib/budgetCurrencyOptions'
 import { api } from '@/lib/api'
 import { ArrowLeft, Save, User, Mail, Phone, MapPin, FileText, Building } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -34,6 +39,7 @@ import {
 
 export default function AdminEditLeadPage() {
   const { user, loading: authLoading } = useAuth()
+  const { currencies: contextCurrencies } = useCurrency()
   const params = useParams()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -53,6 +59,7 @@ export default function AdminEditLeadPage() {
   const [alternatePhoneCountryCode, setAlternatePhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [dropdowns, setDropdowns] = useState({
     budgetCurrencies: [],
+    budgetCurrencyOptions: [],
     inquiryTimelines: [],
     leadPriorities: [],
     leadSources: [],
@@ -99,7 +106,7 @@ export default function AdminEditLeadPage() {
       budget: {
         min: '',
         max: '',
-        currency: 'USD'
+        currency: DEFAULT_BUDGET_CURRENCY
       },
       preferredLocation: [],
       propertyType: [],
@@ -141,6 +148,25 @@ export default function AdminEditLeadPage() {
     fetchCities(formData.contact.address.country, formData.contact.address.state)
   }, [formData.contact.address.country, formData.contact.address.state])
 
+  const currencyOptions = useMemo(
+    () =>
+      resolveBudgetCurrencyOptions(
+        {
+          budgetCurrencyOptions: dropdowns.budgetCurrencyOptions,
+          budgetCurrencies: dropdowns.budgetCurrencies,
+          currencies: dropdowns.budgetCurrencies
+        },
+        contextCurrencies,
+        formData.inquiry.budget.currency
+      ),
+    [
+      dropdowns.budgetCurrencyOptions,
+      dropdowns.budgetCurrencies,
+      contextCurrencies,
+      formData.inquiry.budget.currency
+    ]
+  )
+
   const fetchLeadData = async () => {
     try {
       setFetching(true)
@@ -151,7 +177,8 @@ export default function AdminEditLeadPage() {
         api.get('/agencies?limit=500&isActive=true')
       ])
       setDropdowns({
-        budgetCurrencies: dropdownsRes.budgetCurrencies || [],
+        budgetCurrencies: dropdownsRes.budgetCurrencies || dropdownsRes.currencies || [],
+        budgetCurrencyOptions: dropdownsRes.budgetCurrencyOptions || [],
         inquiryTimelines: dropdownsRes.inquiryTimelines || [],
         leadPriorities: dropdownsRes.leadPriorities || [],
         leadSources: dropdownsRes.leadSources || [],
@@ -225,7 +252,7 @@ export default function AdminEditLeadPage() {
           budget: {
             min: lead.inquiry?.budget?.min || '',
             max: lead.inquiry?.budget?.max || '',
-            currency: lead.inquiry?.budget?.currency || 'USD'
+            currency: lead.inquiry?.budget?.currency || DEFAULT_BUDGET_CURRENCY
           },
           preferredLocation: lead.inquiry?.preferredLocation || [],
           propertyType: lead.inquiry?.propertyType || [],
@@ -509,7 +536,7 @@ export default function AdminEditLeadPage() {
           budget: {
             ...(formData.inquiry.budget.min && { min: parseFloat(sanitizeDecimal(formData.inquiry.budget.min)) }),
             ...(formData.inquiry.budget.max && { max: parseFloat(sanitizeDecimal(formData.inquiry.budget.max)) }),
-            currency: formData.inquiry.budget.currency || 'USD'
+            currency: formData.inquiry.budget.currency || DEFAULT_BUDGET_CURRENCY
           },
           ...(formData.inquiry.preferredLocation.length > 0 && { preferredLocation: formData.inquiry.preferredLocation.filter(l => l.trim()) }),
           ...(formData.inquiry.propertyType.length > 0 && { propertyType: formData.inquiry.propertyType.filter(t => t.trim()) }),
@@ -931,9 +958,14 @@ export default function AdminEditLeadPage() {
                   </label>
                   <SearchableSelect
                     value={formData.inquiry.budget.currency}
-                    onChange={(e) => handleInputChange('inquiry.budget.currency', e.target.value)}
-                    options={(dropdowns.budgetCurrencies || []).map((c) => ({ value: c, label: c }))}
-                    placeholder="Currency"
+                    onChange={(e) =>
+                      handleInputChange(
+                        'inquiry.budget.currency',
+                        String(e.target.value || '').trim().toUpperCase()
+                      )
+                    }
+                    options={currencyOptions}
+                    placeholder="Select currency"
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                     searchPlaceholder="Search currency..."
                   />

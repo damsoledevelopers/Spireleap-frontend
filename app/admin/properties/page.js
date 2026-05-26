@@ -531,7 +531,7 @@ export default function AdminPropertiesPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-visible">
         {/* Property Metrics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
@@ -613,7 +613,7 @@ export default function AdminPropertiesPage() {
         </div>
 
         {/* Filter Buttons */}
-        <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex flex-wrap gap-3 items-center overflow-visible">
           {/* Status Filter - Direct Dropdown */}
           <SearchableSelect
             value={filters.status}
@@ -673,7 +673,7 @@ export default function AdminPropertiesPage() {
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'price' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'price' && (
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
+              <div className="filter-popover filter-popover-start filter-popover-sm">
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-semibold text-gray-900 text-sm">Price Range</h3>
@@ -755,9 +755,8 @@ export default function AdminPropertiesPage() {
               <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'specification' ? 'rotate-180' : ''}`} />
             </button>
             {openFilter === 'specification' && (
-              // <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[300px]">
-              <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 w-[340px] overflow-hidden">
-                <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+              <div className="filter-popover filter-popover-end filter-popover-md rounded-xl shadow-2xl overflow-hidden p-0">
+                <div className="filter-popover-scroll">
                   <div className="p-4 space-y-4">
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="font-semibold text-gray-900">Specifications</h3>
@@ -1104,9 +1103,9 @@ export default function AdminPropertiesPage() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowDatePicker(false)}
                 />
-                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-[calc(100vw-2rem)] max-w-[500px] sm:w-auto sm:min-w-[500px]">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
+                <div className="filter-popover filter-popover-end filter-popover-lg p-4">
+                  <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                    <div className="flex-1 min-w-0">
                       <label className="block text-sm font-bold text-gray-900 mb-2">From Date</label>
                       <input
                         type="date"
@@ -1123,7 +1122,7 @@ export default function AdminPropertiesPage() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <label className="block text-sm font-bold text-gray-900 mb-2">To Date</label>
                       <input
                         type="date"

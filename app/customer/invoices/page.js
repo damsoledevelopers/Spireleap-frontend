@@ -26,19 +26,24 @@ import {
     Phone
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
 import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
+const VALID_INVOICE_TABS = ['requests', 'active', 'rejected', 'invoices']
+
 export default function MyInvoices() {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const { selectedCurrency, ratesByCode } = useCurrency()
     const [invoices, setInvoices] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
-    const [activeTab, setActiveTab] = useState('invoices')
+    const [activeTab, setActiveTab] = useState('requests')
+    const [uploadingProofId, setUploadingProofId] = useState(null)
     const [showConfirmModal, setShowConfirmModal] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState(null)
     const [processingPayment, setProcessingPayment] = useState(false)
@@ -46,6 +51,13 @@ export default function MyInvoices() {
     const [selectedInvoice, setSelectedInvoice] = useState(null)
     const [fetchingDetails, setFetchingDetails] = useState(false)
     const { confirm, ConfirmDialog } = useConfirmDialog()
+
+    useEffect(() => {
+        const tab = searchParams.get('tab')
+        if (VALID_INVOICE_TABS.includes(tab)) {
+            setActiveTab(tab)
+        }
+    }, [searchParams])
 
     useEffect(() => {
         fetchInvoices()
@@ -187,23 +199,62 @@ export default function MyInvoices() {
         }
     }
 
+    const handleUploadProof = async (transaction, file) => {
+        if (!file) return
+        const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+        if (!allowed.includes(file.type)) {
+            toast.error('Upload a PDF or image (JPG, PNG, WEBP)')
+            return
+        }
+        try {
+            setUploadingProofId(transaction._id)
+            const formData = new FormData()
+            formData.append('proof', file)
+            await api.post(`/transactions/my-transactions/${transaction._id}/booking-proof`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            })
+            const isNextPayment = transaction.status === 'approved'
+            toast.success(
+                isNextPayment
+                    ? 'Next payment proof uploaded. Admin will review it shortly.'
+                    : 'Proof uploaded. Admin will review your booking request.'
+            )
+            if (isNextPayment) setActiveTab('requests')
+            fetchInvoices()
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Upload failed')
+        } finally {
+            setUploadingProofId(null)
+        }
+    }
+
     const filteredInvoices = invoices.filter(invoice => {
         const matchesSearch = invoice.property?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             invoice.agency?.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
         if (activeTab === 'invoices') {
             return matchesSearch && (invoice.status === 'completed' || invoice.status === 'refunded');
-        } else {
-            return matchesSearch && invoice.status === 'pending';
         }
+        if (activeTab === 'active') {
+            return matchesSearch && invoice.status === 'approved';
+        }
+        if (activeTab === 'rejected') {
+            return matchesSearch && invoice.status === 'rejected';
+        }
+        return matchesSearch && ['pending_approval', 'pending'].includes(invoice.status);
     })
 
     const getStatusStyle = (status) => {
         switch (status) {
             case 'completed':
                 return 'bg-green-100 text-green-700 border-green-200'
+            case 'pending_approval':
             case 'pending':
                 return 'bg-yellow-100 text-yellow-700 border-yellow-200'
+            case 'approved':
+                return 'bg-blue-100 text-blue-700 border-blue-200'
+            case 'rejected':
+                return 'bg-red-100 text-red-700 border-red-200'
             case 'cancelled':
                 return 'bg-red-100 text-red-700 border-red-200'
             case 'refunded':
@@ -238,20 +289,34 @@ export default function MyInvoices() {
 
                 {/* Tab Navigation */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-1">
-                    <div className="flex space-x-8">
+                    <div className="flex flex-wrap gap-6">
+                        <button
+                            onClick={() => setActiveTab('requests')}
+                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'requests' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Booking requests
+                            {activeTab === 'requests' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('active')}
+                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'active' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Payments due
+                            {activeTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('rejected')}
+                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'rejected' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Rejected
+                            {activeTab === 'rejected' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
+                        </button>
                         <button
                             onClick={() => setActiveTab('invoices')}
                             className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'invoices' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Invoices
                             {activeTab === 'invoices' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('booked')}
-                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'booked' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Booked
-                            {activeTab === 'booked' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                         </button>
                     </div>
                     <div className="relative pb-2">
@@ -281,7 +346,9 @@ export default function MyInvoices() {
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Property & Agency</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Paid</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Pending</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                     </tr>
@@ -314,16 +381,21 @@ export default function MyInvoices() {
                                                     {invoice.type}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="text-sm font-extrabold text-gray-900">
-                                                    {formatCurrency(invoice.amount)}
-                                                </div>
+                                            <td className="px-6 py-4 text-sm font-bold">{formatCurrency(invoice.amount)}</td>
+                                            <td className="px-6 py-4 text-sm text-green-700 font-semibold">
+                                                {formatCurrency(invoice.amountPaid ?? invoice.paymentDetails?.amountPaid ?? 0)}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-amber-700 font-semibold">
+                                                {formatCurrency(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0)}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${invoice.customerConfirmed && invoice.status === 'pending' ? 'bg-blue-50 text-blue-700 border-blue-200' : getStatusStyle(invoice.status)}`}>
-                                                    {invoice.customerConfirmed && invoice.status === 'pending' ? <Check className="h-4 w-4 mr-1.5" /> : getStatusIcon(invoice.status)}
-                                                    {invoice.customerConfirmed && invoice.status === 'pending' ? 'Confirmed' : invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusStyle(invoice.status)}`}>
+                                                    {getStatusIcon(invoice.status)}
+                                                    {(invoice.status || '').replace('_', ' ')}
                                                 </span>
+                                                {invoice.status === 'rejected' && invoice.approval?.adminNote && (
+                                                    <p className="text-xs text-red-600 mt-1 max-w-[200px]">{invoice.approval.adminNote}</p>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end space-x-2">
@@ -334,15 +406,28 @@ export default function MyInvoices() {
                                                     >
                                                         <Eye className="h-5 w-5" />
                                                     </button>
-                                                    {activeTab === 'booked' && (
-                                                        <button
-                                                            onClick={() => handleConfirmProperty(invoice)}
-                                                            disabled={processingPayment || invoice.customerConfirmed}
-                                                            className={`p-2 rounded-lg transition-all disabled:opacity-50 ${invoice.customerConfirmed ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
-                                                            title={invoice.customerConfirmed ? "Confirmed by you" : "Confirm Property"}
-                                                        >
-                                                            {invoice.customerConfirmed ? <Check className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
-                                                        </button>
+                                                    {((activeTab === 'requests' && ['pending_approval', 'pending'].includes(invoice.status)) ||
+                                                        (activeTab === 'active' &&
+                                                            invoice.status === 'approved' &&
+                                                            Number(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0) > 0)) && (
+                                                        <label className="inline-flex items-center px-3 py-1.5 rounded-lg cursor-pointer text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-100">
+                                                            <input
+                                                                type="file"
+                                                                accept=".pdf,image/jpeg,image/png,image/webp"
+                                                                className="hidden"
+                                                                disabled={uploadingProofId === invoice._id}
+                                                                onChange={(e) => {
+                                                                    const f = e.target.files?.[0]
+                                                                    if (f) handleUploadProof(invoice, f)
+                                                                    e.target.value = ''
+                                                                }}
+                                                            />
+                                                            {uploadingProofId === invoice._id
+                                                                ? 'Uploading…'
+                                                                : activeTab === 'active'
+                                                                  ? 'Upload next payment'
+                                                                  : 'Upload proof'}
+                                                        </label>
                                                     )}
                                                     {activeTab === 'invoices' && (
                                                         <button
@@ -366,19 +451,21 @@ export default function MyInvoices() {
                         <div className="h-20 w-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                             <FileText className="h-10 w-10 text-gray-300" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900">
-                            {activeTab === 'invoices' ? 'No invoices found' : 'No pending bookings'}
-                        </h2>
+                        <h2 className="text-xl font-bold text-gray-900">Nothing here yet</h2>
                         <p className="text-gray-500 mt-2 max-w-xs mx-auto">
                             {activeTab === 'invoices'
-                                ? "You haven't made any successful transactions yet."
-                                : "You don't have any properties booked that are awaiting payment."}
+                                ? "Completed bookings with invoices appear here."
+                                : activeTab === 'active'
+                                    ? "Approved bookings with a balance due appear here. Upload your next payment proof when ready."
+                                    : activeTab === 'rejected'
+                                      ? "Rejected bookings appear here with the admin note."
+                                      : "Book a property, then upload proof (PDF or image) for admin review."}
                         </p>
                     </div>
                 )}
 
                 {/* Info Card */}
-                <div className="bg-logo-beige rounded-2xl p-6 border border-gray-200">
+                {/* <div className="bg-logo-beige rounded-2xl p-6 border border-gray-200">
                     <div className="flex items-start">
                         <div className="p-2 bg-white rounded-lg mr-4">
                             <DollarSign className="h-5 w-5 text-gray-700" />
@@ -426,7 +513,7 @@ export default function MyInvoices() {
                             )}
                         </div>
                     </div>
-                </div>
+                </div> */}
             </div>
 
             {/* Transaction Details Modal */}
@@ -454,7 +541,20 @@ export default function MyInvoices() {
                                 <p className="text-gray-500">Loading details...</p>
                             </div>
                         ) : (
-                            <div className="p-6 space-y-8">
+                            <div className="p-6 space-y-6">
+                                <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                                    <Image
+                                        src="/NovaKeys.png"
+                                        alt="NOVA KEYS Real Estate"
+                                        width={44}
+                                        height={44}
+                                        className="object-contain shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                        <p className="text-base font-bold text-[#700E08] tracking-tight">NOVA KEYS</p>
+                                        <p className="text-xs text-gray-500">Real Estate</p>
+                                    </div>
+                                </div>
                                 {/* Consolidated Details Grid */}
                                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">

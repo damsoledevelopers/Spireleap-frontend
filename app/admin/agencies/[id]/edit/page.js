@@ -437,7 +437,9 @@ export default function EditAgencyPage() {
       router.push('/admin/agencies')
     } catch (error) {
       console.error('Error updating agency:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to update agency'
+      const data = error.response?.data
+      const errorMessage =
+        data?.errors?.[0]?.msg || data?.message || 'Failed to update agency'
       toast.error(errorMessage)
     } finally {
       setLoading(false)

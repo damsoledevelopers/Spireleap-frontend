@@ -1,9 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../../contexts/AuthContext'
+import { useCurrency } from '../../../../contexts/CurrencyContext'
+import {
+  DEFAULT_BUDGET_CURRENCY,
+  resolveBudgetCurrencyOptions,
+  defaultBudgetCurrency
+} from '../../../../lib/budgetCurrencyOptions'
 import { api } from '../../../../lib/api'
 import { ArrowLeft, Save, User, Mail, Phone, MapPin, FileText, Building, AlertCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -32,6 +38,7 @@ import {
 
 export default function AdminAddLeadPage() {
   const { user, loading: authLoading } = useAuth()
+  const { currencies: contextCurrencies } = useCurrency()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [properties, setProperties] = useState([])
@@ -76,7 +83,7 @@ export default function AdminAddLeadPage() {
       budget: {
         min: '',
         max: '',
-        currency: 'USD'
+        currency: DEFAULT_BUDGET_CURRENCY
       },
       preferredLocation: [],
       propertyType: [],
@@ -95,6 +102,7 @@ export default function AdminAddLeadPage() {
   const [alternatePhoneCountryCode, setAlternatePhoneCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [dropdowns, setDropdowns] = useState({
     budgetCurrencies: [],
+    budgetCurrencyOptions: [],
     inquiryTimelines: [],
     leadPriorities: [],
     leadSources: [],
@@ -173,12 +181,28 @@ export default function AdminAddLeadPage() {
         api.get('/agencies?limit=500&isActive=true')
       ])
       setDropdowns({
-        budgetCurrencies: dropdownsRes.budgetCurrencies || [],
+        budgetCurrencies: dropdownsRes.budgetCurrencies || dropdownsRes.currencies || [],
+        budgetCurrencyOptions: dropdownsRes.budgetCurrencyOptions || [],
         inquiryTimelines: dropdownsRes.inquiryTimelines || [],
         leadPriorities: dropdownsRes.leadPriorities || [],
         leadSources: dropdownsRes.leadSources || [],
         leadStatuses: dropdownsRes.leadStatuses || []
       })
+      const currencyOpts = resolveBudgetCurrencyOptions(
+        dropdownsRes,
+        contextCurrencies,
+        formData.inquiry.budget.currency
+      )
+      setFormData((prev) => ({
+        ...prev,
+        inquiry: {
+          ...prev.inquiry,
+          budget: {
+            ...prev.inquiry.budget,
+            currency: defaultBudgetCurrency(currencyOpts, prev.inquiry.budget.currency)
+          }
+        }
+      }))
       setProperties(propertiesRes.data.properties || [])
       setAgencies(agenciesRes.data?.agencies || [])
       await fetchAllAgents()
@@ -187,6 +211,25 @@ export default function AdminAddLeadPage() {
       toast.error('Failed to load agencies list')
     }
   }
+
+  const currencyOptions = useMemo(
+    () =>
+      resolveBudgetCurrencyOptions(
+        {
+          budgetCurrencyOptions: dropdowns.budgetCurrencyOptions,
+          budgetCurrencies: dropdowns.budgetCurrencies,
+          currencies: dropdowns.budgetCurrencies
+        },
+        contextCurrencies,
+        formData.inquiry.budget.currency
+      ),
+    [
+      dropdowns.budgetCurrencyOptions,
+      dropdowns.budgetCurrencies,
+      contextCurrencies,
+      formData.inquiry.budget.currency
+    ]
+  )
 
   const fetchAgentsByAgency = async (agencyId) => {
     try {
@@ -863,9 +906,14 @@ export default function AdminAddLeadPage() {
                   </label>
                   <SearchableSelect
                     value={formData.inquiry.budget.currency}
-                    onChange={(e) => handleInputChange('inquiry.budget.currency', e.target.value)}
-                    options={(dropdowns.budgetCurrencies || []).map((c) => ({ value: c, label: c }))}
-                    placeholder="Currency"
+                    onChange={(e) =>
+                      handleInputChange(
+                        'inquiry.budget.currency',
+                        String(e.target.value || '').trim().toUpperCase()
+                      )
+                    }
+                    options={currencyOptions}
+                    placeholder="Select currency"
                     buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
                     searchPlaceholder="Search currency..."
                   />

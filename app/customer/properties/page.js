@@ -20,6 +20,7 @@ import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
+import { getPropertyPrimaryImageUrl } from '../../../lib/propertyImage'
 
 export default function MyProperties() {
     const [activeTab, setActiveTab] = useState('inquired')
@@ -123,10 +124,12 @@ export default function MyProperties() {
                                 {/* Image Section */}
                                 <div className="relative h-48 w-full overflow-hidden">
                                     <Image
-                                        src={property.images?.[0]?.url || '/property-placeholder.jpg'}
+                                        src={getPropertyPrimaryImageUrl(property.images)}
                                         alt={property.title}
                                         fill
                                         className="object-cover group-hover:scale-110 transition-transform duration-500"
+                                        unoptimized
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     />
                                     <div className="absolute top-4 left-4">
                                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm ${property.listingType === 'sale' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'

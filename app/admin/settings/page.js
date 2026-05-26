@@ -58,6 +58,10 @@ export function SettingsPageContent() {
     logLevels: [],
     backupFrequencies: []
   })
+  const [defaultAgencyAgentOptions, setDefaultAgencyAgentOptions] = useState({
+    agencies: [],
+    agents: []
+  })
 
   const togglePasswordVisibility = (fieldName) => {
     setVisiblePasswords(prev => ({
@@ -72,7 +76,9 @@ export function SettingsPageContent() {
       defaultCurrency: 'AED',
       timezone: 'UTC',
       language: 'en',
-      spokenLanguageList: 'English, Arabic, Hindi, Urdu, French, Spanish, German'
+      spokenLanguageList: 'English, Arabic, Hindi, Urdu, French, Spanish, German',
+      defaultAgencyId: '',
+      defaultAgentId: ''
     },
     security: {
       sessionTimeout: 30,
@@ -104,9 +110,30 @@ export function SettingsPageContent() {
     }
   })
 
+  const loadDefaultAgencyAgentOptions = async (agencyId) => {
+    try {
+      const q = agencyId ? `?agency=${encodeURIComponent(agencyId)}` : ''
+      const res = await api.get(`/settings/default-agency-agent/options${q}`)
+      const data = res.data || {}
+      setDefaultAgencyAgentOptions({
+        agencies: data.agencies || [],
+        agents: data.agents || []
+      })
+      return data
+    } catch (e) {
+      console.error('Error loading default agency/agent options:', e)
+      return null
+    }
+  }
+
   useEffect(() => {
     fetchSettings()
   }, [])
+
+  useEffect(() => {
+    if (!canViewSettings) return
+    loadDefaultAgencyAgentOptions(settings.general.defaultAgencyId || undefined)
+  }, [canViewSettings, settings.general.defaultAgencyId])
 
   const loadCurrencyOptions = async () => {
     clearDropdownOptionsCache()
@@ -233,7 +260,7 @@ export function SettingsPageContent() {
           : `${section.charAt(0).toUpperCase() + section.slice(1)} settings saved successfully`
       )
 
-      // Refresh settings after save
+      await loadDefaultAgencyAgentOptions(settings.general.defaultAgencyId || undefined)
       await fetchSettings()
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -481,6 +508,60 @@ export function SettingsPageContent() {
                       )}
                     </div>
                   ))}
+                  {section.id === 'general' && (
+                    <div className="sm:col-span-2 border-t border-gray-100 pt-6 mt-2 space-y-4">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">Default agency &amp; agent</h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Used only when a customer books a property that has no agency/agent assigned.
+                          These records cannot be deleted while set as defaults.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                        <div className="form-group">
+                          <label className="form-label">Default agency</label>
+                          <SearchableSelect
+                            value={settings.general.defaultAgencyId || ''}
+                            onChange={(e) => {
+                              const agencyId = e.target.value
+                              handleInputChange('general', 'defaultAgencyId', agencyId)
+                              handleInputChange('general', 'defaultAgentId', '')
+                              loadDefaultAgencyAgentOptions(agencyId || undefined)
+                            }}
+                            options={[
+                              { value: '', label: 'Select default agency…' },
+                              ...defaultAgencyAgentOptions.agencies
+                            ]}
+                            placeholder="Select default agency…"
+                            buttonClassName="form-input w-full"
+                            searchPlaceholder="Search agency…"
+                            disabled={!canEditSettings}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Default agent</label>
+                          <SearchableSelect
+                            value={settings.general.defaultAgentId || ''}
+                            onChange={(e) =>
+                              handleInputChange('general', 'defaultAgentId', e.target.value)
+                            }
+                            options={[
+                              { value: '', label: 'Select default agent…' },
+                              ...defaultAgencyAgentOptions.agents
+                            ]}
+                            placeholder={
+                              settings.general.defaultAgencyId
+                                ? 'Select default agent…'
+                                : 'Select default agency first'
+                            }
+                            buttonClassName="form-input w-full"
+                            searchPlaceholder="Search agent…"
+                            disabled={!canEditSettings || !settings.general.defaultAgencyId}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

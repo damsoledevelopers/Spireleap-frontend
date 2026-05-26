@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
+import { getFilterPopoverFixedStyle } from '../../lib/filterPopoverPosition'
 
 function toOption(option) {
   if (option && typeof option === 'object') {
@@ -44,7 +46,8 @@ export default function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
-  const [openUpwards, setOpenUpwards] = useState(false)
+  const [menuStyle, setMenuStyle] = useState({})
+  const [mounted, setMounted] = useState(false)
 
   const normalizedOptions = useMemo(() => options.map(toOption), [options])
 
@@ -94,8 +97,8 @@ export default function SearchableSelect({
     if (!open) return
 
     const onDocMouseDown = (e) => {
-      if (!containerRef.current) return
-      if (containerRef.current.contains(e.target)) return
+      if (containerRef.current?.contains(e.target)) return
+      if (menuRef.current?.contains(e.target)) return
       setOpen(false)
       setQuery('')
     }
@@ -126,30 +129,47 @@ export default function SearchableSelect({
     }, 0)
   }, [open, showSearch])
 
-  const updateMenuDirection = useCallback(() => {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const updateMenuPosition = useCallback(() => {
     if (!triggerRef.current || typeof window === 'undefined') return
     const triggerRect = triggerRef.current.getBoundingClientRect()
     const menuHeight = menuRef.current?.offsetHeight || 320
-    const spaceBelow = window.innerHeight - triggerRect.bottom
-    const spaceAbove = triggerRect.top
-    const shouldOpenUpwards = spaceBelow < Math.min(menuHeight, 280) && spaceAbove > spaceBelow
-    setOpenUpwards(shouldOpenUpwards)
+    const style = getFilterPopoverFixedStyle(
+      triggerRef.current,
+      Math.max(triggerRect.width, 120),
+      4,
+      menuHeight
+    )
+    setMenuStyle(style)
   }, [])
 
   useEffect(() => {
     if (!open) {
-      setOpenUpwards(false)
+      setMenuStyle({})
       return
     }
 
-    updateMenuDirection()
-    window.addEventListener('resize', updateMenuDirection)
-    window.addEventListener('scroll', updateMenuDirection, true)
+    updateMenuPosition()
+    let ro = null
+    const raf = requestAnimationFrame(() => {
+      updateMenuPosition()
+      if (typeof ResizeObserver !== 'undefined' && menuRef.current) {
+        ro = new ResizeObserver(updateMenuPosition)
+        ro.observe(menuRef.current)
+      }
+    })
+    window.addEventListener('resize', updateMenuPosition)
+    window.addEventListener('scroll', updateMenuPosition, true)
     return () => {
-      window.removeEventListener('resize', updateMenuDirection)
-      window.removeEventListener('scroll', updateMenuDirection, true)
+      cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', updateMenuPosition)
+      window.removeEventListener('scroll', updateMenuPosition, true)
     }
-  }, [open, updateMenuDirection, filtered.length, query, showSearch])
+  }, [open, updateMenuPosition, filtered.length, query, showSearch])
 
   const emitChange = useCallback(
     (newValue) => {
@@ -243,73 +263,75 @@ export default function SearchableSelect({
         <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div
-          ref={menuRef}
-          className={`absolute left-0 z-[70] w-full rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden ${
-            openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'
-          } ${menuClassName}`}
-          role="listbox"
-          aria-activedescendant={highlightIndex >= 0 ? `${baseId}-option-${highlightIndex}` : undefined}
-        >
-          {showSearch && (
-            <div className="p-2 border-b border-gray-100">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  ref={inputRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder={searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  aria-controls={`${baseId}-listbox`}
-                />
-              </div>
-            </div>
-          )}
-
+      {open &&
+        mounted &&
+        createPortal(
           <div
-            ref={listRef}
-            id={`${baseId}-listbox`}
-            className="max-h-64 overflow-auto py-1"
-            tabIndex={showSearch ? -1 : 0}
-            onKeyDown={showSearch ? undefined : handleSearchKeyDown}
+            ref={menuRef}
+            className={`fixed z-[200] rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden flex flex-col ${menuClassName}`}
+            style={menuStyle}
+            role="listbox"
+            aria-activedescendant={highlightIndex >= 0 ? `${baseId}-option-${highlightIndex}` : undefined}
           >
-            {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-gray-500">No results</div>
-            ) : (
-              filtered.map((opt, i) => {
-                const isSelected = String(opt.value) === String(value ?? '')
-                const isHighlighted = i === highlightIndex
-                return (
-                  <button
-                    key={String(opt.value)}
-                    id={`${baseId}-option-${i}`}
-                    ref={(el) => {
-                      optionRefs.current[i] = el
-                    }}
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                      isHighlighted ? 'bg-gray-100 ring-1 ring-inset ring-primary-300' : ''
-                    } ${isSelected ? 'text-primary-800 font-medium' : 'text-gray-700'}`}
-                    onMouseEnter={() => setHighlightIndex(i)}
-                    onClick={() => {
-                      emitChange(opt.value)
-                      setOpen(false)
-                      setQuery('')
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                )
-              })
+            {showSearch && (
+              <div className="p-2 border-b border-gray-100 flex-shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder={searchPlaceholder}
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    aria-controls={`${baseId}-listbox`}
+                  />
+                </div>
+              </div>
             )}
-          </div>
-        </div>
-      )}
+
+            <div
+              ref={listRef}
+              id={`${baseId}-listbox`}
+              className="overflow-auto py-1 flex-1 min-h-0"
+              tabIndex={showSearch ? -1 : 0}
+              onKeyDown={showSearch ? undefined : handleSearchKeyDown}
+            >
+              {filtered.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+              ) : (
+                filtered.map((opt, i) => {
+                  const isSelected = String(opt.value) === String(value ?? '')
+                  const isHighlighted = i === highlightIndex
+                  return (
+                    <button
+                      key={String(opt.value)}
+                      id={`${baseId}-option-${i}`}
+                      ref={(el) => {
+                        optionRefs.current[i] = el
+                      }}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                        isHighlighted ? 'bg-gray-100 ring-1 ring-inset ring-primary-300' : ''
+                      } ${isSelected ? 'text-primary-800 font-medium' : 'text-gray-700'}`}
+                      onMouseEnter={() => setHighlightIndex(i)}
+                      onClick={() => {
+                        emitChange(opt.value)
+                        setOpen(false)
+                        setQuery('')
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

@@ -662,7 +662,7 @@ export default function AdminInquiriesPage() {
         </div>
 
         {/* Filters — left-aligned with stats + table */}
-        <div className="flex w-full flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 overflow-visible">
             {/* Date Range Filter */}
             <div className="relative">
               <button
@@ -700,10 +700,10 @@ export default function AdminInquiriesPage() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowDatePicker(false)}
                   />
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 w-[min(420px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden">
+                  <div className="filter-popover filter-popover-start filter-popover-md p-0 overflow-hidden">
                     <div className="p-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1">
+                        <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                          <div className="flex-1 min-w-0">
                             <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
                             <input
                               type="date"
@@ -720,7 +720,7 @@ export default function AdminInquiriesPage() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                             />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
                             <input
                               type="date"
@@ -960,7 +960,8 @@ export default function AdminInquiriesPage() {
                           <SearchableSelect
                             value={inquiry.assignedAgent?._id || inquiry.assignedAgent || ""}
                             onChange={async (e) => {
-                              await handleAssignAgent(inquiry._id, e.target.value || null)
+                              const agentId = e.target.value
+                              await handleAssignAgent(inquiry._id, agentId ? agentId : null)
                             }}
                             disabled={assigningAgent === inquiry._id}
                             buttonClassName="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white w-full disabled:opacity-50 disabled:cursor-not-allowed"

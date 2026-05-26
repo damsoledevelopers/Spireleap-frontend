@@ -8,7 +8,6 @@ import {
   Users,
   Package,
   FileText,
-  DollarSign,
   Download,
   RefreshCw,
   BarChart3,
@@ -17,7 +16,9 @@ import {
   UserCheck,
   Building,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Receipt,
+  Wallet
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { exportToCSV, formatLeadsForExport, formatPropertiesForExport, formatAgentsForExport } from '../../../lib/exportUtils'
@@ -91,10 +92,21 @@ export function AdminReportsContent() {
     agentPerformance: [],
     propertiesByLocation: {},
     agencyAnalysis: [],
-    campaignROI: [],
     followUpCompliance: {},
     siteVisitConversion: {},
-    lostReasons: {}
+    lostReasons: {},
+    invoiceStats: {
+      byStatus: {},
+      bookingRequests: 0,
+      paymentsInProgress: 0,
+      completedInvoices: 0,
+      rejected: 0,
+      totalBookings: 0,
+      totalBookingValue: 0,
+      totalCollected: 0,
+      totalOutstanding: 0,
+      recentCompleted: []
+    }
   })
   const [selectedPeriod, setSelectedPeriod] = useState('all')
   const [selectedReport, setSelectedReport] = useState('overview')
@@ -184,6 +196,18 @@ export function AdminReportsContent() {
             ((nextLeadsByStatus?.booked || 0) +
               (nextLeadsByStatus?.closed || 0) +
               (nextLeadsByStatus?.converted || 0))
+        },
+        invoiceStats: stats.invoiceStats || {
+          byStatus: {},
+          bookingRequests: 0,
+          paymentsInProgress: 0,
+          completedInvoices: 0,
+          rejected: 0,
+          totalBookings: 0,
+          totalBookingValue: 0,
+          totalCollected: 0,
+          totalOutstanding: 0,
+          recentCompleted: []
         }
       }))
     } catch (error) {
@@ -274,7 +298,6 @@ export function AdminReportsContent() {
     { id: 'properties', name: 'Property Reports', icon: Package },
     { id: 'leads', name: 'Lead Analytics', icon: FileText },
     { id: 'lead_funnel', name: 'Lead Funnel', icon: TrendingUp },
-    { id: 'campaign_roi', name: 'Campaign ROI', icon: DollarSign },
     { id: 'followup', name: 'Follow-up Compliance', icon: Activity },
     { id: 'site_visit', name: 'Site Visit Conversion', icon: MapPin },
     { id: 'lost_reasons', name: 'Lost Reasons', icon: FileText },
@@ -425,6 +448,102 @@ export function AdminReportsContent() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Invoices & bookings */}
+            <div className="card">
+              <div className="card-header py-3 px-4 sm:px-6">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-primary-600 shrink-0" />
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Invoices &amp; bookings</h3>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Customer booking requests, payments, and completed invoices
+                  {selectedPeriod !== 'all' ? ' (selected period)' : ''}
+                </p>
+              </div>
+              <div className="card-body p-3 sm:p-5 space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                    <p className="text-[10px] sm:text-xs font-medium text-amber-800 leading-tight">Awaiting review</p>
+                    <p className="text-lg sm:text-xl font-bold text-amber-900 mt-0.5">
+                      {reportData.invoiceStats.bookingRequests ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/80 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                    <p className="text-[10px] sm:text-xs font-medium text-blue-800 leading-tight">Payment in progress</p>
+                    <p className="text-lg sm:text-xl font-bold text-blue-900 mt-0.5">
+                      {reportData.invoiceStats.paymentsInProgress ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-green-100 bg-green-50/80 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                    <p className="text-[10px] sm:text-xs font-medium text-green-800 leading-tight">Completed</p>
+                    <p className="text-lg sm:text-xl font-bold text-green-900 mt-0.5">
+                      {reportData.invoiceStats.completedInvoices ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-red-100 bg-red-50/80 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                    <p className="text-[10px] sm:text-xs font-medium text-red-800 leading-tight">Rejected</p>
+                    <p className="text-lg sm:text-xl font-bold text-red-900 mt-0.5">
+                      {reportData.invoiceStats.rejected ?? 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between sm:block gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <Wallet className="h-3.5 w-3.5 shrink-0" />
+                      Total booking value
+                    </span>
+                    <span className="text-sm sm:text-base font-bold text-gray-900 sm:mt-1 block text-right sm:text-left break-all">
+                      {formatAed(reportData.invoiceStats.totalBookingValue || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between sm:block gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-xs font-medium text-gray-600">Collected</span>
+                    <span className="text-sm sm:text-base font-bold text-green-700 sm:mt-1 block text-right sm:text-left break-all">
+                      {formatAed(reportData.invoiceStats.totalCollected || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between sm:block gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-xs font-medium text-gray-600">Outstanding</span>
+                    <span className="text-sm sm:text-base font-bold text-amber-700 sm:mt-1 block text-right sm:text-left break-all">
+                      {formatAed(reportData.invoiceStats.totalOutstanding || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {(reportData.invoiceStats.recentCompleted || []).length > 0 && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      Recent completed invoices
+                    </p>
+                    <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {(reportData.invoiceStats.recentCompleted || []).map((inv) => (
+                        <li
+                          key={inv.id}
+                          className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-0.5 text-xs sm:text-sm rounded-md bg-white border border-gray-100 px-2.5 py-1.5"
+                        >
+                          <span className="font-medium text-gray-900 truncate pr-2">
+                            {inv.propertyTitle}
+                          </span>
+                          <span className="text-gray-500 shrink-0">
+                            {formatAed(inv.amountPaid ?? inv.amount ?? 0)}
+                            {inv.completedAt
+                              ? ` · ${new Date(inv.completedAt).toLocaleDateString()}`
+                              : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(reportData.invoiceStats.totalBookings ?? 0) === 0 && (
+                  <p className="text-xs text-gray-500 text-center py-2">No booking or invoice activity in this period.</p>
+                )}
               </div>
             </div>
 
@@ -1529,134 +1648,6 @@ export function AdminReportsContent() {
                       </span>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Campaign ROI Report */}
-        {selectedReport === 'campaign_roi' && (
-          <>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <div className="card">
-                <div className="card-header">
-                  <h3 className="text-lg font-medium text-gray-900">Campaign Performance</h3>
-                </div>
-                <div className="card-body">
-                  {reportData.campaignROI && reportData.campaignROI.length > 0 ? (
-                    <div className="space-y-4">
-                      {reportData.campaignROI.map((campaign, index) => {
-                        const roiNum = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
-                        const roiLabel = formatPercentLabel(roiNum)
-                        return (
-                          <div key={index} className="border-b border-gray-200 pb-4 last:border-0 last:pb-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold text-gray-900">{campaign.name}</span>
-                              <span className={`text-sm font-bold ${roiNum > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {roiNum > 0 ? '+' : ''}{roiLabel}% ROI
-                              </span>
-                            </div>
-                            <div className="space-y-1 text-xs text-gray-600">
-                              <div className="flex justify-between">
-                                <span>Total Leads:</span>
-                                <span className="font-medium">{campaign.totalLeads}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Converted:</span>
-                                <span className="font-medium text-green-600">{campaign.convertedLeads}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Revenue:</span>
-                                <span className="font-medium">${campaign.revenue.toLocaleString()}</span>
-                              </div>
-                              {campaign.cost > 0 && (
-                                <div className="flex justify-between">
-                                  <span>Cost:</span>
-                                  <span className="font-medium">${campaign.cost.toLocaleString()}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-sm text-gray-500">No campaign data available</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h3 className="text-lg font-medium text-gray-900">Summary</h3>
-                </div>
-                <div className="card-body">
-                  {reportData.campaignROI && reportData.campaignROI.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">Total Campaigns</span>
-                        <span className="text-2xl font-semibold text-gray-900">{reportData.campaignROI.length}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">Total Leads</span>
-                        <span className="text-2xl font-semibold text-blue-600">
-                          {reportData.campaignROI.reduce((sum, c) => sum + c.totalLeads, 0)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">Total Converted</span>
-                        <span className="text-2xl font-semibold text-green-600">
-                          {reportData.campaignROI.reduce((sum, c) => sum + c.convertedLeads, 0)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">Total Revenue</span>
-                        <span className="text-2xl font-semibold text-purple-600">
-                          ${reportData.campaignROI.reduce((sum, c) => sum + c.revenue, 0).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No data available</p>
-                  )}
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-header">
-                  <h3 className="text-lg font-medium text-gray-900">Top Performing Campaigns</h3>
-                </div>
-                <div className="card-body">
-                  {reportData.campaignROI && reportData.campaignROI.length > 0 ? (
-                    <div className="space-y-3">
-                      {[...reportData.campaignROI]
-                        .sort((a, b) => {
-                          const roiA = a.cost > 0 ? ((a.revenue - a.cost) / a.cost) : 0
-                          const roiB = b.cost > 0 ? ((b.revenue - b.cost) / b.cost) : 0
-                          return roiB - roiA
-                        })
-                        .slice(0, 5)
-                        .map((campaign, index) => {
-                          const roiNum = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
-                          const roiLabel = formatPercentLabel(roiNum)
-                          return (
-                            <div key={index} className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{campaign.name}</p>
-                                <p className="text-xs text-gray-500">{campaign.convertedLeads} conversions</p>
-                              </div>
-                              <span className={`text-sm font-bold ${roiNum > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {roiNum > 0 ? '+' : ''}{roiLabel}%
-                              </span>
-                            </div>
-                          )
-                        })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No data available</p>
-                  )}
                 </div>
               </div>
             </div>

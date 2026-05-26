@@ -77,6 +77,8 @@ export default function PropertiesPage() {
   const [pagination, setPagination] = useState({ page: parseInt(searchParams.get('page')) || 1, limit: 12, total: 0, pages: 0 })
   const [geo, setGeo] = useState({ countries: [], states: [], cities: [] })
   const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false })
+  const [locationAreas, setLocationAreas] = useState([])
+  const [locationAreasLoading, setLocationAreasLoading] = useState(false)
 
   useEffect(() => {
     // Load filter options once (from backend)
@@ -190,6 +192,43 @@ export default function PropertiesPage() {
     }
   }, [filters.country, filters.state])
 
+  useEffect(() => {
+    const country = String(filters.country || '').trim()
+    if (!country) {
+      setLocationAreas([])
+      return
+    }
+    let cancelled = false
+    const fetchLocationAreas = async () => {
+      try {
+        setLocationAreasLoading(true)
+        const params = new URLSearchParams({ country })
+        const state = String(filters.state || '').trim()
+        const city = String(filters.city || '').trim()
+        if (state) params.set('state', state)
+        if (city) params.set('city', city)
+        const res = await api.get(`/properties/location-areas?${params}`)
+        const areas = res.data?.areas || []
+        if (!cancelled) {
+          setLocationAreas(areas)
+          const selectedArea = String(filters.area || '').trim()
+          if (selectedArea && !areas.includes(selectedArea)) {
+            setFilters((prev) => (prev.area ? { ...prev, area: '' } : prev))
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching location areas:', e)
+        if (!cancelled) setLocationAreas([])
+      } finally {
+        if (!cancelled) setLocationAreasLoading(false)
+      }
+    }
+    fetchLocationAreas()
+    return () => {
+      cancelled = true
+    }
+  }, [filters.country, filters.state, filters.city])
+
   const stateOptions = useMemo(() => {
     const current = String(filters.state || '').trim()
     return Array.from(new Set([...(geo.states || []), current].filter(Boolean))).sort((a, b) => a.localeCompare(b))
@@ -201,9 +240,12 @@ export default function PropertiesPage() {
   }, [geo.cities, filters.city])
 
   const areaSelectOptions = useMemo(() => {
-    const raw = filterOptions.locations?.areas || []
+    const current = String(filters.area || '').trim()
+    const raw = Array.from(new Set([...(locationAreas || []), current].filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b)
+    )
     return [{ value: '', label: 'All areas' }, ...raw.map((a) => ({ value: a, label: a }))]
-  }, [filterOptions.locations?.areas])
+  }, [locationAreas, filters.area])
 
   const locationSelectClass =
     'px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium bg-white min-w-[140px] max-w-[200px]'
@@ -559,8 +601,8 @@ export default function PropertiesPage() {
                 <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'spec' ? 'rotate-180' : ''}`} />
               </button>
               {openFilter === 'spec' && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[250px]">
-                  <div className="p-4 space-y-3">
+                <div className="filter-popover filter-popover-end filter-popover-sm rounded-lg shadow-lg p-0">
+                  <div className="filter-popover-scroll p-4 space-y-3">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Bedrooms (BHK Type)</label>
                       <select
@@ -678,8 +720,17 @@ export default function PropertiesPage() {
               value={filters.area}
               onChange={(e) => handleFilterChange('area', e.target.value)}
               options={areaSelectOptions}
-              placeholder="Area"
+              placeholder={
+                !filters.country
+                  ? 'Select country first'
+                  : locationAreasLoading
+                    ? 'Loading areas…'
+                    : locationAreas.length === 0
+                      ? 'No areas listed'
+                      : 'Area'
+              }
               searchPlaceholder="Search area…"
+              disabled={!filters.country || locationAreasLoading}
               searchable
               buttonClassName={`${locationSelectClass} ${filters.area ? 'border-primary-500 bg-primary-50 text-primary-700' : ''}`}
             />

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
-import { MapPin, Bed, Bath, Square, Car, Phone, Mail, Heart, Loader2, Clock, Tag, Building, ChevronLeft, ChevronRight, ExternalLink, QrCode } from 'lucide-react'
+import { MapPin, Bed, Bath, Square, Car, Phone, Mail, Heart, Loader2, Clock, Tag, Building, ChevronLeft, ChevronRight, ExternalLink, QrCode, CheckCircle2, FileText, Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
@@ -239,6 +239,8 @@ export default function PropertyDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [inWishlist, setInWishlist] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const similarScrollRef = useRef(null)
   const [similarScrollEdges, setSimilarScrollEdges] = useState({ atStart: true, atEnd: true })
 
@@ -487,17 +489,20 @@ export default function PropertyDetailPage() {
       return
     }
 
-    const toastId = toast.loading('Processing booking...')
-
     try {
+      setBookingLoading(true)
       await api.post(`/properties/${property._id}/book`)
-      toast.success('Property booked successfully!', { id: toastId })
-
-      // Update property status locally to reflect booking
-      setProperty(prev => ({ ...prev, hasBooked: true }))
+      setProperty((prev) => ({
+        ...prev,
+        hasBooked: true,
+        bookingStatus: 'pending_approval'
+      }))
+      setBookingSuccessOpen(true)
     } catch (error) {
       console.error('Booking error:', error)
-      toast.error(error.response?.data?.message || 'Failed to book property', { id: toastId })
+      toast.error(error.response?.data?.message || 'Failed to book property')
+    } finally {
+      setBookingLoading(false)
     }
   }
 
@@ -870,14 +875,24 @@ export default function PropertyDetailPage() {
                   <>
                     <button
                       onClick={handleBookProperty}
-                      className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group"
+                      disabled={bookingLoading}
+                      className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 group disabled:opacity-60 disabled:transform-none disabled:cursor-not-allowed"
                     >
-                      <span>Book Now</span>
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </div>
+                      {bookingLoading ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Booking…</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Book Now</span>
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </div>
+                        </>
+                      )}
                     </button>
                     <p className="text-center text-xs text-gray-500 mt-2">
                       Click to instantly reserve this property
@@ -888,14 +903,26 @@ export default function PropertyDetailPage() {
             )}
 
             {property.hasBooked && (
-              <div className="bg-green-50 rounded-lg shadow-sm p-6 border-2 border-green-100">
-                <div className="flex items-center gap-3 text-green-700 mb-2">
-                  <Clock className="h-6 w-6" />
-                  <h2 className="text-xl font-bold">You have already booked the property</h2>
+              <div className="bg-primary-50 rounded-lg shadow-sm p-6 border-2 border-primary-100">
+                <div className="flex items-center gap-3 text-primary-800 mb-3">
+                  <CheckCircle2 className="h-6 w-6 shrink-0" />
+                  <h2 className="text-lg font-bold leading-tight">Booking received</h2>
                 </div>
-                <p className="text-green-600 text-sm">
-                  You have booked this property. Our team will contact you shortly for confirmation.
+                <p className="text-primary-700 text-sm mb-4">
+                  Upload your payment proof so we can review your booking.
                 </p>
+                <ol className="text-sm text-primary-800 space-y-2 mb-4 list-decimal list-inside">
+                  <li>Open <span className="font-semibold">Invoices</span></li>
+                  <li>Go to <span className="font-semibold">Booking requests</span></li>
+                  <li>Upload PDF or image of your payment</li>
+                </ol>
+                <Link
+                  href="/customer/invoices?tab=requests"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-lg transition-colors"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload payment proof
+                </Link>
               </div>
             )}
 
@@ -1148,6 +1175,83 @@ export default function PropertyDetailPage() {
           )}
         </div>
       </div>
+
+      {bookingSuccessOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="booking-success-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-primary-600 px-6 py-5 text-white text-center relative">
+              <button
+                type="button"
+                onClick={() => setBookingSuccessOpen(false)}
+                className="absolute top-3 right-3 p-1 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="mx-auto w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mb-3">
+                <CheckCircle2 className="h-8 w-8" />
+              </div>
+              <h2 id="booking-success-title" className="text-xl font-bold">
+                Booking received
+              </h2>
+              <p className="text-primary-100 text-sm mt-1">
+                One more step to complete your request
+              </p>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-gray-600 text-sm text-center">
+                Please upload your payment document so our team can review your booking.
+              </p>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-sm font-bold">1</span>
+                  <p className="text-sm text-gray-700 pt-0.5">
+                    Open <span className="font-semibold text-gray-900">Invoices</span> from your account menu
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-sm font-bold">2</span>
+                  <p className="text-sm text-gray-700 pt-0.5">
+                    Open the <span className="font-semibold text-gray-900">Booking requests</span> tab
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-sm font-bold">3</span>
+                  <p className="text-sm text-gray-700 pt-0.5">
+                    Tap <span className="font-semibold text-gray-900">Upload proof</span> and add your PDF or payment screenshot
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <Link
+                  href="/customer/invoices?tab=requests"
+                  onClick={() => setBookingSuccessOpen(false)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  Go to Invoices
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setBookingSuccessOpen(false)}
+                  className="flex-1 py-3 px-4 border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  I&apos;ll do this later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )

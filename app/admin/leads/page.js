@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../components/Layout/DashboardLayout'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -17,6 +17,7 @@ import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 import { getDropdownOptions } from '../../../lib/dropdownsApi'
 import { getToken } from '../../../lib/tokenStorage'
 import { formatPercentLabel } from '../../../lib/formatPercent'
+import { getFilterPopoverFixedStyle } from '../../../lib/filterPopoverPosition'
 
 /**
  * Helper: resolve entry-level permission with safe fallback to module-level permission.
@@ -141,6 +142,9 @@ export default function AdminLeadsPage() {
   const [teams, setTeams] = useState([])
   const [rescoring, setRescoring] = useState(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const dateRangeRef = useRef(null)
+  const datePopoverRef = useRef(null)
+  const [datePopoverStyle, setDatePopoverStyle] = useState({})
   const [showPricePicker, setShowPricePicker] = useState(false)
   const [searchDebounceTimer, setSearchDebounceTimer] = useState(null)
   const [permissionModalEntry, setPermissionModalEntry] = useState(null)
@@ -187,6 +191,47 @@ export default function AdminLeadsPage() {
     setPagination(prev => ({ ...prev, page: 1 }))
     fetchLeads()
   }
+
+  useLayoutEffect(() => {
+    if (!showDatePicker || !dateRangeRef.current) {
+      setDatePopoverStyle({})
+      return
+    }
+    const updatePosition = () => {
+      const panelHeight = datePopoverRef.current?.offsetHeight || 280
+      setDatePopoverStyle(
+        getFilterPopoverFixedStyle(dateRangeRef.current, 600, 4, panelHeight)
+      )
+    }
+    updatePosition()
+    let ro = null
+    const raf = requestAnimationFrame(() => {
+      updatePosition()
+      if (typeof ResizeObserver !== 'undefined' && datePopoverRef.current) {
+        ro = new ResizeObserver(updatePosition)
+        ro.observe(datePopoverRef.current)
+      }
+    })
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+      ro?.disconnect()
+    }
+  }, [showDatePicker])
+
+  useEffect(() => {
+    if (!showDatePicker) return
+    const handlePointerDown = (e) => {
+      if (dateRangeRef.current?.contains(e.target)) return
+      if (datePopoverRef.current?.contains(e.target)) return
+      setShowDatePicker(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [showDatePicker])
 
   // Separate effect for initial data fetch (runs once on auth)
   useEffect(() => {
@@ -920,7 +965,7 @@ export default function AdminLeadsPage() {
     })
 
     try {
-      const response = await api.put(`/leads/${leadId}/assign`, { assignedAgent: agentId })
+      const response = await api.put(`/leads/${leadId}/assign`, { assignedAgent: agentId || null })
 
       // Update with server response only if it's different
       if (response.data?.lead) {
@@ -953,7 +998,7 @@ export default function AdminLeadsPage() {
         )
       }
 
-      toast.success('Lead assigned successfully')
+      toast.success(agentId ? 'Lead assigned successfully' : 'Agent removed')
       fetchDashboardMetrics()
       fetchMissedFollowUps()
     } catch (error) {
@@ -965,7 +1010,7 @@ export default function AdminLeadsPage() {
         setAllLeads(previousAllLeadsState)
       }
       console.error('Error assigning lead:', error)
-      toast.error('Failed to assign lead')
+      toast.error(error.response?.data?.message || (agentId ? 'Failed to assign lead' : 'Failed to remove agent'))
     }
   }
 
@@ -1420,7 +1465,11 @@ export default function AdminLeadsPage() {
       const agentPayload = bulkAgent === '__clear__' ? null : bulkAgent
       const assignPromises = selectedLeads.map(id => api.put(`/leads/${id}/assign`, { assignedAgent: agentPayload }))
       await Promise.all(assignPromises)
-      toast.success(`${selectedLeads.length} lead(s) assigned successfully`)
+      toast.success(
+        agentPayload
+          ? `${selectedLeads.length} lead(s) assigned successfully`
+          : `Agent removed from ${selectedLeads.length} lead(s)`
+      )
       setSelectedLeads([])
       setShowBulkActions(false)
       setBulkAgent('')
@@ -2082,9 +2131,9 @@ export default function AdminLeadsPage() {
             </div>
           </div>
 
-          {/* Filters and Controls */}
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
+          {/* Filters and Controls — z-index keeps dropdowns above the table below */}
+          <div className="relative z-[30] flex items-center justify-between flex-wrap gap-4 overflow-visible">
+            <div className="flex items-center gap-3 flex-wrap overflow-visible">
               <SearchableSelect
                 value={pagination.limit}
                 onChange={(e) => {
@@ -2204,7 +2253,7 @@ export default function AdminLeadsPage() {
               />
 
               {/* Date Range Filter */}
-              <div className="relative">
+              <div className="relative" ref={dateRangeRef}>
                 <button
                   type="button"
                   onClick={() => setShowDatePicker(!showDatePicker)}
@@ -2238,11 +2287,15 @@ export default function AdminLeadsPage() {
                 {showDatePicker && (
                   <>
                     <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setShowDatePicker(false)}
+                      className="fixed inset-0 z-[190] pointer-events-none"
+                      aria-hidden="true"
                     />
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-0 z-50 w-[calc(100vw-2rem)] max-w-[600px] sm:w-auto sm:min-w-[600px] overflow-hidden">
-                      <div className="flex flex-col md:flex-row">
+                    <div
+                      ref={datePopoverRef}
+                      className="filter-popover-fixed p-0 overflow-y-auto overscroll-contain"
+                      style={datePopoverStyle}
+                    >
+                      <div className="flex flex-col md:flex-row min-w-0">
                         {/* Presets */}
                         <div className="w-full md:w-40 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-2">
                           <div className="flex flex-col gap-1">
@@ -2267,8 +2320,8 @@ export default function AdminLeadsPage() {
 
                         {/* Custom Range */}
                         <div className="flex-1 p-4">
-                          <div className="flex items-center gap-4">
-                            <div className="flex-1">
+                          <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                            <div className="flex-1 min-w-0">
                               <label className="block text-xs font-bold text-gray-900 mb-2">From Date</label>
                               <input
                                 type="date"
@@ -2284,7 +2337,7 @@ export default function AdminLeadsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                               />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <label className="block text-xs font-bold text-gray-900 mb-2">To Date</label>
                               <input
                                 type="date"

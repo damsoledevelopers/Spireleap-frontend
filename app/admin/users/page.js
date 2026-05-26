@@ -660,7 +660,7 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 flex-wrap">
+        <div className="flex items-center justify-end gap-3 flex-wrap overflow-visible">
           {/* Date Range Filter Button - Left End */}
           <div className="relative">
             <button
@@ -698,9 +698,9 @@ export default function AdminUsers() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowDatePicker(false)}
                 />
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 w-[calc(100vw-2rem)] max-w-[500px] sm:w-auto sm:min-w-[500px]">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
+                <div className="filter-popover filter-popover-start filter-popover-lg p-4">
+                  <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                    <div className="flex-1 min-w-0">
                       <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
                       <input
                         type="date"
@@ -716,7 +716,7 @@ export default function AdminUsers() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
                       <input
                         type="date"
