@@ -89,25 +89,27 @@ export default function MyProperties() {
                     </Link>
                 </div>
 
-                {/* Tab Navigation */}
-                <div className="flex p-1 bg-gray-100 rounded-2xl w-fit">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab.id
-                                ? 'bg-white text-primary-600 shadow-sm'
-                                : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                        >
-                            <tab.icon className={`h-4 w-4 mr-2 ${activeTab === tab.id ? 'text-primary-600' : 'text-gray-400'}`} />
-                            {tab.label}
-                            <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-primary-50 text-primary-600' : 'bg-gray-200 text-gray-500'
-                                }`}>
-                                {data[tab.id]?.length || 0}
-                            </span>
-                        </button>
-                    ))}
+                {/* Tab Navigation — horizontal scroll on small screens */}
+                <div className="w-full max-w-full overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
+                    <div className="inline-flex p-1 bg-gray-100 rounded-2xl min-w-min">
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex shrink-0 items-center whitespace-nowrap px-4 sm:px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab.id
+                                    ? 'bg-white text-primary-600 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                <tab.icon className={`h-4 w-4 mr-2 shrink-0 ${activeTab === tab.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                                {tab.label}
+                                <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-primary-50 text-primary-600' : 'bg-gray-200 text-gray-500'
+                                    }`}>
+                                    {data[tab.id]?.length || 0}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Property Grid */}

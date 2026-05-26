@@ -38,6 +38,8 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 import UserDetailOverview from '../../../../components/Users/UserDetailOverview'
 import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
+import { useCurrency } from '../../../../contexts/CurrencyContext'
+import { formatMoneyFromAed } from '../../../../lib/money'
 
 function visitPropertyId(visit) {
   if (!visit) return ''
@@ -152,12 +154,6 @@ function normalizeSiteVisitRow(visit, leadId, prop, leadName) {
   }
 }
 
-function formatPlainAmount(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return '—'
-  return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-
 /** Digits and at most one decimal point — for admin payment amount fields */
 function sanitizeNumericAmountInput(raw) {
   if (raw == null) return ''
@@ -186,21 +182,22 @@ function parseApiErrorMessage(error, fallback) {
   return fallback
 }
 
-function formatPropertyPriceLabel(property) {
+function formatPropertyPriceLabel(property, selectedCurrency, ratesByCode) {
+  const fmt = (n) =>
+    Number.isFinite(n)
+      ? formatMoneyFromAed(n, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+      : 'N/A'
   if (!property?.price) return 'N/A'
   if (typeof property.price === 'object') {
     if (property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
-      const n = Number(property.price.sale)
-      return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+      return fmt(Number(property.price.sale))
     }
     if (property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
-      const n = Number(property.price.rent.amount)
-      return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+      return fmt(Number(property.price.rent.amount))
     }
     return 'N/A'
   }
-  const n = Number(property.price)
-  return Number.isFinite(n) ? formatPlainAmount(n) : 'N/A'
+  return fmt(Number(property.price))
 }
 
 function BookingPropertyCard({
@@ -216,6 +213,10 @@ function BookingPropertyCard({
   onFinalize,
   processingApproval
 }) {
+  const { selectedCurrency, ratesByCode } = useCurrency()
+  const formatAmount = (value) =>
+    formatMoneyFromAed(value, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+
   if (!property) return null
 
   const existingPaid = Number(transaction?.amountPaid ?? transaction?.paymentDetails?.amountPaid ?? 0)
@@ -263,8 +264,8 @@ function BookingPropertyCard({
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 group-hover:bg-white group-hover:border-[#700E08]/20 transition-all">
-                <p className="text-xl font-black text-gray-900 leading-none">
-                  {formatPropertyPriceLabel(property)}
+                <p className="text-xl font-black text-gray-900 leading-none break-words text-right">
+                  {formatPropertyPriceLabel(property, selectedCurrency, ratesByCode)}
                 </p>
                 {property.price?.rent?.amount && <p className="text-[10px] font-bold text-gray-400 text-right mt-1">/ month</p>}
               </div>
@@ -294,15 +295,15 @@ function BookingPropertyCard({
         <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 text-sm">
           <div>
             <span className="text-gray-500 block text-xs">Total</span>
-            <span className="font-medium">{formatPlainAmount(transaction.amount || 0)}</span>
+            <span className="font-medium">{formatAmount(transaction.amount || 0)}</span>
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Paid</span>
-            <span className="font-medium text-green-700">{formatPlainAmount(transaction.amountPaid ?? transaction.paymentDetails?.amountPaid ?? 0)}</span>
+            <span className="font-medium text-green-700">{formatAmount(transaction.amountPaid ?? transaction.paymentDetails?.amountPaid ?? 0)}</span>
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Pending</span>
-            <span className="font-medium text-amber-700">{formatPlainAmount(transaction.pendingAmount ?? transaction.paymentDetails?.dueAmount ?? transaction.amount ?? 0)}</span>
+            <span className="font-medium text-amber-700">{formatAmount(transaction.pendingAmount ?? transaction.paymentDetails?.dueAmount ?? transaction.amount ?? 0)}</span>
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Proof</span>
@@ -332,20 +333,25 @@ function BookingPropertyCard({
           </p>
           {isInstallmentReview && (
             <p className="text-xs text-amber-800">
-              Already paid: {formatPlainAmount(existingPaid)} · Balance: {formatPlainAmount(pendingDue)}
+              Already paid: {formatAmount(existingPaid)} · Balance: {formatAmount(pendingDue)}
             </p>
           )}
           <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder={isInstallmentReview ? 'Amount for this payment' : 'Amount received (optional)'}
-              value={approvalDraft.amountPaid}
-              onChange={(e) => onDraftChange?.('amountPaid', sanitizeNumericAmountInput(e.target.value))}
-              className="w-full sm:max-w-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-              aria-label="Payment amount"
-            />
+            <div className="w-full sm:max-w-[220px]">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder={isInstallmentReview ? 'Amount for this payment' : 'Amount received (optional)'}
+                value={approvalDraft.amountPaid}
+                onChange={(e) => onDraftChange?.('amountPaid', sanitizeNumericAmountInput(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                aria-label="Payment amount"
+              />
+              <p className="text-[10px] text-amber-700 mt-1">
+                Enter amount in {selectedCurrency}
+              </p>
+            </div>
             <input
               type="text"
               placeholder="Admin note (optional)"
@@ -379,7 +385,7 @@ function BookingPropertyCard({
         <div className="mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
           {pendingDue > 0 ? (
             <p className="text-sm text-blue-900">
-              Balance due: <span className="font-bold">{formatPlainAmount(pendingDue)}</span>.
+              Balance due: <span className="font-bold">{formatAmount(pendingDue)}</span>.
               Customer can upload the next payment proof from <span className="font-semibold">Payments due</span> on their account.
             </p>
           ) : (
@@ -404,6 +410,9 @@ export default function AdminUserDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user: currentUser, checkPermission } = useAuth()
+  const { selectedCurrency, ratesByCode } = useCurrency()
+  const formatBookingAmount = (value) =>
+    formatMoneyFromAed(value, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
   const [loading, setLoading] = useState(true)
   const [userData, setUserData] = useState(null)
   const [userInquiries, setUserInquiries] = useState([])
@@ -1303,8 +1312,8 @@ export default function AdminUserDetailPage() {
     const ok = await confirm({
       title: isNextPayment ? 'Confirm payment' : 'Approve booking',
       message: isNextPayment
-        ? `Add ${formatPlainAmount(draft.amountPaid || 0)} to amount already paid (${formatPlainAmount(existingPaid)})?`
-        : `Approve this booking${draft.amountPaid ? ` with ${formatPlainAmount(draft.amountPaid)} received` : ''}?`,
+        ? `Add ${formatBookingAmount(draft.amountPaid || 0)} to amount already paid (${formatBookingAmount(existingPaid)})?`
+        : `Approve this booking${draft.amountPaid ? ` with ${formatBookingAmount(draft.amountPaid)} received` : ''}?`,
       confirmText: 'Approve',
       tone: 'primary'
     })
@@ -1418,7 +1427,9 @@ export default function AdminUserDetailPage() {
     }
 
     if (amountPaid + dueAmount !== totalAmount) {
-      toast.error(`Amount paid (₹${amountPaid.toLocaleString()}) + Due amount (₹${dueAmount.toLocaleString()}) must equal total amount (₹${totalAmount.toLocaleString()})`)
+      toast.error(
+        `Amount paid (${formatBookingAmount(amountPaid)}) + Due amount (${formatBookingAmount(dueAmount)}) must equal total amount (${formatBookingAmount(totalAmount)})`
+      )
       return
     }
 
@@ -1789,21 +1800,21 @@ export default function AdminUserDetailPage() {
                     <tbody className="bg-white">
                       {userInquiries.map((inquiry, index) => {
                         const displayProperty = inquiry.property || inquiry.interestedProperties?.[0]?.property
-                        const toRupee = (value) => {
+                        const toDisplayPrice = (value) => {
                           const numeric = Number(value)
-                          return Number.isFinite(numeric) ? `₹${numeric.toLocaleString()}` : null
+                          return Number.isFinite(numeric) ? formatBookingAmount(numeric) : null
                         }
                         const propertyPrice = displayProperty?.price
                           ? (typeof displayProperty.price === 'object'
                             ? (displayProperty.price.sale !== undefined && displayProperty.price.sale !== null && displayProperty.price.sale !== ''
-                              ? (toRupee(displayProperty.price.sale) || 'N/A')
+                              ? (toDisplayPrice(displayProperty.price.sale) || 'N/A')
                               : (displayProperty.price.rent?.amount !== undefined && displayProperty.price.rent?.amount !== null && displayProperty.price.rent?.amount !== '')
                                 ? (() => {
-                                  const rentAmount = toRupee(displayProperty.price.rent.amount)
+                                  const rentAmount = toDisplayPrice(displayProperty.price.rent.amount)
                                   return rentAmount ? `${rentAmount}/${displayProperty.price.rent.period || 'month'}` : 'N/A'
                                 })()
                                 : 'Price on request')
-                            : (toRupee(displayProperty.price) || 'N/A'))
+                            : (toDisplayPrice(displayProperty.price) || 'N/A'))
                           : 'Price on request'
 
                         return (
@@ -3541,7 +3552,7 @@ export default function AdminUserDetailPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-900 mb-1">
-                      Amount (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                      Amount ({selectedCurrency})<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="number"
@@ -3691,7 +3702,7 @@ export default function AdminUserDetailPage() {
                     <div>
                       <span className="text-blue-600 font-medium">Total Amount:</span>
                       <span className="ml-2 text-blue-900 font-bold">
-                        ₹{Number(finalizingTransaction.amount || 0).toLocaleString()}
+                        {formatBookingAmount(finalizingTransaction.amount || 0)}
                       </span>
                     </div>
                     <div>
@@ -3708,7 +3719,7 @@ export default function AdminUserDetailPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-gray-900 mb-1">
-                        Amount Paid (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                        Amount Paid ({selectedCurrency})<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="number"
@@ -3734,7 +3745,7 @@ export default function AdminUserDetailPage() {
 
                     <div>
                       <label className="block text-sm font-bold text-gray-900 mb-1">
-                        Due Amount (₹)<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                        Due Amount ({selectedCurrency})<span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                       </label>
                       <input
                         type="number"
@@ -3836,11 +3847,13 @@ export default function AdminUserDetailPage() {
                           <AlertCircle className="h-4 w-4 text-red-600" />
                         )}
                         <span className={Number(finalizationData.amountPaid || 0) + Number(finalizationData.dueAmount || 0) === Number(finalizingTransaction.amount || 0) ? 'text-green-800' : 'text-red-800'}>
-                          Amount Paid (₹{Number(finalizationData.amountPaid || 0).toLocaleString()}) + 
-                          Due Amount (₹{Number(finalizationData.dueAmount || 0).toLocaleString()}) = 
-                          ₹{(Number(finalizationData.amountPaid || 0) + Number(finalizationData.dueAmount || 0)).toLocaleString()} 
+                          Amount Paid ({formatBookingAmount(finalizationData.amountPaid || 0)}) + 
+                          Due Amount ({formatBookingAmount(finalizationData.dueAmount || 0)}) = 
+                          {formatBookingAmount(
+                            Number(finalizationData.amountPaid || 0) + Number(finalizationData.dueAmount || 0)
+                          )}{' '}
                           {Number(finalizationData.amountPaid || 0) + Number(finalizationData.dueAmount || 0) !== Number(finalizingTransaction.amount || 0) && 
-                            ` (Should be ₹${Number(finalizingTransaction.amount || 0).toLocaleString()})`
+                            `(Should be ${formatBookingAmount(finalizingTransaction.amount || 0)})`
                           }
                         </span>
                       </div>

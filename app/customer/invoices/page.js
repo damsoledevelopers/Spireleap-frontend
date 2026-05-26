@@ -287,37 +287,39 @@ export default function MyInvoices() {
                     </div>
                 </div>
 
-                {/* Tab Navigation */}
+                {/* Tab Navigation — horizontal scroll on small screens */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-1">
-                    <div className="flex flex-wrap gap-6">
+                    <div className="w-full max-w-full overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
+                        <div className="flex gap-4 sm:gap-6 w-max min-w-full pr-2">
                         <button
                             onClick={() => setActiveTab('requests')}
-                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'requests' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`shrink-0 whitespace-nowrap pb-4 text-sm font-bold transition-all relative ${activeTab === 'requests' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Booking requests
                             {activeTab === 'requests' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                         </button>
                         <button
                             onClick={() => setActiveTab('active')}
-                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'active' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`shrink-0 whitespace-nowrap pb-4 text-sm font-bold transition-all relative ${activeTab === 'active' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Payments due
                             {activeTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                         </button>
                         <button
                             onClick={() => setActiveTab('rejected')}
-                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'rejected' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`shrink-0 whitespace-nowrap pb-4 text-sm font-bold transition-all relative ${activeTab === 'rejected' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Rejected
                             {activeTab === 'rejected' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                         </button>
                         <button
                             onClick={() => setActiveTab('invoices')}
-                            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'invoices' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`shrink-0 whitespace-nowrap pb-4 text-sm font-bold transition-all relative ${activeTab === 'invoices' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Invoices
                             {activeTab === 'invoices' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                         </button>
+                        </div>
                     </div>
                     <div className="relative pb-2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
