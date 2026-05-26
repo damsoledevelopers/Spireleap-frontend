@@ -179,6 +179,7 @@ export default function MyInvoices() {
 
             // Download the receipt/invoice PDF with all payment details
             const downloadRes = await api.get(`/payments/${paymentId}/receipt`, {
+                params: { currency: selectedCurrency },
                 responseType: 'blob'
             })
 
