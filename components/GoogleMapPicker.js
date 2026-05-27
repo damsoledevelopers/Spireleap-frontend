@@ -3,9 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapPin } from 'lucide-react'
 
-export default function GoogleMapPicker({ lat, lng, onLocationSelect }) {
+export default function GoogleMapPicker({ lat, lng, initialLocation, onLocationSelect }) {
+  const resolvedLat = lat ?? initialLocation?.lat ?? 0
+  const resolvedLng = lng ?? initialLocation?.lng ?? 0
+
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [coordinates, setCoordinates] = useState({ lat: lat || 0, lng: lng || 0 })
+  const [coordinates, setCoordinates] = useState({ lat: resolvedLat || 0, lng: resolvedLng || 0 })
   const mapRef = useRef(null)
   const markerRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -51,16 +54,24 @@ export default function GoogleMapPicker({ lat, lng, onLocationSelect }) {
   }, [])
 
   useEffect(() => {
-    if (mapLoaded && mapInstanceRef.current && (lat !== coordinates.lat || lng !== coordinates.lng)) {
-      setCoordinates({ lat, lng })
-      if (lat && lng) {
-        mapInstanceRef.current.setCenter({ lat, lng })
+    const nextLat = lat ?? initialLocation?.lat
+    const nextLng = lng ?? initialLocation?.lng
+    if (
+      mapLoaded &&
+      mapInstanceRef.current &&
+      nextLat != null &&
+      nextLng != null &&
+      (nextLat !== coordinates.lat || nextLng !== coordinates.lng)
+    ) {
+      setCoordinates({ lat: nextLat, lng: nextLng })
+      if (nextLat && nextLng) {
+        mapInstanceRef.current.setCenter({ lat: nextLat, lng: nextLng })
         if (markerRef.current) {
-          markerRef.current.setPosition({ lat, lng })
+          markerRef.current.setPosition({ lat: nextLat, lng: nextLng })
         }
       }
     }
-  }, [lat, lng, mapLoaded])
+  }, [lat, lng, initialLocation?.lat, initialLocation?.lng, mapLoaded])
 
   const initializeMap = () => {
     if (!mapRef.current || !window.google) return

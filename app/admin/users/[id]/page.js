@@ -223,6 +223,11 @@ function BookingPropertyCard({
   const pendingDue = Number(transaction?.pendingAmount ?? transaction?.paymentDetails?.dueAmount ?? 0)
   const isPendingReview = transaction && ['pending_approval', 'pending'].includes(transaction.status)
   const isInstallmentReview = isPendingReview && existingPaid > 0
+  const submittedBy =
+    transaction?.lead?.contact?.name ||
+    [transaction?.lead?.contact?.firstName, transaction?.lead?.contact?.lastName].filter(Boolean).join(' ').trim() ||
+    transaction?.lead?.contact?.email ||
+    'Customer'
 
   return (
     <div className="group transition-all">
@@ -292,7 +297,7 @@ function BookingPropertyCard({
       </div>
 
       {transaction && (
-        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 text-sm">
+        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 text-sm">
           <div>
             <span className="text-gray-500 block text-xs">Total</span>
             <span className="font-medium">{formatAmount(transaction.amount || 0)}</span>
@@ -322,6 +327,10 @@ function BookingPropertyCard({
           <div>
             <span className="text-gray-500 block text-xs">Status</span>
             <span className="capitalize font-medium">{transaction.status?.replace('_', ' ')}</span>
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Submitted By</span>
+            <span className="font-medium break-words">{submittedBy}</span>
           </div>
         </div>
       )}
@@ -420,6 +429,7 @@ export default function AdminUserDetailPage() {
   const [transactions, setTransactions] = useState([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+  const [bookingSectionTab, setBookingSectionTab] = useState('requests')
   const [allTasks, setAllTasks] = useState([])
   const [allReminders, setAllReminders] = useState([])
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -1609,15 +1619,15 @@ export default function AdminUserDetailPage() {
     <DashboardLayout>
       <div className="space-y-4">
         {/* Redesigned Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <Link href="/admin/users" className="text-gray-400 hover:text-gray-700 mt-1 transition-colors">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h1 className="text-2xl font-semibold text-gray-900">
+                  <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 break-words">
                     {userData.firstName} {userData.lastName}
                   </h1>
                   <div className="flex items-center gap-2">
@@ -1634,13 +1644,13 @@ export default function AdminUserDetailPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
+                  <div className="flex items-start gap-1.5 min-w-0">
                     <Mail className="h-3.5 w-3.5 text-gray-400" />
-                    <span>{userData.email}</span>
+                    <span className="break-all">{userData.email}</span>
                   </div>
                   {userData.phone && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <Phone className="h-3.5 w-3.5 text-gray-400" />
                       <span>{userData.phone}</span>
                     </div>
@@ -1654,11 +1664,11 @@ export default function AdminUserDetailPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end md:self-start flex-wrap">
+            <div className="flex items-center gap-2 self-start md:self-start flex-wrap w-full md:w-auto">
               {canEditUser && (
                 <Link
                   href={`/admin/users/${params.id}/edit`}
-                  className="px-4 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1.5 text-sm font-medium transition-colors"
+                  className="px-4 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors w-full sm:w-auto"
                 >
                   <Edit className="h-3.5 w-3.5" />
                   Edit
@@ -2439,6 +2449,7 @@ export default function AdminUserDetailPage() {
               ['pending_approval', 'pending'].includes(t.status)
             )
             const approvedTransactions = transactions.filter(t => t.status === 'approved')
+            const bookingRequestTransactions = [...pendingApprovalTransactions, ...approvedTransactions]
 
             const renderBookingCard = (t) => (
               <BookingPropertyCard
@@ -2458,69 +2469,61 @@ export default function AdminUserDetailPage() {
 
             return (
               <div className="space-y-6 sm:space-y-8">
-                {pendingApprovalTransactions.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden p-4 sm:p-8">
-                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-4 sm:mb-6">Booking requests (awaiting review)</h2>
-                    <div className="space-y-4 sm:space-y-6">
-                      {pendingApprovalTransactions.map((t, idx) => (
-                        <div key={t._id || idx} className="bg-amber-50/30 p-4 sm:p-6 rounded-2xl border border-amber-100">
-                          {renderBookingCard(t)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {pendingApprovalTransactions.length === 0 && approvedTransactions.length === 0 && bookedProperties.length === 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-                    <Building className="h-12 w-12 text-gray-200 mx-auto mb-3" />
-                    <p className="text-lg font-bold text-gray-500">No booking requests yet</p>
-                    <p className="text-sm text-gray-400 mt-1">When the customer books a property and uploads proof, it will appear here for review.</p>
-                  </div>
-                )}
-
-                {approvedTransactions.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden p-4 sm:p-8">
-                    <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-4 sm:mb-6">Approved — payment in progress</h2>
-                    <div className="space-y-4 sm:space-y-6">
-                      {approvedTransactions.map((t, idx) => (
-                        <div key={t._id || idx} className="bg-blue-50/20 p-4 sm:p-6 rounded-2xl border border-blue-100">
-                          {renderBookingCard(t)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Booked Properties Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-4 sm:p-8">
-                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-50">
-                    <h2 className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center gap-3">
-                      <div className="p-2 bg-green-50 rounded-lg shrink-0">
-                        <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                      </div>
-                      <span>Completed bookings</span>
-                    </h2>
+                  <div className="flex items-center gap-6 mb-6 border-b border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setBookingSectionTab('requests')}
+                      className={`pb-3 text-sm font-bold relative ${bookingSectionTab === 'requests' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Booking Requests
+                      {bookingSectionTab === 'requests' && <div className="absolute left-0 right-0 -bottom-px h-0.5 bg-primary-600 rounded-full" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBookingSectionTab('completed')}
+                      className={`pb-3 text-sm font-bold relative ${bookingSectionTab === 'completed' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Completed
+                      {bookingSectionTab === 'completed' && <div className="absolute left-0 right-0 -bottom-px h-0.5 bg-primary-600 rounded-full" />}
+                    </button>
                   </div>
-                  <div className="space-y-6">
-                    {bookedProperties.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-6">
-                        {bookedProperties.map((t, idx) => (
-                          <div key={t._id || idx} className="bg-green-50/10 p-6 rounded-2xl border border-green-100/50 shadow-sm">
-                            {renderBookingCard(t)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="p-6 bg-gray-50 rounded-3xl mb-4">
-                          <ClipboardList className="h-12 w-12 text-gray-200" />
+
+                  {bookingSectionTab === 'requests' ? (
+                    <div className="space-y-4 sm:space-y-6">
+                      {bookingRequestTransactions.length > 0 ? bookingRequestTransactions.map((t, idx) => (
+                        <div key={t._id || idx} className={`${['pending_approval', 'pending'].includes(t.status) ? 'bg-amber-50/30 border-amber-100' : 'bg-blue-50/20 border-blue-100'} p-4 sm:p-6 rounded-2xl border`}>
+                          {renderBookingCard(t)}
                         </div>
-                        <p className="text-xl font-extrabold text-gray-400">No Finalized Bookings</p>
-                        <p className="text-sm text-gray-400 mt-1 max-w-xs font-medium">Once a sale or lease is finalized, it will appear in the success pipeline.</p>
-                      </div>
-                    )}
-                  </div>
+                      )) : (
+                        <div className="text-center py-16">
+                          <Building className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+                          <p className="text-lg font-bold text-gray-500">No booking requests yet</p>
+                          <p className="text-sm text-gray-400 mt-1">When the customer submits a booking proof, it appears here for review.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {bookedProperties.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-6">
+                          {bookedProperties.map((t, idx) => (
+                            <div key={t._id || idx} className="bg-green-50/10 p-6 rounded-2xl border border-green-100/50 shadow-sm">
+                              {renderBookingCard(t)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                          <div className="p-6 bg-gray-50 rounded-3xl mb-4">
+                            <ClipboardList className="h-12 w-12 text-gray-200" />
+                          </div>
+                          <p className="text-xl font-extrabold text-gray-400">No Finalized Bookings</p>
+                          <p className="text-sm text-gray-400 mt-1 max-w-xs font-medium">Completed booking records appear here.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )

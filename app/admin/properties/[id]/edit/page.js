@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { ArrowLeft, Save, Upload, X, MapPin, Building, User, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Save, Upload, X, MapPin, Building, User, ChevronUp, ChevronDown, LayoutGrid } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -37,6 +37,7 @@ import {
   COMPLETION_STATUS_FORM_OPTIONS
 } from '@/lib/propertyOptions'
 import { fetchPropertyTypeOptions } from '@/lib/propertyTypesApi'
+import PropertyVideosEditor, { normalizeVideosForSubmit } from '@/components/Property/PropertyVideosEditor'
 
 const GoogleMapPicker = dynamic(() => import('../../../../../components/GoogleMapPicker'), { ssr: false })
 
@@ -47,6 +48,8 @@ export default function AdminEditPropertyPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingFloorPlans, setUploadingFloorPlans] = useState(false)
+  const [uploadingQr, setUploadingQr] = useState(false)
   const [categories, setCategories] = useState([])
   const [amenities, setAmenities] = useState([])
   const [agencies, setAgencies] = useState([])
@@ -65,6 +68,17 @@ export default function AdminEditPropertyPage() {
   }
   const [formData, setFormData] = useState({
     location: { country: '', state: '', city: '' },
+    regulatoryInformation: {
+      reference: '',
+      listedAt: '',
+      brokerLicense: '',
+      agencyName: '',
+      zoneName: '',
+      agentLicense: '',
+      dldPermitNumber: '',
+      qrImage: '',
+      qrValue: ''
+    }
   })
 
   const [geo, setGeo] = useState({
@@ -240,6 +254,19 @@ export default function AdminEditPropertyPage() {
           neighborhood: property.location?.neighborhood || '',
           landmark: property.location?.landmark || ''
         },
+        regulatoryInformation: {
+          reference: property.regulatoryInformation?.reference || '',
+          listedAt: property.regulatoryInformation?.listedAt
+            ? new Date(property.regulatoryInformation.listedAt).toISOString().split('T')[0]
+            : '',
+          brokerLicense: property.regulatoryInformation?.brokerLicense || '',
+          agencyName: property.regulatoryInformation?.agencyName || '',
+          zoneName: property.regulatoryInformation?.zoneName || '',
+          agentLicense: property.regulatoryInformation?.agentLicense || '',
+          dldPermitNumber: property.regulatoryInformation?.dldPermitNumber || '',
+          qrImage: property.regulatoryInformation?.qrImage || '',
+          qrValue: property.regulatoryInformation?.qrValue || ''
+        },
         specifications: {
           isStudio: !!property.specifications?.isStudio,
           bedrooms: property.specifications?.bedrooms || '',
@@ -264,7 +291,11 @@ export default function AdminEditPropertyPage() {
         category: property.category?._id || '',
         amenities: property.amenities?.map(a => a._id || a) || [],
         images: property.images || [],
-        videos: property.videos || [],
+        floorPlanImages: property.floorPlanImages || [],
+        videos: (property.videos || []).filter((v) => v?.url).map((v) => ({
+          url: v.url,
+          type: v.type || 'youtube'
+        })),
         virtualTour: property.virtualTour || { url: '', type: '3d' },
         tags: property.tags || [],
         featured: property.featured || false,
@@ -469,18 +500,16 @@ export default function AdminEditPropertyPage() {
         throw new Error('Invalid response from server')
       }
 
-      const newImages = response.data.files.map((file, index) => ({
-        url: file.url,
-        alt: file.originalName || `Image ${index + 1}`,
-        isPrimary: formData.images.length === 0 && index === 0,
-        order: formData.images.length + index
-      }))
-
-      setFormData({
-        ...formData,
-        images: [...formData.images, ...newImages]
+      setFormData((prev) => {
+        const newImages = response.data.files.map((file, index) => ({
+          url: file.url,
+          alt: `Image ${prev.images.length + index + 1}`,
+          isPrimary: prev.images.length === 0 && index === 0,
+          order: prev.images.length + index
+        }))
+        return { ...prev, images: [...prev.images, ...newImages] }
       })
-      toast.success(`Successfully uploaded ${newImages.length} image(s)`)
+      toast.success(`Successfully uploaded ${response.data.files.length} image(s)`)
     } catch (error) {
       console.error('Error uploading images:', error)
       const errorMessage = error.response?.data?.message || error.message || 'Failed to upload images'
@@ -495,6 +524,63 @@ export default function AdminEditPropertyPage() {
       ...formData,
       images: formData.images.filter((_, i) => i !== index)
     })
+  }
+
+  const handleFloorPlanUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    e.target.value = ''
+    setUploadingFloorPlans(true)
+    try {
+      const uploadFormData = new FormData()
+      files.forEach((file) => uploadFormData.append('images', file))
+      const response = await api.post('/upload/property-images', uploadFormData)
+      if (!response.data?.files) throw new Error('Invalid response from server')
+      setFormData((prev) => {
+        const newPlans = response.data.files.map((file, index) => ({
+          url: file.url,
+          alt: `Floor plan ${prev.floorPlanImages.length + index + 1}`,
+          order: prev.floorPlanImages.length + index
+        }))
+        return { ...prev, floorPlanImages: [...prev.floorPlanImages, ...newPlans] }
+      })
+      toast.success(`Uploaded ${response.data.files.length} floor plan(s)`)
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Failed to upload floor plans')
+    } finally {
+      setUploadingFloorPlans(false)
+    }
+  }
+
+  const removeFloorPlan = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      floorPlanImages: prev.floorPlanImages.filter((_, i) => i !== index)
+    }))
+  }
+
+  const handleQrImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploadingQr(true)
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append('images', file)
+      const response = await api.post('/upload/property-images', uploadFormData)
+      const url = response.data?.files?.[0]?.url
+      if (!url) throw new Error('Invalid response from server')
+      setFormData((prev) => ({
+        ...prev,
+        regulatoryInformation: { ...(prev.regulatoryInformation || {}), qrImage: url }
+      }))
+      toast.success('QR image uploaded')
+    } catch (error) {
+      console.error('Error uploading QR image:', error)
+      toast.error(error.response?.data?.message || error.message || 'Failed to upload QR image')
+    } finally {
+      setUploadingQr(false)
+    }
   }
 
   const setPrimaryImage = (index) => {
@@ -525,6 +611,14 @@ export default function AdminEditPropertyPage() {
     try {
       if (!isValidOptionalPostalDigits(formData.location?.zipCode)) {
         toast.error(OPTIONAL_POSTAL_DIGITS_MESSAGE)
+        setSaving(false)
+        return
+      }
+
+      const qrValue = String(formData.regulatoryInformation?.qrValue || '').trim()
+      const qrImage = formData.regulatoryInformation?.qrImage
+      if (qrValue && !qrImage) {
+        toast.error('Please upload QR image when QR Value is provided')
         setSaving(false)
         return
       }
@@ -578,12 +672,35 @@ export default function AdminEditPropertyPage() {
         amenities: formData.amenities,
         tags: formData.tags.filter(t => t.trim()),
         virtualTour: formData.virtualTour.url ? formData.virtualTour : undefined,
-        videos: formData.videos.filter(v => v.url)
+        videos: normalizeVideosForSubmit(formData.videos),
+        regulatoryInformation: formData.regulatoryInformation
+          ? {
+            ...formData.regulatoryInformation,
+            listedAt: formData.regulatoryInformation?.listedAt
+              ? new Date(formData.regulatoryInformation.listedAt).toISOString()
+              : undefined
+          }
+          : undefined
       }
 
       delete submitData.bedroomSelect
       if (!submitData.completionStatus) delete submitData.completionStatus
       if (submitData.category === '' || submitData.category == null) delete submitData.category
+
+      if (submitData.regulatoryInformation) {
+        Object.keys(submitData.regulatoryInformation).forEach((key) => {
+          if (
+            submitData.regulatoryInformation[key] === undefined ||
+            submitData.regulatoryInformation[key] === null ||
+            submitData.regulatoryInformation[key] === ''
+          ) {
+            delete submitData.regulatoryInformation[key]
+          }
+        })
+        if (Object.keys(submitData.regulatoryInformation).length === 0) {
+          delete submitData.regulatoryInformation
+        }
+      }
 
       if (
         submitData.specifications?.area &&
@@ -904,6 +1021,143 @@ export default function AdminEditPropertyPage() {
             />
           </div>
 
+          {/* Regulatory Information */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Regulatory Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Reference</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.reference || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.reference', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter reference"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Listed At</label>
+                <input
+                  type="date"
+                  value={formData.regulatoryInformation?.listedAt || ''}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => handleInputChange('regulatoryInformation.listedAt', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Broker License</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.brokerLicense || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.brokerLicense', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter broker license"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Agency Name</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.agencyName || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.agencyName', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter agency name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Zone Name</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.zoneName || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.zoneName', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter zone name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Agent License</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.agentLicense || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.agentLicense', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter agent license"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">DLD Permit Number</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.dldPermitNumber || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.dldPermitNumber', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter DLD permit number"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  QR code image
+                  {String(formData.regulatoryInformation?.qrValue || '').trim() ? (
+                    <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                  ) : null}
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Upload a QR image. If QR Value is set, QR image is required.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:bg-gray-50 text-sm font-medium text-gray-700">
+                    <Upload className="h-4 w-4" />
+                    {uploadingQr ? 'Uploading…' : 'Upload QR image'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      disabled={uploadingQr}
+                      onChange={handleQrImageUpload}
+                    />
+                  </label>
+                  {formData.regulatoryInformation?.qrImage && (
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('regulatoryInformation.qrImage', '')}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Remove QR image
+                    </button>
+                  )}
+                </div>
+                {formData.regulatoryInformation?.qrImage && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img
+                      src={formData.regulatoryInformation.qrImage}
+                      alt="QR preview"
+                      className="h-24 w-24 object-contain border border-gray-200 rounded bg-white p-1"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-sm font-bold text-gray-900 mb-1">QR Value</label>
+                <input
+                  type="text"
+                  value={formData.regulatoryInformation?.qrValue || ''}
+                  onChange={(e) => handleInputChange('regulatoryInformation.qrValue', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Enter property URL"
+                />
+                {String(formData.regulatoryInformation?.qrValue || '').trim() &&
+                  !formData.regulatoryInformation?.qrImage && (
+                    <p className="text-xs text-red-600 mt-2">
+                      QR image is required when QR Value is set.
+                    </p>
+                  )}
+              </div>
+            </div>
+          </div>
+
           {/* Images */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Images</h2>
@@ -925,7 +1179,7 @@ export default function AdminEditPropertyPage() {
                   <div key={index} className="relative group">
                     <img
                       src={getImageUrl(img)}
-                      alt={img.alt || `Image ${index + 1}`}
+                      alt=""
                       className="w-full h-32 object-cover rounded-lg"
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity rounded-lg flex items-center justify-center gap-2">
@@ -948,6 +1202,60 @@ export default function AdminEditPropertyPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Floor plans */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <LayoutGrid className="h-5 w-5 text-primary-600" />
+              Floor Plans
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Upload floor plan images shown in the property gallery under &quot;Floor plans&quot;.
+            </p>
+            <div className="mb-4">
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFloorPlanUpload}
+                disabled={uploadingFloorPlans}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+              {uploadingFloorPlans && <p className="text-sm text-gray-500 mt-2">Uploading...</p>}
+            </div>
+            {formData.floorPlanImages?.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {formData.floorPlanImages.map((plan, index) => (
+                  <div key={index} className="relative group border border-gray-200 rounded-lg overflow-hidden">
+                    <img
+                      src={getImageUrl(plan)}
+                      alt=""
+                      className="w-full h-32 object-contain bg-gray-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeFloorPlan(index)}
+                      className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded text-xs"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Property videos */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Property Videos</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Add or remove YouTube links shown on the property gallery.
+            </p>
+            <PropertyVideosEditor
+              videos={formData.videos || []}
+              onChange={(videos) => setFormData((prev) => ({ ...prev, videos }))}
+            />
           </div>
 
           {/* Specifications */}

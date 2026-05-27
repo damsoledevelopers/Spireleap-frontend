@@ -35,6 +35,9 @@ import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
 
 const VALID_INVOICE_TABS = ['requests', 'active', 'rejected', 'invoices']
 
+const getUploadedDocs = (invoice) =>
+    (invoice?.documents || []).filter((doc) => doc?.url)
+
 export default function MyInvoices() {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -214,7 +217,7 @@ export default function MyInvoices() {
             await api.post(`/transactions/my-transactions/${transaction._id}/booking-proof`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             })
-            const isNextPayment = transaction.status === 'approved'
+            const isNextPayment = transaction.status === 'approved' || transaction.status === 'pending'
             toast.success(
                 isNextPayment
                     ? 'Next payment proof uploaded. Admin will review it shortly.'
@@ -237,12 +240,23 @@ export default function MyInvoices() {
             return matchesSearch && (invoice.status === 'completed' || invoice.status === 'refunded');
         }
         if (activeTab === 'active') {
-            return matchesSearch && invoice.status === 'approved';
+            const hasUploadedProof = getUploadedDocs(invoice).length > 0
+            const isPaymentCycle =
+                invoice.status === 'approved' ||
+                (invoice.status === 'pending' && hasUploadedProof)
+            return matchesSearch &&
+                isPaymentCycle &&
+                Number(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0) > 0;
         }
         if (activeTab === 'rejected') {
             return matchesSearch && invoice.status === 'rejected';
         }
-        return matchesSearch && ['pending_approval', 'pending'].includes(invoice.status);
+        const hasUploadedProof = getUploadedDocs(invoice).length > 0
+        if (invoice.status === 'pending_approval') return matchesSearch
+        if (invoice.status === 'pending') {
+            return matchesSearch && !hasUploadedProof
+        }
+        return false
     })
 
     const getStatusStyle = (status) => {
@@ -353,7 +367,7 @@ export default function MyInvoices() {
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Paid</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Pending</th>
                                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right w-[210px]">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -391,17 +405,22 @@ export default function MyInvoices() {
                                             <td className="px-6 py-4 text-sm text-amber-700 font-semibold">
                                                 {formatCurrency(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0)}
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusStyle(invoice.status)}`}>
+                                            <td className="px-6 py-4 space-y-1.5">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${getStatusStyle(invoice.status)}`}>
                                                     {getStatusIcon(invoice.status)}
                                                     {(invoice.status || '').replace('_', ' ')}
                                                 </span>
+                                                {getUploadedDocs(invoice).length > 0 && (
+                                                    <p className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-[11px] text-green-700 font-semibold">
+                                                        {getUploadedDocs(invoice).length} file(s) uploaded
+                                                    </p>
+                                                )}
                                                 {invoice.status === 'rejected' && invoice.approval?.adminNote && (
                                                     <p className="text-xs text-red-600 mt-1 max-w-[200px]">{invoice.approval.adminNote}</p>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end space-x-2">
+                                            <td className="px-6 py-4 text-right align-top">
+                                                <div className="flex items-center justify-end gap-2 min-w-[180px]">
                                                     <button
                                                         onClick={() => handleViewDetails(invoice)}
                                                         className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
@@ -409,11 +428,24 @@ export default function MyInvoices() {
                                                     >
                                                         <Eye className="h-5 w-5" />
                                                     </button>
-                                                    {((activeTab === 'requests' && ['pending_approval', 'pending'].includes(invoice.status)) ||
-                                                        (activeTab === 'active' &&
-                                                            invoice.status === 'approved' &&
-                                                            Number(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0) > 0)) && (
-                                                        <label className="inline-flex items-center px-3 py-1.5 rounded-lg cursor-pointer text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-100">
+                                                    {(() => {
+                                                        const uploadedDocs = getUploadedDocs(invoice)
+                                                        const hasUploadedProof = uploadedDocs.length > 0
+                                                        const canUploadForRequest =
+                                                            activeTab === 'requests' &&
+                                                            ['pending_approval', 'pending'].includes(invoice.status) &&
+                                                            !hasUploadedProof
+                                                        const canUploadForInstallment =
+                                                            activeTab === 'active' &&
+                                                            ['approved', 'pending'].includes(invoice.status) &&
+                                                            Number(invoice.pendingAmount ?? invoice.paymentDetails?.dueAmount ?? 0) > 0
+
+                                                        if (!(canUploadForRequest || canUploadForInstallment)) {
+                                                            return null
+                                                        }
+
+                                                        return (
+                                                        <label className="inline-flex min-w-[140px] justify-center items-center px-3 py-2 rounded-lg cursor-pointer text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-100 whitespace-nowrap shadow-sm">
                                                             <input
                                                                 type="file"
                                                                 accept=".pdf,image/jpeg,image/png,image/webp"
@@ -431,7 +463,8 @@ export default function MyInvoices() {
                                                                   ? 'Upload next payment'
                                                                   : 'Upload proof'}
                                                         </label>
-                                                    )}
+                                                        )
+                                                    })()}
                                                     {activeTab === 'invoices' && (
                                                         <button
                                                             onClick={() => handleDownload(invoice)}
@@ -458,8 +491,8 @@ export default function MyInvoices() {
                         <p className="text-gray-500 mt-2 max-w-xs mx-auto">
                             {activeTab === 'invoices'
                                 ? "Completed bookings with invoices appear here."
-                                : activeTab === 'active'
-                                    ? "Approved bookings with a balance due appear here. Upload your next payment proof when ready."
+                                    : activeTab === 'active'
+                                    ? "Bookings with a balance due appear here. Upload next payment proof when ready."
                                     : activeTab === 'rejected'
                                       ? "Rejected bookings appear here with the admin note."
                                       : "Book a property, then upload proof (PDF or image) for admin review."}
@@ -926,7 +959,16 @@ export default function MyInvoices() {
                                             ? (selectedInvoice.lead?.documents || [])
                                             : [];
 
-                                        const allDocuments = [...transactionDocs, ...leadDocs];
+                                        const allDocuments = [...transactionDocs, ...leadDocs]
+                                            .filter((doc) => doc?.url)
+                                            .filter((doc, idx, arr) =>
+                                                arr.findIndex((d) => d?.url === doc?.url) === idx
+                                            )
+                                            .sort((a, b) => {
+                                                const aTime = new Date(a?.uploadedAt || 0).getTime()
+                                                const bTime = new Date(b?.uploadedAt || 0).getTime()
+                                                return bTime - aTime
+                                            });
 
                                         if (allDocuments.length > 0) {
                                             return (

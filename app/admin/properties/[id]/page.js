@@ -9,8 +9,6 @@ import { formatBedroomLabel } from '../../../../lib/propertyOptions'
 import {
   ArrowLeft,
   Edit,
-  ChevronLeft,
-  ChevronRight,
   MapPin,
   Bed,
   Bath,
@@ -19,14 +17,14 @@ import {
   Calendar,
   Building,
   User,
-  DollarSign,
-  Package,
-  Eye,
+  Banknote,
   ExternalLink,
   QrCode
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { formatPropertyPrice } from '../../../../lib/money'
+import PropertyMediaGallery from '../../../../components/Property/PropertyMediaGallery'
 
 export default function AdminPropertyViewPage() {
   const params = useParams()
@@ -34,7 +32,6 @@ export default function AdminPropertyViewPage() {
   const { user } = useAuth()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeImageIndex, setActiveImageIndex] = useState(0)
 
   useEffect(() => {
     fetchProperty()
@@ -55,23 +52,8 @@ export default function AdminPropertyViewPage() {
   }
 
   const formatPrice = (price) => {
-    if (!price) return 'N/A'
-    const toCurrency = (value) => {
-      const numeric = Number(value)
-      return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
-    }
-
-    if (typeof price === 'object') {
-      if (price.sale !== undefined && price.sale !== null && price.sale !== '') {
-        return toCurrency(price.sale) || 'N/A'
-      }
-      if (price.rent?.amount !== undefined && price.rent?.amount !== null && price.rent?.amount !== '') {
-        const rentAmount = toCurrency(price.rent.amount)
-        return rentAmount ? `${rentAmount}/${price.rent.period || 'monthly'}` : 'N/A'
-      }
-      return 'N/A'
-    }
-    return toCurrency(price) || 'N/A'
+    const formatted = formatPropertyPrice(price)
+    return formatted === 'Price on request' ? 'N/A' : formatted
   }
 
   const hasValue = (value) => value !== undefined && value !== null && String(value).trim() !== ''
@@ -80,27 +62,18 @@ export default function AdminPropertyViewPage() {
     if (typeof image === 'string') return image
     return image?.url || image
   }
-
-  const getOrderedImages = () => {
-    const images = Array.isArray(property?.images) ? property.images.filter(Boolean) : []
-    if (images.length <= 1) return images
-    const primaryIndex = images.findIndex((img) => img?.isPrimary)
-    if (primaryIndex <= 0) return images
-    return [images[primaryIndex], ...images.filter((_, idx) => idx !== primaryIndex)]
-  }
-
-  const orderedImages = getOrderedImages()
   const regulatory = property?.regulatoryInformation || {}
   const location = property?.location || {}
   const specifications = property?.specifications || {}
+  const qrHref = regulatory.qrValue
+    ? /^https?:\/\//i.test(regulatory.qrValue)
+      ? regulatory.qrValue
+      : `https://${regulatory.qrValue}`
+    : ''
   const amenityNames = Array.isArray(property?.amenities)
     ? property.amenities.map((a) => (typeof a === 'string' ? a : a?.name)).filter(Boolean)
     : []
   const categoryName = typeof property?.category === 'object' ? property?.category?.name : property?.category
-
-  useEffect(() => {
-    setActiveImageIndex(0)
-  }, [property?.id, property?._id, orderedImages.length])
 
   useEffect(() => {
     if (!property) return
@@ -131,10 +104,6 @@ export default function AdminPropertyViewPage() {
     )
   }
 
-  const activeImage = orderedImages[activeImageIndex]
-  const totalImages = orderedImages.length
-  const canSlide = totalImages > 1
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -162,72 +131,13 @@ export default function AdminPropertyViewPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Images */}
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="relative h-96 bg-gray-200 overflow-hidden">
-                {activeImage ? (
-                  <img
-                    src={getImageUrl(activeImage)}
-                    alt={property.title}
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      e.target.src = '/placeholder-property.jpg'
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Package className="h-16 w-16 text-gray-400" />
-                  </div>
-                )}
-                {canSlide && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setActiveImageIndex((prev) => (prev === 0 ? totalImages - 1 : prev - 1))}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full"
-                      aria-label="Previous image"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveImageIndex((prev) => (prev === totalImages - 1 ? 0 : prev + 1))}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full"
-                      aria-label="Next image"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    <span className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                      {activeImageIndex + 1}/{totalImages}
-                    </span>
-                  </>
-                )}
-              </div>
-              {orderedImages.length > 1 && (
-                <div className="grid grid-cols-4 md:grid-cols-6 gap-2 p-4">
-                  {orderedImages.map((img, idx) => (
-                    <button
-                      key={`${getImageUrl(img)}-${idx}`}
-                      type="button"
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`relative h-20 bg-gray-200 rounded overflow-hidden border-2 ${
-                        idx === activeImageIndex ? 'border-primary-600' : 'border-transparent'
-                      }`}
-                      aria-label={`View image ${idx + 1}`}
-                    >
-                      <img
-                        src={getImageUrl(img)}
-                        alt={`${property.title} ${idx + 1}`}
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          e.target.style.display = 'none'
-                        }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PropertyMediaGallery
+              title={property.title}
+              images={property.images}
+              floorPlanImages={property.floorPlanImages}
+              videos={property.videos}
+              agent={property.agent}
+            />
 
             {/* Property Details */}
             <div className="bg-white rounded-lg shadow-sm p-6">
@@ -343,25 +253,53 @@ export default function AdminPropertyViewPage() {
                 <p><span className="text-gray-500">Zone Name:</span> <span className="text-gray-900">{regulatory.zoneName || 'N/A'}</span></p>
                 <p><span className="text-gray-500">Agent License:</span> <span className="text-gray-900">{regulatory.agentLicense || 'N/A'}</span></p>
                 <p><span className="text-gray-500">DLD Permit:</span> <span className="text-gray-900">{regulatory.dldPermitNumber || 'N/A'}</span></p>
-                <p><span className="text-gray-500">QR Value:</span> <span className="text-gray-900 break-all">{regulatory.qrValue || 'N/A'}</span></p>
-              </div>
-              {regulatory.qrImage && (
-                <div className="mt-4 flex items-start gap-4">
-                  <div className="border rounded-lg p-2 bg-white w-28 h-28 overflow-hidden">
-                    <img src={getImageUrl(regulatory.qrImage)} alt="QR" className="w-full h-full object-contain" />
-                  </div>
-                  {regulatory.qrValue && (
+                {/* <p>
+                  <span className="text-gray-500">QR Value:</span>{' '}
+                  {regulatory.qrValue ? (
                     <a
-                      href={/^https?:\/\//i.test(regulatory.qrValue) ? regulatory.qrValue : `https://${regulatory.qrValue}`}
+                      href={qrHref}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                      className="text-primary-600 hover:underline break-all"
                     >
-                      <QrCode className="h-4 w-4" />
-                      <span>Open QR Link</span>
-                      <ExternalLink className="h-4 w-4" />
+                      {regulatory.qrValue}
                     </a>
+                  ) : (
+                    <span className="text-gray-900">N/A</span>
                   )}
+                </p> */}
+              </div>
+              {(regulatory.qrImage || regulatory.qrValue) && (
+                <div className="mt-4 flex items-start gap-4">
+                  {regulatory.qrImage ? (
+                    <div className="border rounded-lg p-2 bg-white w-28 h-28 overflow-hidden">
+                      <img src={getImageUrl(regulatory.qrImage)} alt="QR" className="w-full h-full object-contain" />
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg p-2 bg-gray-50 w-28 h-28 overflow-hidden flex items-center justify-center">
+                      <QrCode className="h-6 w-6 text-gray-400" />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {regulatory.qrValue ? (
+                      <a
+                        href={qrHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 w-fit"
+                      >
+                        <QrCode className="h-4 w-4" />
+                        <span>Open QR Link</span>
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : null}
+                    {regulatory.qrValue && !regulatory.qrImage ? (
+                      <p className="text-xs text-red-600">
+                        QR image is missing. Upload QR image to display it on the listing.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </div>
@@ -372,7 +310,7 @@ export default function AdminPropertyViewPage() {
             {/* Price Card */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="h-5 w-5 text-primary-600" />
+                <Banknote className="h-5 w-5 text-primary-600" />
                 <h3 className="text-lg font-semibold">Price</h3>
               </div>
               <p className="text-3xl font-bold text-primary-600 mb-2">
@@ -384,11 +322,9 @@ export default function AdminPropertyViewPage() {
               <p className="text-sm text-gray-500 capitalize mt-1">
                 Type: {property.propertyType}
               </p>
-              {hasValue(property.price?.currency) && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Currency: {property.price.currency}
-                </p>
-              )}
+              <p className="text-sm text-gray-500 mt-1">
+                Currency: {property.price?.currency || 'AED'}
+              </p>
               {property.price?.rent?.amount && (
                 <p className="text-sm text-gray-500 mt-1">
                   Rent Cycle: {property.price.rent.period || 'monthly'}

@@ -8,6 +8,7 @@ import { api } from '../../../../lib/api'
 import { CheckCircle, XCircle, Eye, Clock, MapPin, User, Building } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { formatPropertyPrice } from '../../../../lib/money'
 
 export default function AdminPendingPropertiesPage() {
   const { user } = useAuth()
@@ -61,21 +62,7 @@ export default function AdminPendingPropertiesPage() {
     setShowRejectModal(true)
   }
 
-  const formatPrice = (property) => {
-    if (!property.price) return 'Price on request'
-    const toCurrency = (value) => {
-      const numeric = Number(value)
-      return Number.isFinite(numeric) ? `$${numeric.toLocaleString()}` : null
-    }
-    if (property.listingType === 'sale' && property.price.sale !== undefined && property.price.sale !== null && property.price.sale !== '') {
-      return toCurrency(property.price.sale) || 'N/A'
-    }
-    if (property.listingType === 'rent' && property.price.rent?.amount !== undefined && property.price.rent?.amount !== null && property.price.rent?.amount !== '') {
-      const rentAmount = toCurrency(property.price.rent.amount)
-      return rentAmount ? `${rentAmount}/${property.price.rent.period || 'month'}` : 'N/A'
-    }
-    return 'Price on request'
-  }
+  const formatPrice = (property) => formatPropertyPrice(property?.price)
 
   return (
     <DashboardLayout>

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
-import { MapPin, Bed, Bath, Square, Car, Phone, Mail, Heart, Loader2, Clock, Tag, Building, ChevronLeft, ChevronRight, ExternalLink, QrCode, CheckCircle2, FileText, Upload, X } from 'lucide-react'
+import { MapPin, Bed, Bath, Square, Car, Phone, Mail, Heart, Loader2, Clock, Tag, Building, ChevronLeft, ChevronRight, ExternalLink, QrCode, CheckCircle2, FileText, Upload, X, Share2, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '../../../components/Layout/Header'
 import Footer from '../../../components/Layout/Footer'
@@ -13,7 +13,18 @@ import { useAuth } from '../../../contexts/AuthContext'
 import PhoneField from '../../../components/Common/PhoneField'
 import { buildE164Phone, splitE164Phone, DEFAULT_COUNTRY_CODE } from '../../../lib/phone'
 import { useCurrency } from '../../../contexts/CurrencyContext'
-import { formatMoneyFromAed } from '../../../lib/money'
+import { formatMoneyFromAed, formatAed } from '../../../lib/money'
+import PropertyMediaGallery from '../../../components/Property/PropertyMediaGallery'
+import {
+  hasValidMapCoordinates,
+  getGoogleMapsEmbedUrl,
+  getGoogleMapsPlaceUrl
+} from '../../../lib/mapCoordinates'
+import {
+  openGmailCompose,
+  openPhoneCall,
+  buildCustomerToAgentEmail
+} from '../../../lib/agentContact'
 import { formatBedroomLabel } from '../../../lib/propertyOptions'
 import { validatePhoneField, sanitizeNationalPhoneInput } from '../../../lib/phoneValidation'
 
@@ -125,96 +136,10 @@ function formatSimilarLocationLine(loc) {
   return parts.length ? parts.join(', ') : DISPLAY_NA
 }
 
-function PropertyImageGallery({ title, images }) {
-  const safeImages = Array.isArray(images) ? images.filter(Boolean) : []
-  const [activeIndex, setActiveIndex] = useState(0)
-
-  useEffect(() => {
-    setActiveIndex(0)
-  }, [safeImages.length])
-
-  if (safeImages.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="relative h-72 sm:h-96 bg-gray-200">
-          <img
-            src="/placeholder-property.jpg"
-            alt={title || 'Property image'}
-            className="w-full h-full object-cover"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  const prev = () => setActiveIndex((i) => (i - 1 + safeImages.length) % safeImages.length)
-  const next = () => setActiveIndex((i) => (i + 1) % safeImages.length)
-
-  const active = safeImages[activeIndex]
-  const activeUrl = resolveImageUrl(active)
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      <div className="relative h-72 sm:h-[520px] bg-gray-200 overflow-hidden">
-        <img
-          src={activeUrl || '/placeholder-property.jpg'}
-          alt={title || `Property image ${activeIndex + 1}`}
-          className="w-full h-full object-cover"
-        />
-
-        {safeImages.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={prev}
-              className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow"
-              aria-label="Previous image"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={next}
-              className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow"
-              aria-label="Next image"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/55 text-white text-xs px-2 py-1 rounded-full">
-              {activeIndex + 1} / {safeImages.length}
-            </div>
-          </>
-        )}
-      </div>
-
-      {safeImages.length > 1 && (
-        <div className="p-4">
-          <div className="flex gap-2 overflow-x-auto">
-            {safeImages.map((img, idx) => {
-              const url = resolveImageUrl(img)
-              const isActive = idx === activeIndex
-              return (
-                <button
-                  key={url || idx}
-                  type="button"
-                  onClick={() => setActiveIndex(idx)}
-                  className={`relative h-16 w-24 flex-shrink-0 rounded overflow-hidden border ${isActive ? 'border-primary-600' : 'border-gray-200 hover:border-gray-300'}`}
-                  aria-label={`View image ${idx + 1}`}
-                >
-                  <img
-                    src={url || '/placeholder-property.jpg'}
-                    alt={`${title || 'Property'} thumbnail ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+function listingTypeLabel(listingType) {
+  if (listingType === 'sale') return 'FOR SALE'
+  if (listingType === 'rent') return 'FOR RENT'
+  return 'FOR LEASE'
 }
 
 export default function PropertyDetailPage() {
@@ -223,7 +148,7 @@ export default function PropertyDetailPage() {
   const searchParams = useSearchParams()
   const from = searchParams.get('from')
   const { user } = useAuth()
-  const { selectedCurrency, ratesByCode } = useCurrency()
+  const { selectedCurrency, setSelectedCurrency, ratesByCode } = useCurrency()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [similarProperties, setSimilarProperties] = useState([])
@@ -242,6 +167,7 @@ export default function PropertyDetailPage() {
   const [bookingLoading, setBookingLoading] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const similarScrollRef = useRef(null)
+  const inquirySectionRef = useRef(null)
   const [similarScrollEdges, setSimilarScrollEdges] = useState({ atStart: true, atEnd: true })
 
   const updateSimilarScrollEdges = useCallback(() => {
@@ -506,7 +432,66 @@ export default function PropertyDetailPage() {
     }
   }
 
-  const formatPrice = (price) => formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+  const formatPriceAed = (price) => formatAed(price, { minimumFractionDigits: 0 })
+  const formatPriceDisplay = (price) =>
+    selectedCurrency === 'AED'
+      ? formatPriceAed(price)
+      : formatMoneyFromAed(price, selectedCurrency, ratesByCode, { minimumFractionDigits: 0 })
+
+  const handleShareProperty = async () => {
+    if (!property) return
+    const url = typeof window !== 'undefined' ? window.location.href : ''
+    const shareTitle = property.title || 'Property listing'
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: shareTitle, url })
+        return
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+        toast.success('Link copied to clipboard')
+        return
+      }
+      toast.error('Sharing is not supported on this device')
+    } catch (err) {
+      if (err?.name !== 'AbortError') {
+        toast.error('Could not share this property')
+      }
+    }
+  }
+
+  const scrollToInquiry = () => {
+    inquirySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const contactAgentName =
+    property?.agent
+      ? [property.agent.firstName, property.agent.lastName].filter(Boolean).join(' ').trim()
+      : ''
+
+  const handleContactAgentEmail = () => {
+    if (!property?.agent?.email) return
+    const { subject, bodyLines } = buildCustomerToAgentEmail({
+      agentName: contactAgentName,
+      propertyTitle: property.title,
+      propertyLocation: formatAddressLine(property.location),
+      customerName: user
+        ? [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+        : ''
+    })
+    const result = openGmailCompose({
+      to: property.agent.email,
+      subject,
+      bodyLines
+    })
+    if (!result.ok) toast.error(result.error || 'Email is not available')
+  }
+
+  const handleContactAgentCall = () => {
+    if (!property?.agent?.phone) return
+    const result = openPhoneCall(property.agent.phone)
+    if (!result.ok) toast.error(result.error || 'Phone number is not available')
+  }
 
   if (loading) {
     return (
@@ -566,43 +551,95 @@ export default function PropertyDetailPage() {
           }
         </Link>
 
-        {/* First row: images only (matches requested layout) */}
-        <div className="mb-8">
-          <PropertyImageGallery
+        {/* Gallery + hero row (reference layout) */}
+        <div className="mb-8 space-y-5">
+          <PropertyMediaGallery
             title={hasMeaningfulText(property.title) ? property.title : DISPLAY_NA}
             images={orderedImages}
+            floorPlanImages={property.floorPlanImages}
+            videos={property.videos}
+            agent={property.agent}
+            propertyLocation={formatAddressLine(property.location)}
+            customerName={
+              user
+                ? [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+                : ''
+            }
           />
+
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="h-2 w-2 shrink-0 rounded-sm bg-primary-600" aria-hidden />
+                <span className="text-xs font-bold tracking-widest text-primary-800 uppercase">
+                  {listingTypeLabel(property.listingType)}
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight">
+                {hasMeaningfulText(property.title) ? property.title : DISPLAY_NA}
+              </h1>
+              <div className="flex items-center text-gray-600 mt-2">
+                <MapPin className="h-4 w-4 mr-1.5 shrink-0" />
+                <span className="text-sm sm:text-base">{formatAddressLine(property.location)}</span>
+              </div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold text-primary-600">
+                {property.listingType === 'sale' && property.price?.sale
+                  ? formatPriceDisplay(property.price.sale)
+                  : property.listingType === 'rent' && property.price?.rent?.amount
+                    ? `${formatPriceDisplay(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
+                    : 'Price on request'}
+              </p>
+              {selectedCurrency !== 'AED' && (
+                <p className="text-sm text-gray-600 mt-1">
+                  ≈ {property.listingType === 'sale' && property.price?.sale
+                    ? formatPriceAed(property.price.sale)
+                    : property.listingType === 'rent' && property.price?.rent?.amount
+                      ? `${formatPriceAed(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
+                      : ''}{' '}
+                  <span className="text-xs text-gray-500">(AED listing price)</span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 lg:shrink-0 lg:pt-8">
+              <button
+                type="button"
+                onClick={toggleWishlist}
+                disabled={wishlistLoading}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-60"
+              >
+                <Heart className={`h-4 w-4 ${inWishlist ? 'fill-red-500 text-red-500' : ''}`} />
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={handleShareProperty}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </button>
+              {/* <button
+                type="button"
+                onClick={scrollToInquiry}
+                className="inline-flex flex-col items-start gap-0.5 rounded-xl bg-gradient-to-br from-primary-700 to-primary-900 px-5 py-3 text-left text-white shadow-md hover:from-primary-800 hover:to-primary-950 transition-colors"
+              >
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Schedule a visit
+                </span>
+                <span className="text-xs text-primary-100 font-medium">Request information</span>
+              </button> */}
+            </div>
+          </div>
         </div>
 
-        {/* Second row: all other sections below images */}
+        {/* Content sections */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Property Details */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                    {hasMeaningfulText(property.title) ? property.title : DISPLAY_NA}
-                  </h1>
-                  <div className="flex items-center text-gray-600">
-                    <MapPin className="h-5 w-5 mr-2 shrink-0" />
-                    <span>{formatAddressLine(property.location)}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-primary-600 mb-1">
-                    {property.listingType === 'sale' && property.price?.sale
-                      ? formatPrice(property.price.sale)
-                      : property.listingType === 'rent' && property.price?.rent?.amount
-                        ? `${formatPrice(property.price.rent.amount)}/${property.price.rent.period || 'month'}`
-                        : 'Price on request'}
-                  </p>
-                  <span className="text-sm text-gray-500">
-                    {property.listingType === 'sale' ? 'For Sale' : property.listingType === 'rent' ? 'For Rent' : 'Sale/Rent'}
-                  </span>
-                </div>
-              </div>
 
               {/* Specifications */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-t border-b border-gray-200">
@@ -803,28 +840,37 @@ export default function PropertyDetailPage() {
               )}
 
               {/* Map */}
-              {property.location?.coordinates && (
+              {hasValidMapCoordinates(property.location?.coordinates) && (
                 <div className="mt-6">
                   <h2 className="text-xl font-semibold mb-3">Location</h2>
-                  {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+                  {getGoogleMapsEmbedUrl(
+                    property.location.coordinates,
+                    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+                  ) ? (
                     <div className="h-64 bg-gray-200 rounded-lg overflow-hidden">
                       <iframe
+                        title="Property location"
                         width="100%"
                         height="100%"
                         frameBorder="0"
                         style={{ border: 0 }}
-                        src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${property.location.coordinates.lat},${property.location.coordinates.lng}`}
+                        src={getGoogleMapsEmbedUrl(
+                          property.location.coordinates,
+                          process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+                        )}
                         allowFullScreen
                       />
                     </div>
                   ) : (
                     <div className="h-64 bg-gray-100 border border-dashed border-gray-300 rounded-lg flex items-center justify-center p-6">
-                      <div className="text-center text-gray-600">
-                        <p className="font-medium">Google Maps API key not configured</p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Set <code className="bg-gray-200 px-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in <code className="bg-gray-200 px-1 rounded">.env.local</code>.
-                        </p>
-                      </div>
+                      <a
+                        href={getGoogleMapsPlaceUrl(property.location.coordinates)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 font-semibold hover:underline"
+                      >
+                        Open location in Google Maps
+                      </a>
                     </div>
                   )}
                 </div>
@@ -953,7 +999,7 @@ export default function PropertyDetailPage() {
             )}
 
             {/* Inquiry Form */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div ref={inquirySectionRef} className="bg-white rounded-lg shadow-sm p-6 scroll-mt-24">
               <h2 className="text-xl font-semibold mb-4">Request Information</h2>
               <form onSubmit={handleInquirySubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -1032,17 +1078,31 @@ export default function PropertyDetailPage() {
                       <p className="text-sm text-gray-600 mt-1">{property.agent.agentInfo.bio}</p>
                     )}
                     <div className="mt-3 space-y-2">
-                      {property.agent.phone && (
-                        <a href={`tel:${property.agent.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-primary-600">
-                          <Phone className="h-4 w-4" />
-                          {property.agent.phone}
-                        </a>
-                      )}
                       {property.agent.email && (
-                        <a href={`mailto:${property.agent.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-primary-600">
-                          <Mail className="h-4 w-4" />
-                          {property.agent.email}
-                        </a>
+                        <button
+                          type="button"
+                          onClick={handleContactAgentEmail}
+                          className="flex items-center gap-2 text-sm text-gray-600 hover:text-primary-600 text-left w-full"
+                        >
+                          <Mail className="h-4 w-4 shrink-0" />
+                          <span className="break-all">{property.agent.email}</span>
+                        </button>
+                      )}
+                      {property.agent.phone && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleContactAgentCall}
+                            className="md:hidden flex items-center gap-2 text-sm text-gray-600 hover:text-primary-600 text-left w-full"
+                          >
+                            <Phone className="h-4 w-4 shrink-0" />
+                            {property.agent.phone}
+                          </button>
+                          <p className="hidden md:flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="h-4 w-4 shrink-0 text-gray-400" />
+                            {property.agent.phone}
+                          </p>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1128,9 +1188,9 @@ export default function PropertyDetailPage() {
                   <div className="p-4">
                     <p className="text-primary-600 font-bold text-lg mb-1">
                       {p.listingType === 'sale' && p.price?.sale
-                        ? formatPrice(p.price.sale)
+                        ? formatPriceDisplay(p.price.sale)
                         : p.listingType === 'rent' && p.price?.rent?.amount
-                          ? `${formatPrice(p.price.rent.amount)}/${p.price.rent.period || 'month'}`
+                          ? `${formatPriceDisplay(p.price.rent.amount)}/${p.price.rent.period || 'month'}`
                           : 'Price on request'}
                     </p>
                     <p className="text-sm text-gray-900 font-semibold line-clamp-1">
