@@ -1398,7 +1398,6 @@ export default function AdminEditPropertyPage() {
                     )
                   })}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
               </div>
             </div>
           </div>
