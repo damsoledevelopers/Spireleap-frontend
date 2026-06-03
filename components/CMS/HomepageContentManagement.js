@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
-import { Save, Home, ChevronDown, ChevronUp, Palette } from 'lucide-react'
+import { Save, Home, ChevronDown, ChevronUp, Palette, Camera, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { resolveMediaUrl } from '../../lib/mediaUrl'
+import ImageCropModal from '../Common/ImageCropModal'
+import HeroBackgroundPreview, { HeroBackgroundMobilePreview } from '../Home/HeroBackgroundPreview'
 
 const MAX_HERO_WORDS = 4
 const countWords = (s) => {
@@ -25,6 +28,8 @@ export default function HomepageContentManagement() {
   const { checkPermission } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingHeroBg, setUploadingHeroBg] = useState(false)
+  const [heroCropSrc, setHeroCropSrc] = useState(null)
   const [homePage, setHomePage] = useState(null)
   const [expandedSections, setExpandedSections] = useState({
     hero: true,
@@ -58,6 +63,7 @@ export default function HomepageContentManagement() {
     },
     styles: {
       hero: {
+        backgroundImage: '',
         backgroundColor: '',
         titleColor: '',
         subtitleColor: '',
@@ -113,7 +119,7 @@ export default function HomepageContentManagement() {
             },
             styles: contentData.styles || {
               hero: {
-                backgroundColor: '', titleColor: '', subtitleColor: '', descriptionColor: '',
+                backgroundImage: '', backgroundColor: '', titleColor: '', subtitleColor: '', descriptionColor: '',
                 textAlign: 'center', titleFontSize: '', subtitleFontSize: '', descriptionFontSize: '',
                 titleFontStyle: 'normal', subtitleFontStyle: 'normal', descriptionFontStyle: 'normal'
               },
@@ -219,6 +225,58 @@ export default function HomepageContentManagement() {
         [section]: { ...formData.styles[section], [field]: value }
       }
     })
+  }
+
+  const openHeroImageCrop = (src) => {
+    if (!src) return
+    setHeroCropSrc(src)
+  }
+
+  const handleHeroBackgroundFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPG, PNG, WebP, etc.)')
+      return
+    }
+    const maxSize = 8 * 1024 * 1024
+    if (file.size > maxSize) {
+      toast.error('Image must be 8MB or smaller')
+      return
+    }
+    openHeroImageCrop(URL.createObjectURL(file))
+  }
+
+  const handleAdjustHeroCrop = () => {
+    const url = resolveMediaUrl(formData.styles.hero.backgroundImage)
+    if (!url) return
+    openHeroImageCrop(url)
+  }
+
+  const closeHeroCropModal = () => {
+    if (heroCropSrc && heroCropSrc.startsWith('blob:')) URL.revokeObjectURL(heroCropSrc)
+    setHeroCropSrc(null)
+  }
+
+  const uploadHeroCroppedBlob = async (blob) => {
+    try {
+      setUploadingHeroBg(true)
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', blob, 'hero-background.jpg')
+      uploadFormData.append('folder', 'cms')
+      const response = await api.post('/upload?folder=cms', uploadFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      updateStyle('hero', 'backgroundImage', response.data.url || '')
+      toast.success('Hero background uploaded')
+    } catch (error) {
+      console.error('Hero background upload error:', error)
+      toast.error('Failed to upload hero background')
+      throw error
+    } finally {
+      setUploadingHeroBg(false)
+    }
   }
 
   const toggleSection = (section) => {
@@ -333,9 +391,73 @@ export default function HomepageContentManagement() {
                   <Palette className="h-4 w-4 text-primary-500" />
                   Hero Section Styling
                 </h4>
+                <div className="md:col-span-2 lg:col-span-4 mb-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Hero Background Image</label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Preview below matches the live homepage (overlay, title, and search). Crop at 16∶9 so the image stays aligned on mobile and desktop.
+                  </p>
+                  {formData.styles.hero.backgroundImage ? (
+                    <div className="mb-4 space-y-3">
+                      <p className="text-xs font-semibold text-gray-700">Homepage preview</p>
+                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+                        <HeroBackgroundPreview
+                          imageUrl={resolveMediaUrl(formData.styles.hero.backgroundImage)}
+                          heroTitle={formData.heroTitle}
+                          heroSubtitle={formData.heroSubtitle}
+                          heroDescription={formData.heroDescription}
+                          titleColor={formData.styles.hero.titleColor}
+                          subtitleColor={formData.styles.hero.subtitleColor || '#ffffff'}
+                          descriptionColor={formData.styles.hero.descriptionColor || '#f3f4f6'}
+                          textAlign={formData.styles.hero.textAlign || 'center'}
+                          label="Desktop / tablet"
+                        />
+                        <HeroBackgroundMobilePreview
+                          imageUrl={resolveMediaUrl(formData.styles.hero.backgroundImage)}
+                          label="Mobile"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label
+                      htmlFor="hero-bg-upload"
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 cursor-pointer ${uploadingHeroBg ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
+                      {uploadingHeroBg ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                      {uploadingHeroBg ? 'Uploading…' : formData.styles.hero.backgroundImage ? 'Replace image' : 'Upload image'}
+                    </label>
+                    <input
+                      id="hero-bg-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleHeroBackgroundFileSelect}
+                      disabled={uploadingHeroBg || Boolean(heroCropSrc)}
+                    />
+                    {formData.styles.hero.backgroundImage ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleAdjustHeroCrop}
+                          disabled={uploadingHeroBg || Boolean(heroCropSrc)}
+                          className="text-sm font-medium text-primary-700 hover:text-primary-800 disabled:opacity-50"
+                        >
+                          Adjust crop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateStyle('hero', 'backgroundImage', '')}
+                          className="text-sm text-red-600 hover:text-red-700 font-medium"
+                        >
+                          Remove image
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Background Color</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Overlay color (fallback)</label>
                     <div className="flex gap-2">
                       <input
                         type="color"
@@ -648,6 +770,23 @@ export default function HomepageContentManagement() {
           </button>
         </div>
       </form>
+
+      <ImageCropModal
+        open={Boolean(heroCropSrc)}
+        imageSrc={heroCropSrc}
+        onClose={closeHeroCropModal}
+        onConfirm={uploadHeroCroppedBlob}
+        aspect={16 / 9}
+        title="Crop hero background"
+        hint="Drag to reposition. Use the slider to zoom in or out."
+        previewHeroTitle={formData.heroTitle}
+        previewHeroSubtitle={formData.heroSubtitle}
+        previewHeroDescription={formData.heroDescription}
+        previewTitleColor={formData.styles.hero.titleColor}
+        previewSubtitleColor={formData.styles.hero.subtitleColor}
+        previewDescriptionColor={formData.styles.hero.descriptionColor}
+        previewTextAlign={formData.styles.hero.textAlign}
+      />
     </div>
   )
 }

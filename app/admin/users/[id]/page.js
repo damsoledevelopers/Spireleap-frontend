@@ -40,6 +40,11 @@ import UserDetailOverview from '../../../../components/Users/UserDetailOverview'
 import { useConfirmDialog } from '../../../../components/Common/useConfirmDialog'
 import { useCurrency } from '../../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../../lib/money'
+import {
+  hasActiveDocumentRequest,
+  getDocumentRequestMessage,
+  getRequiredDocumentsList
+} from '../../../../lib/bookingDocumentRequest'
 
 function visitPropertyId(visit) {
   if (!visit) return ''
@@ -200,6 +205,70 @@ function formatPropertyPriceLabel(property, selectedCurrency, ratesByCode) {
   return fmt(Number(property.price))
 }
 
+const PROOF_PREVIEW_COUNT = 2
+
+function proofDocLabel(doc, index) {
+  const raw = (doc.name || doc.filename || '').trim()
+  if (!raw) return `Doc ${index + 1}`
+  if (raw.length <= 22) return raw
+  const dot = raw.lastIndexOf('.')
+  if (dot > 0 && raw.length - dot <= 6) {
+    return `${raw.slice(0, 14)}…${raw.slice(dot)}`
+  }
+  return `${raw.slice(0, 20)}…`
+}
+
+function BookingProofLinks({ documents = [] }) {
+  const [expanded, setExpanded] = useState(false)
+  const proofDocs = documents.filter((d) => d?.url)
+  if (proofDocs.length === 0) {
+    return <span className="text-xs text-red-600">Not uploaded</span>
+  }
+  const hiddenCount = Math.max(0, proofDocs.length - PROOF_PREVIEW_COUNT)
+  const visibleDocs = expanded ? proofDocs : proofDocs.slice(0, PROOF_PREVIEW_COUNT)
+
+  return (
+    <div className="mt-1 min-w-0">
+      <div className="flex flex-wrap items-center gap-1">
+        {visibleDocs.map((d, i) => (
+          <a
+            key={`${d.url}-${i}`}
+            href={d.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={d.name || d.filename || `Document ${i + 1}`}
+            className="inline-flex max-w-[7.5rem] items-center gap-1 truncate rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700 hover:bg-primary-100"
+          >
+            <FileText className="h-3 w-3 shrink-0 opacity-70" />
+            <span className="truncate">{proofDocLabel(d, i)}</span>
+          </a>
+        ))}
+        {hiddenCount > 0 && !expanded ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-100"
+          >
+            +{hiddenCount} more
+          </button>
+        ) : null}
+        {expanded && proofDocs.length > PROOF_PREVIEW_COUNT ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-gray-500 hover:text-gray-700"
+          >
+            Less
+          </button>
+        ) : null}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-0.5">
+        {proofDocs.length} file{proofDocs.length === 1 ? '' : 's'} · click to open
+      </p>
+    </div>
+  )
+}
+
 function BookingPropertyCard({
   property,
   transaction,
@@ -210,6 +279,7 @@ function BookingPropertyCard({
   onDraftChange,
   onApprove,
   onReject,
+  onRequestDocuments,
   onFinalize,
   processingApproval
 }) {
@@ -223,6 +293,9 @@ function BookingPropertyCard({
   const pendingDue = Number(transaction?.pendingAmount ?? transaction?.paymentDetails?.dueAmount ?? 0)
   const isPendingReview = transaction && ['pending_approval', 'pending'].includes(transaction.status)
   const isInstallmentReview = isPendingReview && existingPaid > 0
+  const awaitingCustomerDocs = hasActiveDocumentRequest(transaction)
+  const documentRequestMessage = getDocumentRequestMessage(transaction)
+  const requiredDocsList = getRequiredDocumentsList(transaction)
   const submittedBy =
     transaction?.lead?.contact?.name ||
     [transaction?.lead?.contact?.firstName, transaction?.lead?.contact?.lastName].filter(Boolean).join(' ').trim() ||
@@ -310,19 +383,9 @@ function BookingPropertyCard({
             <span className="text-gray-500 block text-xs">Pending</span>
             <span className="font-medium text-amber-700">{formatAmount(transaction.pendingAmount ?? transaction.paymentDetails?.dueAmount ?? transaction.amount ?? 0)}</span>
           </div>
-          <div>
+          <div className="min-w-0 lg:col-span-1">
             <span className="text-gray-500 block text-xs">Proof</span>
-            {(transaction.documents || []).filter((d) => d.url).length > 0 ? (
-              <div className="flex flex-wrap gap-2 mt-1">
-                {(transaction.documents || []).filter((d) => d.url).map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 underline">
-                    {d.name || 'View'}
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-red-600">Not uploaded</span>
-            )}
+            <BookingProofLinks documents={transaction.documents} />
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Status</span>
@@ -335,12 +398,33 @@ function BookingPropertyCard({
         </div>
       )}
 
+      {type === 'booked' && isPendingReview && awaitingCustomerDocs && (
+        <div className="mt-4 p-4 rounded-xl border border-orange-200 bg-orange-50/80 space-y-2">
+          <p className="text-sm font-bold text-orange-900">Waiting for customer documents</p>
+          {documentRequestMessage ? (
+            <p className="text-xs text-orange-800 whitespace-pre-wrap">{documentRequestMessage}</p>
+          ) : null}
+          {requiredDocsList.length > 0 ? (
+            <ul className="text-xs text-orange-800 list-disc list-inside">
+              {requiredDocsList.map((doc, i) => (
+                <li key={i}>{doc}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-[11px] text-orange-700">Booking stays pending until the customer uploads again.</p>
+        </div>
+      )}
+
       {type === 'booked' && isPendingReview && canEditUser && (
         <div className="mt-4 p-4 rounded-xl border border-amber-100 bg-amber-50/50 space-y-3">
           <p className="text-sm font-bold text-amber-900">
-            {isInstallmentReview ? 'Review next payment proof' : 'Review booking request'}
+            {awaitingCustomerDocs
+              ? 'Booking kept pending — you can still approve or reject after documents arrive'
+              : isInstallmentReview
+                ? 'Review next payment proof'
+                : 'Review booking request'}
           </p>
-          {isInstallmentReview && (
+          {isInstallmentReview && !awaitingCustomerDocs && (
             <p className="text-xs text-amber-800">
               Already paid: {formatAmount(existingPaid)} · Balance: {formatAmount(pendingDue)}
             </p>
@@ -369,14 +453,23 @@ function BookingPropertyCard({
               className="w-full sm:flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             />
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2">
             <button
               type="button"
               onClick={onApprove}
-              disabled={processingApproval}
+              disabled={processingApproval || awaitingCustomerDocs}
+              title={awaitingCustomerDocs ? 'Wait for customer to upload requested documents' : undefined}
               className="w-full sm:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50"
             >
               Approve
+            </button>
+            <button
+              type="button"
+              onClick={onRequestDocuments}
+              disabled={processingApproval}
+              className="w-full sm:w-auto px-4 py-2.5 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-700 disabled:opacity-50"
+            >
+              {awaitingCustomerDocs ? 'Update document request' : 'Request documents'}
             </button>
             <button
               type="button"
@@ -500,6 +593,9 @@ export default function AdminUserDetailPage() {
   const [processingApproval, setProcessingApproval] = useState(false)
   const [rejectingTransaction, setRejectingTransaction] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
+  const [documentRequestTransaction, setDocumentRequestTransaction] = useState(null)
+  const [documentRequestMessage, setDocumentRequestMessage] = useState('')
+  const [documentRequestItems, setDocumentRequestItems] = useState('')
 
   const canEditUser = checkPermission('users', 'edit')
 
@@ -1366,6 +1462,46 @@ export default function AdminUserDetailPage() {
         title: 'Could not approve booking',
         message: parseApiErrorMessage(error, 'Failed to approve booking. Please check the amount and try again.')
       })
+    } finally {
+      setProcessingApproval(false)
+    }
+  }
+
+  const openDocumentRequestModal = (transaction) => {
+    if (!transaction?._id) return
+    setDocumentRequestTransaction(transaction)
+    setDocumentRequestMessage(getDocumentRequestMessage(transaction))
+    setDocumentRequestItems(getRequiredDocumentsList(transaction).join(', '))
+  }
+
+  const handleRequestBookingDocuments = async () => {
+    if (!documentRequestTransaction?._id) return
+    const message = documentRequestMessage.trim()
+    if (!message) {
+      toast.error('Enter a message explaining what documents you need')
+      return
+    }
+    const ok = await confirm({
+      title: 'Keep booking pending',
+      message:
+        'The customer will stay on pending review and can upload more documents. Continue?',
+      confirmText: 'Send request',
+      tone: 'primary'
+    })
+    if (!ok) return
+    try {
+      setProcessingApproval(true)
+      await api.post(`/transactions/${documentRequestTransaction._id}/request-documents`, {
+        message,
+        requiredDocuments: documentRequestItems.trim() || undefined
+      })
+      toast.success('Customer notified — booking kept pending for more documents')
+      setDocumentRequestTransaction(null)
+      setDocumentRequestMessage('')
+      setDocumentRequestItems('')
+      await fetchUserTransactions()
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to request documents')
     } finally {
       setProcessingApproval(false)
     }
@@ -2462,6 +2598,7 @@ export default function AdminUserDetailPage() {
                 onDraftChange={(field, value) => setApprovalDraftField(t._id, field, value)}
                 onApprove={() => handleApproveBooking(t)}
                 onReject={() => { setRejectingTransaction(t); setRejectNote('') }}
+                onRequestDocuments={() => openDocumentRequestModal(t)}
                 onFinalize={() => handleFinalizeBooking(t)}
                 processingApproval={processingApproval}
               />
@@ -3951,6 +4088,53 @@ export default function AdminUserDetailPage() {
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-bold hover:bg-primary-700"
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {documentRequestTransaction && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Request documents</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Booking stays in pending review. The customer can upload more files from their account.
+            </p>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Message to customer (required)</label>
+            <textarea
+              value={documentRequestMessage}
+              onChange={(e) => setDocumentRequestMessage(e.target.value)}
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg p-3 text-sm mb-3"
+              placeholder="e.g. Please upload a clear copy of your Emirates ID and bank transfer receipt."
+            />
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Required documents (optional)</label>
+            <input
+              type="text"
+              value={documentRequestItems}
+              onChange={(e) => setDocumentRequestItems(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              placeholder="Comma-separated, e.g. Emirates ID, Payment receipt"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentRequestTransaction(null)
+                  setDocumentRequestMessage('')
+                  setDocumentRequestItems('')
+                }}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRequestBookingDocuments}
+                disabled={processingApproval}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold disabled:opacity-50"
+              >
+                Send request
               </button>
             </div>
           </div>

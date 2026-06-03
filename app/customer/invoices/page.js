@@ -32,6 +32,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCurrency } from '../../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../../lib/money'
 import { useConfirmDialog } from '../../../components/Common/useConfirmDialog'
+import {
+    hasActiveDocumentRequest,
+    getDocumentRequestMessage,
+    getRequiredDocumentsList
+} from '../../../lib/bookingDocumentRequest'
 
 const VALID_INVOICE_TABS = ['requests', 'active', 'rejected', 'invoices']
 
@@ -415,6 +420,19 @@ export default function MyInvoices() {
                                                         {getUploadedDocs(invoice).length} file(s) uploaded
                                                     </p>
                                                 )}
+                                                {hasActiveDocumentRequest(invoice) && (
+                                                    <div className="mt-1 max-w-[220px] rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                                                        <p className="font-semibold">More documents needed</p>
+                                                        {getDocumentRequestMessage(invoice) ? (
+                                                            <p className="mt-0.5 line-clamp-2">{getDocumentRequestMessage(invoice)}</p>
+                                                        ) : null}
+                                                        {getRequiredDocumentsList(invoice).length > 0 ? (
+                                                            <p className="mt-0.5 text-amber-800">
+                                                                {getRequiredDocumentsList(invoice).join(' · ')}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                )}
                                                 {invoice.status === 'rejected' && invoice.approval?.adminNote && (
                                                     <p className="text-xs text-red-600 mt-1 max-w-[200px]">{invoice.approval.adminNote}</p>
                                                 )}
@@ -431,10 +449,11 @@ export default function MyInvoices() {
                                                     {(() => {
                                                         const uploadedDocs = getUploadedDocs(invoice)
                                                         const hasUploadedProof = uploadedDocs.length > 0
+                                                        const needsMoreDocs = hasActiveDocumentRequest(invoice)
                                                         const canUploadForRequest =
                                                             activeTab === 'requests' &&
                                                             ['pending_approval', 'pending'].includes(invoice.status) &&
-                                                            !hasUploadedProof
+                                                            (!hasUploadedProof || needsMoreDocs)
                                                         const canUploadForInstallment =
                                                             activeTab === 'active' &&
                                                             ['approved', 'pending'].includes(invoice.status) &&
@@ -624,6 +643,25 @@ export default function MyInvoices() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {hasActiveDocumentRequest(selectedInvoice) && (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                        <p className="text-sm font-bold text-amber-900">Admin requested more documents</p>
+                                        <p className="text-sm text-amber-800 mt-1 whitespace-pre-wrap">
+                                            {getDocumentRequestMessage(selectedInvoice)}
+                                        </p>
+                                        {getRequiredDocumentsList(selectedInvoice).length > 0 && (
+                                            <ul className="mt-2 text-sm text-amber-800 list-disc list-inside">
+                                                {getRequiredDocumentsList(selectedInvoice).map((doc, i) => (
+                                                    <li key={i}>{doc}</li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        <p className="text-xs text-amber-700 mt-2">
+                                            Use <span className="font-semibold">Upload requested docs</span> on this booking to submit additional PDF or image files.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Payment Details Section - Amount Paid & Due Amount */}
                                 {selectedInvoice.paymentDetails && (

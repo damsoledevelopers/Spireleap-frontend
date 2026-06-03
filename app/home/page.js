@@ -16,29 +16,30 @@ import {
   ArrowRight,
   Star,
   Users,
-  Building2,
-  DollarSign,
-  ChevronDown,
   ChevronLeft,
   Calendar,
   FileText,
-  Heart,
-  ClipboardCheck
+  Heart
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useCurrency } from '../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../lib/money'
+import { formatBedroomLabel } from '../../lib/propertyOptions'
+import HomeHeroSearch from '../../components/Home/HomeHeroSearch'
 import {
-  formatBedroomLabel,
-  BEDROOM_FILTER_OPTIONS,
-  BALCONY_FILTER_OPTIONS,
-  matchesBedroomFilter,
-  matchesBalconyFilter,
-  COMPLETION_STATUS_FILTER_OPTIONS
-} from '../../lib/propertyOptions'
-import { fetchPropertyTypeOptions } from '../../lib/propertyTypesApi'
+  EMPTY_HOME_SEARCH_FILTERS,
+  HOME_PROPERTIES_DEFAULT_LIMIT,
+  HOME_PROPERTIES_FILTERED_LIMIT,
+  buildPropertiesListingHref,
+  buildPropertiesSearchParams,
+  filterPropertiesByHandover,
+  filterPropertiesBySegment,
+  hasAppliedHomeFilters,
+  splitPropertyTypeOptions
+} from '../../lib/homeSearchFilters'
 import MediaImage from '../../components/Common/MediaImage'
 import { resolveMediaUrl } from '../../lib/mediaUrl'
+import { DEFAULT_HERO_BACKGROUND, HERO_IMAGE_GRADIENT_OVERLAY } from '../../lib/heroBackground'
 
 export default function HomePage() {
   const router = useRouter()
@@ -74,84 +75,25 @@ export default function HomePage() {
     blogs: false
   })
   const [windowWidth, setWindowWidth] = useState(0)
-  const [propertyTypeOptions, setPropertyTypeOptions] = useState([])
-  const [searchFilters, setSearchFilters] = useState({
-    propertyType: '',
-    completionStatus: '',
-    listingType: '',
-    city: '',
-    minPrice: '',
-    maxPrice: '',
-    balconies: '',
-    bedrooms: '',
-    unfurnished: '',
-    semiFurnished: '',
-    fullyFurnished: ''
+  const [filterOptions, setFilterOptions] = useState({
+    propertyTypeOptions: [],
+    completionStatusOptions: []
   })
+  const [draftFilters, setDraftFilters] = useState({ ...EMPTY_HOME_SEARCH_FILTERS })
+  const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_HOME_SEARCH_FILTERS })
+  const [searchingProperties, setSearchingProperties] = useState(false)
   const [watchlist, setWatchlist] = useState([])
 
-  const normalize = (v) => (v ?? '').toString().trim().toLowerCase()
+  const hasActiveFilters = hasAppliedHomeFilters(appliedFilters)
 
-  const hasAnyAppliedFilter = Object.entries(searchFilters).some(([_, v]) => !!normalize(v))
+  const segmentPropertyTypes = splitPropertyTypeOptions(
+    filterOptions.propertyTypeOptions,
+    draftFilters.propertySegment
+  )
 
-  const displayedProperties = (() => {
-    const source = homeProperties
-    if (!hasAnyAppliedFilter) return source.slice(0, 6)
-
-    const wantsUnfurnished = searchFilters.unfurnished === '1'
-    const wantsSemi = searchFilters.semiFurnished === '1'
-    const wantsFully = searchFilters.fullyFurnished === '1'
-    const wantsAnyFurnishing = wantsUnfurnished || wantsSemi || wantsFully
-
-    return source
-      .filter((p) => {
-        const type = normalize(p.propertyType || p.type)
-        const listingType = normalize(p.listingType)
-        const city = normalize(p.location?.city)
-
-        const specs = p.specifications || {}
-
-        const completion = normalize(p.completionStatus || '')
-        const legacyCompletion = ['off_plan', 'ready_to_move', 'under_construction'].includes(type) ? type : ''
-
-        const matchesType =
-          !normalize(searchFilters.propertyType) ||
-          type === normalize(searchFilters.propertyType)
-
-        const matchesCompletion =
-          !normalize(searchFilters.completionStatus) ||
-          completion === normalize(searchFilters.completionStatus) ||
-          legacyCompletion === normalize(searchFilters.completionStatus)
-
-        const matchesListing =
-          !normalize(searchFilters.listingType) ||
-          listingType === normalize(searchFilters.listingType)
-
-        const matchesCity =
-          !normalize(searchFilters.city) ||
-          city.includes(normalize(searchFilters.city))
-
-        const matchesBalconies = matchesBalconyFilter(searchFilters.balconies, specs)
-        const matchesBedrooms = matchesBedroomFilter(searchFilters.bedrooms, specs)
-
-        const matchesFurnishing =
-          !wantsAnyFurnishing ||
-          (wantsUnfurnished && Number(specs.unfurnished || 0) > 0) ||
-          (wantsSemi && Number(specs.semiFurnished || 0) > 0) ||
-          (wantsFully && Number(specs.fullyFurnished || 0) > 0)
-
-        return (
-          matchesType &&
-          matchesCompletion &&
-          matchesListing &&
-          matchesCity &&
-          matchesBalconies &&
-          matchesBedrooms &&
-          matchesFurnishing
-        )
-      })
-      .slice(0, 6)
-  })()
+  const displayedProperties = hasActiveFilters
+    ? homeProperties
+    : homeProperties.slice(0, HOME_PROPERTIES_DEFAULT_LIMIT)
 
   // Get stats from CMS or use defaults
   const getStats = () => {
@@ -254,7 +196,7 @@ export default function HomePage() {
     fetchAmenities()
     fetchActiveScripts()
     fetchPlans()
-    fetchPropertyTypeOptions(api).then(setPropertyTypeOptions).catch(() => {})
+    fetchHomeFilterOptions()
 
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth)
@@ -272,17 +214,6 @@ export default function HomePage() {
       fetchWatchlist()
     }
   }, [user])
-
-  // Live filtering: when user changes filters, jump to results
-  useEffect(() => {
-    if (!hasAnyAppliedFilter) return
-    if (typeof window === 'undefined') return
-    const timer = setTimeout(() => {
-      const el = document.getElementById('home-properties-results')
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 250)
-    return () => clearTimeout(timer)
-  }, [hasAnyAppliedFilter, searchFilters.city, searchFilters.listingType, searchFilters.propertyType, searchFilters.completionStatus, searchFilters.balconies, searchFilters.bedrooms, searchFilters.unfurnished, searchFilters.semiFurnished, searchFilters.fullyFurnished])
 
   const fetchWatchlist = async () => {
     try {
@@ -547,12 +478,43 @@ export default function HomePage() {
     }
   }
 
-  const fetchHomeProperties = async () => {
+  const fetchHomeFilterOptions = async () => {
+    try {
+      const response = await api.get('/properties/filter-options')
+      const data = response.data || {}
+      setFilterOptions({
+        propertyTypeOptions: data.propertyTypeOptions || [],
+        completionStatusOptions: data.completionStatusOptions || []
+      })
+    } catch (error) {
+      console.error('Error fetching filter options:', error)
+    }
+  }
+
+  const fetchHomeProperties = async (filters = null) => {
     try {
       setHomePropertiesLoading(true)
-      const params = new URLSearchParams({ status: 'active', page: '1', limit: '12' })
+      const filtered = filters && hasAppliedHomeFilters(filters)
+      const currencyOpts = { selectedCurrency, ratesByCode }
+      const params = filtered
+        ? buildPropertiesSearchParams(filters, {
+          limit: HOME_PROPERTIES_FILTERED_LIMIT,
+          ...currencyOpts
+        })
+        : new URLSearchParams({
+          status: 'active',
+          page: '1',
+          limit: String(HOME_PROPERTIES_DEFAULT_LIMIT)
+        })
       const response = await api.get(`/properties?${params}`)
-      setHomeProperties(response.data.properties || [])
+      let list = response.data.properties || []
+      if (filters?.propertySegment && filters.propertyType === '') {
+        list = filterPropertiesBySegment(list, filters.propertySegment)
+      }
+      if (filters?.handoverQuarter) {
+        list = filterPropertiesByHandover(list, filters.handoverQuarter)
+      }
+      setHomeProperties(list)
     } catch (error) {
       console.error('Error fetching home properties:', error)
       toast.error('Failed to load properties')
@@ -560,6 +522,31 @@ export default function HomePage() {
     } finally {
       setHomePropertiesLoading(false)
     }
+  }
+
+  const handleHomeSearch = async () => {
+    const nextApplied = { ...draftFilters }
+    setAppliedFilters(nextApplied)
+    try {
+      setSearchingProperties(true)
+      await fetchHomeProperties(nextApplied)
+      if (typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          const el = document.getElementById('home-properties-results')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
+    } finally {
+      setSearchingProperties(false)
+    }
+  }
+
+  const handleClearHomeSearch = async () => {
+    const reset = { ...EMPTY_HOME_SEARCH_FILTERS }
+    setDraftFilters(reset)
+    setAppliedFilters(reset)
+    setSearchSubmitted(false)
+    await fetchHomeProperties()
   }
 
   const fetchTestimonials = async () => {
@@ -820,35 +807,56 @@ export default function HomePage() {
     <div className="min-h-screen bg-logo-offWhite">
       <Header />
 
-      {/* Hero Section - Enhanced Modern Design */}
+      {/* Hero Section */}
+      {(() => {
+        const heroBgUrl = resolveMediaUrl(homePageContent?.styles?.hero?.backgroundImage)
+        const heroOverlay =
+          homePageContent?.styles?.hero?.backgroundColor?.trim() || DEFAULT_HERO_BACKGROUND
+        const heroHasImage = Boolean(heroBgUrl)
+        return (
       <section
-        className="relative min-h-[95vh] flex items-center justify-center overflow-hidden transition-colors duration-500"
-        style={{
-          background: homePageContent?.styles?.hero?.backgroundColor || 'linear-gradient(to bottom right, #0a213e, #0f2d52, #143a67, #19487b)'
-        }}
+        className="relative min-h-[72vh] sm:min-h-[80vh] lg:min-h-[82vh] flex items-center justify-center overflow-x-hidden overflow-y-visible"
       >
-        {/* Enhanced Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
+        {heroHasImage ? (
+          <>
+            <img
+              src={heroBgUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              draggable={false}
+              aria-hidden
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: HERO_IMAGE_GRADIENT_OVERLAY }}
+              aria-hidden
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 transition-colors duration-500" style={{ background: heroOverlay }} aria-hidden />
+        )}
+
+        {!heroHasImage && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-gold-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
           <div className="absolute top-0 right-1/4 w-96 h-96 bg-primary-600 rounded-full mix-blend-multiply filter blur-3xl opacity-25 animate-blob animation-delay-2000"></div>
           <div className="absolute -bottom-8 left-1/3 w-96 h-96 bg-primary-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
           <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-gold-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-3000"></div>
-          {/* Additional subtle particles */}
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAzNHYtNGgtMnY0aC00djJoNHY0aDJ2LTRoNHYtMmgtNHptMC0zMFYwaC0ydjRoLTR2Mmg0djRoMlY2aDRWNGgtNHpNNiAzNHYtNEg0djRIMHYyaDR2NGgydi00aDR2LTJINnptMC0zMFYwSDR2NEgwdjJoNHY0aDJWNmg0VjRINnoiIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvZz48L3N2Zz4=')] opacity-20"></div>
         </div>
+        )}
 
         {/* Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <div
             className="animate-fade-in-up"
             style={{ textAlign: homePageContent?.styles?.hero?.textAlign || 'center' }}
           >
-            {/* Enhanced Badge */}
-            <div className="inline-flex items-center px-5 py-2.5 mb-8 bg-white/15 backdrop-blur-md rounded-full border border-white/30 shadow-lg hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
-              <span className="text-sm font-bold text-white tracking-wide">🏆 #1 Real Estate Platform</span>
+            <div className="inline-flex items-center px-3 py-1.5 mb-4 bg-white/10 backdrop-blur-md rounded-full border border-white/20">
+              <span className="text-xs font-semibold text-white/95 tracking-wide">Find properties across the UAE</span>
             </div>
 
-            <h1 className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-6 text-white leading-tight animate-fade-in-up animation-delay-200">
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 text-white leading-snug tracking-tight animate-fade-in-up animation-delay-200">
               <span
                 className="bg-gradient-to-r from-gold-400 via-gold-300 to-gold-200 bg-clip-text text-transparent drop-shadow-2xl animate-gradient"
                 style={{
@@ -876,13 +884,13 @@ export default function HomePage() {
               {!homePageContent?.heroSubtitle && (
                 <>
                   <br />
-                  <span className="text-white drop-shadow-lg animate-fade-in-up animation-delay-400">Property Today</span>
+                  <span className="block mt-1 text-2xl md:text-3xl lg:text-4xl font-bold text-white/95 drop-shadow-lg animate-fade-in-up animation-delay-400">Property Today</span>
                 </>
               )}
             </h1>
 
             <p
-              className="text-xl md:text-2xl lg:text-3xl mb-12 text-gray-100 max-w-4xl mx-auto leading-relaxed font-light animate-fade-in-up animation-delay-600"
+              className="text-sm md:text-base lg:text-lg mb-6 text-gray-100/90 max-w-2xl mx-auto leading-snug animate-fade-in-up animation-delay-600"
               style={{
                 color: homePageContent?.styles?.hero?.descriptionColor || '#f3f4f6',
                 fontSize: homePageContent?.styles?.hero?.descriptionFontSize || '',
@@ -892,186 +900,22 @@ export default function HomePage() {
               {homePageContent?.heroDescription || 'Discover premium homes, luxury apartments, and prime commercial properties in the world\'s best locations'}
             </p>
 
-            {/* Hero Search Form - Clean two-row layout */}
-            <form
-              className="max-w-5xl mx-auto animate-fade-in-up animation-delay-800"
-              onSubmit={(e) => { e.preventDefault(); }}
-            >
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/80 p-6 md:p-8 transition-shadow hover:shadow-2xl">
-                {/* Row 1: Property Type | Completion | Listing Type | Location */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-5">
-                  <div>
-                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
-                      <Building2 className="h-3.5 w-3.5 text-primary-600" />
-                      Property Type
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={searchFilters.propertyType}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
-                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.propertyType
-                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
-                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
-                          }`}
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
-                      >
-                        <option value="" className="text-gray-500">All Property Types</option>
-                        {propertyTypeOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value} className="text-gray-900">{opt.label}</option>
-                        ))}
-                      </select>
-                      <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
-                      <ClipboardCheck className="h-3.5 w-3.5 text-primary-600" />
-                      Completion Status
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={searchFilters.completionStatus}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, completionStatus: e.target.value }))}
-                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.completionStatus
-                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
-                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
-                          }`}
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
-                      >
-                        {COMPLETION_STATUS_FILTER_OPTIONS.map((opt) => (
-                          <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <ClipboardCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
-                      <DollarSign className="h-3.5 w-3.5 text-primary-600" />
-                      Listing Type
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={searchFilters.listingType}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, listingType: e.target.value }))}
-                        className={`w-full px-4 py-3.5 pl-10 pr-9 border rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.listingType
-                          ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
-                          : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
-                          }`}
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
-                      >
-                        <option value="">Sale/Rent</option>
-                        <option value="sale">For Sale</option>
-                        <option value="rent">For Rent</option>
-                      </select>
-                      <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
-                      <MapPin className="h-3.5 w-3.5 text-primary-600" />
-                      Location
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Enter city..."
-                        value={searchFilters.city}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, city: e.target.value }))}
-                        className="w-full px-4 py-3.5 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 text-gray-900 placeholder-gray-400 bg-white transition-all"
-                      />
-                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Row 2: Balconies | Bedroom | Furnishing checkboxes | Search button */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
-                      Balconies
-                    </label>
-                    <select
-                      value={searchFilters.balconies}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, balconies: e.target.value }))}
-                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.balconies
-                        ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
-                        : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
-                        }`}
-                      style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
-                    >
-                      {BALCONY_FILTER_OPTIONS.map((o) => (
-                        <option key={o.value || 'any'} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-widest">
-                      Bedroom
-                    </label>
-                    <select
-                      value={searchFilters.bedrooms}
-                      onChange={(e) => setSearchFilters(prev => ({ ...prev, bedrooms: e.target.value }))}
-                      className={`w-full px-4 py-3 border rounded-xl text-base focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all appearance-none cursor-pointer ${searchFilters.bedrooms
-                        ? 'bg-red-50 border-red-300 text-red-900 hover:bg-red-50'
-                        : 'bg-white border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-primary-400'
-                        }`}
-                      style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
-                    >
-                      {BEDROOM_FILTER_OPTIONS.map((o) => (
-                        <option key={o.value || 'any'} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-wrap items-end gap-5 md:gap-6 pb-1">
-                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
-                      <input
-                        type="checkbox"
-                        checked={!!searchFilters.unfurnished}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, unfurnished: e.target.checked ? '1' : '' }))}
-                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
-                      />
-                      Unfurnished
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
-                      <input
-                        type="checkbox"
-                        checked={!!searchFilters.semiFurnished}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, semiFurnished: e.target.checked ? '1' : '' }))}
-                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
-                      />
-                      Semi
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer text-base font-semibold text-gray-700 select-none">
-                      <input
-                        type="checkbox"
-                        checked={!!searchFilters.fullyFurnished}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, fullyFurnished: e.target.checked ? '1' : '' }))}
-                        className="h-5 w-5 rounded border-2 border-gray-400 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer accent-primary-600"
-                      />
-                      Fully
-                    </label>
-                  </div>
-                  {/* No Search button: filtering is live */}
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Enhanced Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-10 border-2 border-white/40 rounded-full flex justify-center shadow-lg backdrop-blur-sm">
-              <div className="w-1 h-3 bg-white/70 rounded-full mt-2 animate-pulse"></div>
+            <div className="animate-fade-in-up animation-delay-800 relative z-20">
+              <HomeHeroSearch
+                draftFilters={draftFilters}
+                onChange={setDraftFilters}
+                onSearch={handleHomeSearch}
+                searching={searchingProperties || homePropertiesLoading}
+                propertyTypeOptions={segmentPropertyTypes}
+                completionStatusOptions={filterOptions.completionStatusOptions}
+              />
             </div>
-            <span className="text-white/80 text-xs font-medium tracking-wider">Scroll</span>
           </div>
         </div>
+
       </section>
+        )
+      })()}
 
       {/* Banners Section - From CMS */}
       {banners.length > 0 && (
@@ -1114,30 +958,19 @@ export default function HomePage() {
                 Browse & Search
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900">
-                {hasAnyAppliedFilter ? 'Search Results' : 'Latest Properties'}
+                {hasActiveFilters ? 'Search Results' : 'Latest Properties'}
               </h2>
               <p className="text-gray-600 mt-2 max-w-2xl">
-                {hasAnyAppliedFilter
-                  ? `Showing ${displayedProperties.length} matching properties`
+                {hasActiveFilters
+                  ? `Showing ${displayedProperties.length} matching ${displayedProperties.length === 1 ? 'property' : 'properties'}`
                   : 'Discover active listings handpicked for you.'}
               </p>
             </div>
 
-            {hasAnyAppliedFilter && (
+            {hasActiveFilters && (
               <button
-                onClick={() => setSearchFilters({
-                  propertyType: '',
-                  completionStatus: '',
-                  listingType: '',
-                  city: '',
-                  minPrice: '',
-                  maxPrice: '',
-                  balconies: '',
-                  bedrooms: '',
-                  unfurnished: '',
-                  semiFurnished: '',
-                  fullyFurnished: ''
-                })}
+                type="button"
+                onClick={handleClearHomeSearch}
                 className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-bold transition-colors"
               >
                 Clear Search
@@ -1237,15 +1070,17 @@ export default function HomePage() {
             </div>
           )}
 
-          <div className="text-center mt-14">
-            <Link
-              href="/properties"
-              className="inline-flex items-center justify-center px-8 py-4 bg-gray-900 hover:bg-black text-white rounded-2xl font-bold shadow-xl transition-colors"
-            >
-              View all properties
-              <ArrowRight className="ml-3 h-5 w-5" />
-            </Link>
-          </div>
+          {displayedProperties.length > 0 && (
+            <div className="text-center mt-14">
+              <Link
+                href={buildPropertiesListingHref(appliedFilters, { selectedCurrency, ratesByCode })}
+                className="inline-flex items-center justify-center px-8 py-4 bg-gray-900 hover:bg-black text-white rounded-2xl font-bold shadow-xl transition-colors"
+              >
+                View More
+                <ArrowRight className="ml-3 h-5 w-5" />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

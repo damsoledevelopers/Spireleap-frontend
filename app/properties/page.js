@@ -11,6 +11,8 @@ import Footer from '../../components/Layout/Footer'
 import { useCurrency } from '../../contexts/CurrencyContext'
 import { formatMoneyFromAed } from '../../lib/money'
 import SearchableSelect from '../../components/Common/SearchableSelect'
+import FilterRangePopover, { FILTER_RANGE_POPOVER_CLASS } from '../../components/Common/FilterRangePopover'
+import PropertiesFilterChipButton from '../../components/Common/PropertiesFilterChipButton'
 import {
   BEDROOM_FILTER_OPTIONS,
   bedroomFilterToQueryParams,
@@ -538,42 +540,32 @@ export default function PropertiesPage() {
 
             {/* Price Filter */}
             <div className="relative">
-              <button
+              <PropertiesFilterChipButton
+                active={filters.minPrice || filters.maxPrice}
+                open={openFilter === 'price'}
                 onClick={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
-                className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm font-medium flex items-center gap-2 ${filters.minPrice || filters.maxPrice ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300'}`}
-              >
-                <DollarSign className="h-4 w-4" />
-                Price
-                {(filters.minPrice || filters.maxPrice) && (
-                  <span className="bg-primary-600 text-white rounded-full px-2 py-0.5 text-xs">
-                    {filters.minPrice && filters.maxPrice ? `${filters.minPrice}-${filters.maxPrice}` : filters.minPrice ? `${filters.minPrice}+` : `Up to ${filters.maxPrice}`}
-                  </span>
-                )}
-                <ChevronDown className={`h-4 w-4 transition-transform ${openFilter === 'price' ? 'rotate-180' : ''}`} />
-              </button>
+                label="Price"
+                badge={
+                  filters.minPrice || filters.maxPrice
+                    ? filters.minPrice && filters.maxPrice
+                      ? `${filters.minPrice}-${filters.maxPrice}`
+                      : filters.minPrice
+                        ? `${filters.minPrice}+`
+                        : `Up to ${filters.maxPrice}`
+                    : null
+                }
+                className="w-auto"
+              />
               {openFilter === 'price' && (
-                <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 w-72 max-w-[calc(100vw-2rem)]">
-                  <div className="p-4 space-y-3">
-                    <h3 className="font-semibold text-gray-900">Price Range</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="number"
-                        placeholder="Min"
-                        value={filters.minPrice}
-                        onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Max"
-                        value={filters.maxPrice}
-                        onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
-                    </div>
-                    <button onClick={() => setOpenFilter(null)} className="w-full btn btn-primary py-2 text-sm">Apply</button>
-                  </div>
-                </div>
+                <FilterRangePopover
+                  title="Price Range"
+                  minValue={filters.minPrice}
+                  maxValue={filters.maxPrice}
+                  onMinChange={(v) => handleFilterChange('minPrice', v)}
+                  onMaxChange={(v) => handleFilterChange('maxPrice', v)}
+                  onApply={() => setOpenFilter(null)}
+                  className={FILTER_RANGE_POPOVER_CLASS}
+                />
               )}
             </div>
 

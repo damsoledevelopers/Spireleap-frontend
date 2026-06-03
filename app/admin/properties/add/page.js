@@ -32,7 +32,8 @@ import {
   BEDROOM_SELECT_OPTIONS,
   bedroomSelectToSpecs,
   specsToBedroomSelect,
-  COMPLETION_STATUS_FORM_OPTIONS
+  COMPLETION_STATUS_FORM_OPTIONS,
+  getHandoverByFormOptions
 } from '../../../../lib/propertyOptions'
 import { fetchPropertyTypeOptions } from '../../../../lib/propertyTypesApi'
 import PropertyVideosEditor, { normalizeVideosForSubmit } from '../../../../components/Property/PropertyVideosEditor'
@@ -87,6 +88,7 @@ export default function AdminAddPropertyPage() {
     description: '',
     propertyType: 'apartment',
     completionStatus: '',
+    handoverQuarter: '',
     listingType: 'sale',
     agency: '',
     agent: '',
@@ -635,6 +637,9 @@ export default function AdminAddPropertyPage() {
 
       delete submitData.bedroomSelect
       if (!submitData.completionStatus) delete submitData.completionStatus
+      if (submitData.completionStatus !== 'off_plan' || !submitData.handoverQuarter) {
+        delete submitData.handoverQuarter
+      }
 
       if (!submitData.agency) delete submitData.agency
       if (!submitData.agent) delete submitData.agent
@@ -821,13 +826,37 @@ export default function AdminAddPropertyPage() {
                 <label className="block text-sm font-bold text-gray-900 mb-1">Completion Status</label>
                 <SearchableSelect
                   value={formData.completionStatus || ''}
-                  onChange={(e) => handleInputChange('completionStatus', e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === 'off_plan') {
+                      handleInputChange('completionStatus', v)
+                    } else {
+                      setFormData((prev) => ({
+                        ...prev,
+                        completionStatus: v,
+                        handoverQuarter: ''
+                      }))
+                    }
+                  }}
                   options={COMPLETION_STATUS_FORM_OPTIONS}
                   placeholder="Select completion status"
                   searchable={false}
                   buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
                 />
               </div>
+              {formData.completionStatus === 'off_plan' && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">Handover by</label>
+                  <SearchableSelect
+                    value={formData.handoverQuarter || ''}
+                    onChange={(e) => handleInputChange('handoverQuarter', e.target.value)}
+                    options={getHandoverByFormOptions(formData.handoverQuarter)}
+                    placeholder="Select handover by"
+                    searchable={false}
+                    buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-1">
                   Listing Type
